@@ -18,18 +18,76 @@ const Config = (() => {
 
   function get(key) { return getAll()[key]; }
 
-  /** Return array of {type,pattern,service,method} from Lexicon Civica */
+  /**
+   * Return command lexicon (hardcoded in code for version control)
+   * Each entry maps a command pattern to its handler.
+   */
   function getLexicon() {
-    const ss = SpreadsheetApp.openById(CONFIG_SHEET_ID);
-    const sh = ss.getSheetByName('Lexicon');
-    if (!sh) throw new Error("Missing 'Lexicon' tab in config spreadsheet.");
-    const rows = sh.getDataRange().getValues().slice(1);
-    return rows.map(([cmd, regex, service, method]) => ({
-      type: String(cmd).toUpperCase(),
-      pattern: new RegExp(regex, 'i'),
-      service,
-      method
-    }));
+    return [
+      {
+        type: 'HELP',
+        pattern: /^HELP|^AUXILIUM/i,
+        service: 'Personality',
+        method: 'HELP',
+        description: 'Show help message'
+      },
+      {
+        type: 'QUOT',
+        pattern: /^QUOT|^BALANCE/i,
+        service: 'InboxProcessor',
+        method: 'QUOT',
+        description: 'Check balance and view active items'
+      },
+      {
+        type: 'CAUSA',
+        pattern: /^CAUSA/i,
+        service: 'Causae',
+        method: 'createCausa',
+        description: 'Create collective vote with wagers'
+      },
+      {
+        type: 'VOTE',
+        pattern: /^VOTE/i,
+        service: 'Causae',
+        method: 'vote',
+        description: 'Vote on a causa with wager'
+      },
+      {
+        type: 'RESOLVE',
+        pattern: /^RESOLVE/i,
+        service: 'Causae',
+        method: 'resolveCausa',
+        description: 'Resolve causa and distribute winnings'
+      },
+      {
+        type: 'COMMISSIO',
+        pattern: /^COMMISSIO/i,
+        service: 'Commissio',
+        method: 'createCommissio',
+        description: 'Create bounty task with reward'
+      },
+      {
+        type: 'ACCEPT',
+        pattern: /^ACCEPT/i,
+        service: 'Commissio',
+        method: 'acceptCommissio',
+        description: 'Accept and claim a commissio'
+      },
+      {
+        type: 'COMPLETE',
+        pattern: /^COMPLETE/i,
+        service: 'Commissio',
+        method: 'completeCommissio',
+        description: 'Complete commissio and claim reward'
+      },
+      {
+        type: 'TRANSFER',
+        pattern: /^TRANSFER/i,
+        service: 'DispatchTable',
+        method: 'TRANSFER',
+        description: 'Transfer Wavebucks to another user'
+      }
+    ];
   }
 
   /** Return HTML string from Personality tab for a given key */

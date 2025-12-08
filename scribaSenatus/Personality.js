@@ -47,7 +47,7 @@ const Personality = (() => {
     const lexicon = Config.getLexicon();
 
     let html = `
-      <h1>📜 Scriba Senatus - Command Reference</h1>
+      <h1>&#128220; Scriba Senatus - Command Reference</h1>
       <p><i>Welcome to the Senate's automated clerk system. Send commands via email to interact with the Wavebucks economy.</i></p>
       <hr/>
     `;
@@ -70,10 +70,14 @@ const Personality = (() => {
       html += `<h2>${data.icon} ${categoryName}</h2><ul>`;
 
       data.commands.forEach(cmd => {
+        // Create mailto link with pre-filled body
+        const emailBody = encodeURIComponent(cmd.example || cmd.type);
+        const mailtoLink = `mailto:scribasenatus@gmail.com?subject=Command&body=${emailBody}`;
+
         html += `
           <li>
             <b>${cmd.type}</b> - ${cmd.description || 'No description'}
-            <br/><i>Example: ${cmd.example || cmd.type}</i>
+            <br/><i>Example: <a href="${mailtoLink}">${cmd.example || cmd.type}</a></i>
           </li>
         `;
       });
@@ -83,7 +87,7 @@ const Personality = (() => {
 
     html += `
       <hr/>
-      <h3>📚 Tips</h3>
+      <h3>&#128218; Tips</h3>
       <ul>
         <li>All commands are <b>case-insensitive</b></li>
         <li>Commands should be at the <b>start of your email body</b></li>

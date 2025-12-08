@@ -31,7 +31,7 @@ const Config = (() => {
         method: 'HELP',
         description: 'Show help message',
         category: 'Balance & Information',
-        icon: '💰',
+        icon: '&#128176;', // 💰
         example: 'HELP'
       },
       {
@@ -41,7 +41,7 @@ const Config = (() => {
         method: 'QUOT',
         description: 'Check balance and view active items',
         category: 'Balance & Information',
-        icon: '💰',
+        icon: '&#128176;', // 💰
         example: 'QUOT or BALANCE'
       },
       {
@@ -51,7 +51,7 @@ const Config = (() => {
         method: 'createCausa',
         description: 'Create collective vote with wagers',
         category: 'Causae (Voting & Wagering)',
-        icon: '🗳️',
+        icon: '&#128179;', // 🗳️
         example: 'CAUSA Best pizza topping | Pepperoni | Mushrooms | CLOSE 2025-12-31 | MIN 5'
       },
       {
@@ -61,7 +61,7 @@ const Config = (() => {
         method: 'vote',
         description: 'Vote on a causa with wager',
         category: 'Causae (Voting & Wagering)',
-        icon: '🗳️',
+        icon: '&#128179;', // 🗳️
         example: 'VOTE 1 0 10'
       },
       {
@@ -71,7 +71,7 @@ const Config = (() => {
         method: 'resolveCausa',
         description: 'Resolve causa and distribute winnings',
         category: 'Causae (Voting & Wagering)',
-        icon: '🗳️',
+        icon: '&#128179;', // 🗳️
         example: 'RESOLVE 1 0'
       },
       {
@@ -81,7 +81,7 @@ const Config = (() => {
         method: 'createCommissio',
         description: 'Create bounty task with reward',
         category: 'Commissiones (Bounty Tasks)',
-        icon: '📋',
+        icon: '&#128203;', // 📋
         example: 'COMMISSIO Fix login bug | REWARD 50 | EXPIRES 2025-12-20'
       },
       {
@@ -91,7 +91,7 @@ const Config = (() => {
         method: 'acceptCommissio',
         description: 'Accept and claim a commissio',
         category: 'Commissiones (Bounty Tasks)',
-        icon: '📋',
+        icon: '&#128203;', // 📋
         example: 'ACCEPT 3'
       },
       {
@@ -101,7 +101,7 @@ const Config = (() => {
         method: 'completeCommissio',
         description: 'Complete commissio and claim reward',
         category: 'Commissiones (Bounty Tasks)',
-        icon: '📋',
+        icon: '&#128203;', // 📋
         example: 'COMPLETE 3'
       },
       {
@@ -111,7 +111,7 @@ const Config = (() => {
         method: 'TRANSFER',
         description: 'Transfer Wavebucks to another user',
         category: 'Transfers',
-        icon: '💸',
+        icon: '&#128184;', // 💸
         example: 'TRANSFER friend@example.com 25'
       }
     ];

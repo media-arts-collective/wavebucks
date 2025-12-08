@@ -176,7 +176,7 @@ const CommandParsers = (() => {
 
 })();
 
-// Mock Config module with hardcoded lexicon
+// Mock Config module with hardcoded lexicon (matches actual Config.js)
 const Config = (() => {
   function getLexicon() {
     return [
@@ -185,63 +185,90 @@ const Config = (() => {
         pattern: /^HELP|^AUXILIUM/i,
         service: 'Personality',
         method: 'HELP',
-        description: 'Show help message'
+        description: 'Show help message',
+        category: 'Balance & Information',
+        icon: '&#128176;',
+        example: 'HELP'
       },
       {
         type: 'QUOT',
         pattern: /^QUOT|^BALANCE/i,
         service: 'InboxProcessor',
         method: 'QUOT',
-        description: 'Check balance and view active items'
+        description: 'Check balance and view active items',
+        category: 'Balance & Information',
+        icon: '&#128176;',
+        example: 'QUOT or BALANCE'
       },
       {
         type: 'CAUSA',
         pattern: /^CAUSA/i,
         service: 'Causae',
         method: 'createCausa',
-        description: 'Create collective vote with wagers'
+        description: 'Create collective vote with wagers',
+        category: 'Causae (Voting & Wagering)',
+        icon: '&#128179;',
+        example: 'CAUSA Best pizza topping | Pepperoni | Mushrooms | CLOSE 2025-12-31 | MIN 5'
       },
       {
         type: 'VOTE',
         pattern: /^VOTE/i,
         service: 'Causae',
         method: 'vote',
-        description: 'Vote on a causa with wager'
+        description: 'Vote on a causa with wager',
+        category: 'Causae (Voting & Wagering)',
+        icon: '&#128179;',
+        example: 'VOTE 1 0 10'
       },
       {
         type: 'RESOLVE',
         pattern: /^RESOLVE/i,
         service: 'Causae',
         method: 'resolveCausa',
-        description: 'Resolve causa and distribute winnings'
+        description: 'Resolve causa and distribute winnings',
+        category: 'Causae (Voting & Wagering)',
+        icon: '&#128179;',
+        example: 'RESOLVE 1 0'
       },
       {
         type: 'COMMISSIO',
         pattern: /^COMMISSIO/i,
         service: 'Commissio',
         method: 'createCommissio',
-        description: 'Create bounty task with reward'
+        description: 'Create bounty task with reward',
+        category: 'Commissiones (Bounty Tasks)',
+        icon: '&#128203;',
+        example: 'COMMISSIO Fix login bug | REWARD 50 | EXPIRES 2025-12-20'
       },
       {
         type: 'ACCEPT',
         pattern: /^ACCEPT/i,
         service: 'Commissio',
         method: 'acceptCommissio',
-        description: 'Accept and claim a commissio'
+        description: 'Accept and claim a commissio',
+        category: 'Commissiones (Bounty Tasks)',
+        icon: '&#128203;',
+        example: 'ACCEPT 3'
       },
       {
         type: 'COMPLETE',
         pattern: /^COMPLETE/i,
         service: 'Commissio',
         method: 'completeCommissio',
-        description: 'Complete commissio and claim reward'
+        description: 'Complete commissio and claim reward',
+        category: 'Commissiones (Bounty Tasks)',
+        icon: '&#128203;',
+        example: 'COMPLETE 3'
       },
       {
         type: 'TRANSFER',
         pattern: /^TRANSFER/i,
         service: 'DispatchTable',
         method: 'TRANSFER',
-        description: 'Transfer Wavebucks to another user'
+        description: 'Transfer Wavebucks to another user',
+        category: 'Transfers',
+        icon: '&#128184;',
+        example: 'TRANSFER friend@example.com 25'
       }
     ];
   }
@@ -413,6 +440,53 @@ function testPatternMatching() {
 }
 
 // ============================================================================
+// LEXICON METADATA TESTS
+// ============================================================================
+
+function testLexiconMetadata() {
+  TestRunner.test('Lexicon entries have complete metadata', () => {
+    const lexicon = Config.getLexicon();
+    lexicon.forEach(entry => {
+      TestRunner.assert(entry.category, `${entry.type} should have category`);
+      TestRunner.assert(entry.icon, `${entry.type} should have icon`);
+      TestRunner.assert(entry.example, `${entry.type} should have example`);
+      TestRunner.assert(entry.description, `${entry.type} should have description`);
+    });
+  });
+
+  TestRunner.test('Icons use HTML entities', () => {
+    const lexicon = Config.getLexicon();
+    lexicon.forEach(entry => {
+      TestRunner.assert(
+        entry.icon.includes('&#'),
+        `${entry.type} icon should use HTML entity format`
+      );
+    });
+  });
+
+  TestRunner.test('All commands have examples', () => {
+    const lexicon = Config.getLexicon();
+    lexicon.forEach(entry => {
+      TestRunner.assert(
+        entry.example && entry.example.length > 0,
+        `${entry.type} should have non-empty example`
+      );
+    });
+  });
+
+  TestRunner.test('Categories are properly organized', () => {
+    const lexicon = Config.getLexicon();
+    const categories = [...new Set(lexicon.map(e => e.category))];
+
+    TestRunner.assert(categories.length >= 3, 'Should have at least 3 categories');
+    TestRunner.assert(
+      categories.includes('Balance & Information'),
+      'Should have Balance & Information category'
+    );
+  });
+}
+
+// ============================================================================
 // TEST RUNNER
 // ============================================================================
 
@@ -428,6 +502,9 @@ function runAllTests() {
 
   Logger.log('\nRunning Pattern Matching tests...');
   testPatternMatching();
+
+  Logger.log('\nRunning Lexicon Metadata tests...');
+  testLexiconMetadata();
 
   const summary = TestRunner.summary();
 

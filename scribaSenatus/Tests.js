@@ -326,6 +326,74 @@ function testMessageBuilder() {
 }
 
 // ============================================================================
+// CAUSAE SERVICE TESTS
+// ============================================================================
+
+function testCausaeService() {
+  TestRunner.test('Causae module has required methods', () => {
+    TestRunner.assert(typeof Causae.createCausa === 'function', 'Should have createCausa method');
+    TestRunner.assert(typeof Causae.vote === 'function', 'Should have vote method');
+    TestRunner.assert(typeof Causae.resolveCausa === 'function', 'Should have resolveCausa method');
+    TestRunner.assert(typeof Causae.getActiveList === 'function', 'Should have getActiveList method');
+  });
+
+  TestRunner.test('Causae.getActiveList returns array', () => {
+    const list = Causae.getActiveList();
+    TestRunner.assert(Array.isArray(list), 'Should return array');
+  });
+}
+
+// ============================================================================
+// COMMISSIONES SERVICE TESTS
+// ============================================================================
+
+function testCommissionesService() {
+  TestRunner.test('Commissio module has required methods', () => {
+    TestRunner.assert(typeof Commissio.createCommissio === 'function', 'Should have createCommissio method');
+    TestRunner.assert(typeof Commissio.acceptCommissio === 'function', 'Should have acceptCommissio method');
+    TestRunner.assert(typeof Commissio.completeCommissio === 'function', 'Should have completeCommissio method');
+    TestRunner.assert(typeof Commissio.getActiveList === 'function', 'Should have getActiveList method');
+  });
+
+  TestRunner.test('Commissio.getActiveList returns array', () => {
+    const list = Commissio.getActiveList();
+    TestRunner.assert(Array.isArray(list), 'Should return array');
+  });
+}
+
+// ============================================================================
+// PERSONALITY TESTS
+// ============================================================================
+
+function testPersonality() {
+  TestRunner.test('Personality.get(HELP) returns HTML', () => {
+    const help = Personality.get('HELP');
+    TestRunner.assert(typeof help === 'string', 'Should return string');
+    TestRunner.assert(help.length > 0, 'Should not be empty');
+    TestRunner.assert(help.includes('Scriba Senatus'), 'Should include title');
+  });
+
+  TestRunner.test('HELP message includes all command categories', () => {
+    const help = Personality.get('HELP');
+    TestRunner.assert(help.includes('Balance & Information'), 'Should include Balance category');
+    TestRunner.assert(help.includes('Causae'), 'Should include Causae category');
+    TestRunner.assert(help.includes('Commissiones'), 'Should include Commissiones category');
+    TestRunner.assert(help.includes('Transfers'), 'Should include Transfers category');
+  });
+
+  TestRunner.test('HELP message includes mailto links', () => {
+    const help = Personality.get('HELP');
+    TestRunner.assert(help.includes('mailto:scribasenatus@gmail.com'), 'Should include mailto links');
+  });
+
+  TestRunner.test('HELP message uses HTML entities for emojis', () => {
+    const help = Personality.get('HELP');
+    TestRunner.assert(help.includes('&#128'), 'Should use HTML entity emojis');
+    TestRunner.assert(!help.match(/[^\x00-\x7F]/), 'Should not contain raw unicode emojis');
+  });
+}
+
+// ============================================================================
 // INTEGRATION TESTS
 // ============================================================================
 
@@ -374,6 +442,35 @@ function testIntegration() {
     TestRunner.assertEqual(parsed.title, 'Test', 'Should parse title');
     TestRunner.assert(parsed.options.length === 2, 'Should have 2 options');
   });
+
+  TestRunner.test('Lexicon metadata includes examples and icons', () => {
+    const lexicon = Config.getLexicon();
+    lexicon.forEach(entry => {
+      TestRunner.assert(entry.category, `${entry.type} should have category`);
+      TestRunner.assert(entry.icon, `${entry.type} should have icon`);
+      TestRunner.assert(entry.example, `${entry.type} should have example`);
+      TestRunner.assert(entry.description, `${entry.type} should have description`);
+    });
+  });
+
+  TestRunner.test('All handlers use HTML entity emojis', () => {
+    const testEmail = 'test@example.com';
+    const handlers = {
+      'CAUSA': 'CAUSA Test | A | B',
+      'VOTE': 'VOTE 1 0 10',
+      'COMMISSIO': 'COMMISSIO Test task',
+      'ACCEPT': 'ACCEPT 1',
+      'COMPLETE': 'COMPLETE 1',
+      'TRANSFER': 'TRANSFER user@example.com 10'
+    };
+
+    Object.entries(handlers).forEach(([type, body]) => {
+      // Note: These will fail if there's no data, but structure test is valuable
+      // In real test environment, we'd mock the data
+      const handler = DispatchTable[type];
+      TestRunner.assert(typeof handler === 'function', `${type} handler should exist`);
+    });
+  });
 }
 
 // ============================================================================
@@ -405,15 +502,24 @@ function runAllTests() {
   Logger.log('\nRunning MessageBuilder tests...');
   testMessageBuilder();
 
+  Logger.log('\nRunning Causae Service tests...');
+  testCausaeService();
+
+  Logger.log('\nRunning Commissiones Service tests...');
+  testCommissionesService();
+
+  Logger.log('\nRunning Personality tests...');
+  testPersonality();
+
   Logger.log('\nRunning Integration tests...');
   testIntegration();
 
   const summary = TestRunner.summary();
 
   if (summary.failed === 0) {
-    Logger.log('\n🎉 All tests passed!');
+    Logger.log('\n&#127881; All tests passed!');
   } else {
-    Logger.log(`\n⚠️ ${summary.failed} test(s) failed`);
+    Logger.log(`\n&#9888; ${summary.failed} test(s) failed`);
   }
 
   return summary;

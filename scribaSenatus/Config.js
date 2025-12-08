@@ -29,63 +29,90 @@ const Config = (() => {
         pattern: /^HELP|^AUXILIUM/i,
         service: 'Personality',
         method: 'HELP',
-        description: 'Show help message'
+        description: 'Show help message',
+        category: 'Balance & Information',
+        icon: '💰',
+        example: 'HELP'
       },
       {
         type: 'QUOT',
         pattern: /^QUOT|^BALANCE/i,
         service: 'InboxProcessor',
         method: 'QUOT',
-        description: 'Check balance and view active items'
+        description: 'Check balance and view active items',
+        category: 'Balance & Information',
+        icon: '💰',
+        example: 'QUOT or BALANCE'
       },
       {
         type: 'CAUSA',
         pattern: /^CAUSA/i,
         service: 'Causae',
         method: 'createCausa',
-        description: 'Create collective vote with wagers'
+        description: 'Create collective vote with wagers',
+        category: 'Causae (Voting & Wagering)',
+        icon: '🗳️',
+        example: 'CAUSA Best pizza topping | Pepperoni | Mushrooms | CLOSE 2025-12-31 | MIN 5'
       },
       {
         type: 'VOTE',
         pattern: /^VOTE/i,
         service: 'Causae',
         method: 'vote',
-        description: 'Vote on a causa with wager'
+        description: 'Vote on a causa with wager',
+        category: 'Causae (Voting & Wagering)',
+        icon: '🗳️',
+        example: 'VOTE 1 0 10'
       },
       {
         type: 'RESOLVE',
         pattern: /^RESOLVE/i,
         service: 'Causae',
         method: 'resolveCausa',
-        description: 'Resolve causa and distribute winnings'
+        description: 'Resolve causa and distribute winnings',
+        category: 'Causae (Voting & Wagering)',
+        icon: '🗳️',
+        example: 'RESOLVE 1 0'
       },
       {
         type: 'COMMISSIO',
         pattern: /^COMMISSIO/i,
         service: 'Commissio',
         method: 'createCommissio',
-        description: 'Create bounty task with reward'
+        description: 'Create bounty task with reward',
+        category: 'Commissiones (Bounty Tasks)',
+        icon: '📋',
+        example: 'COMMISSIO Fix login bug | REWARD 50 | EXPIRES 2025-12-20'
       },
       {
         type: 'ACCEPT',
         pattern: /^ACCEPT/i,
         service: 'Commissio',
         method: 'acceptCommissio',
-        description: 'Accept and claim a commissio'
+        description: 'Accept and claim a commissio',
+        category: 'Commissiones (Bounty Tasks)',
+        icon: '📋',
+        example: 'ACCEPT 3'
       },
       {
         type: 'COMPLETE',
         pattern: /^COMPLETE/i,
         service: 'Commissio',
         method: 'completeCommissio',
-        description: 'Complete commissio and claim reward'
+        description: 'Complete commissio and claim reward',
+        category: 'Commissiones (Bounty Tasks)',
+        icon: '📋',
+        example: 'COMPLETE 3'
       },
       {
         type: 'TRANSFER',
         pattern: /^TRANSFER/i,
         service: 'DispatchTable',
         method: 'TRANSFER',
-        description: 'Transfer Wavebucks to another user'
+        description: 'Transfer Wavebucks to another user',
+        category: 'Transfers',
+        icon: '💸',
+        example: 'TRANSFER friend@example.com 25'
       }
     ];
   }

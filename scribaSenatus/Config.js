@@ -49,7 +49,7 @@ const Config = (() => {
         pattern: /^CAUSA/i,
         service: 'Causae',
         method: 'createCausa',
-        description: 'Create a collective vote with wagers. Format: CAUSA <title> | <option1> | <option2> | ... | CLOSE <YYYY-MM-DD> | MIN <wager>. Closing date and minimum wager are optional (defaults: 7 days, &#8361;1)',
+        description: 'Create a collective vote with wagers. Separate options with |. Optional: CLOSE date, MIN wager (defaults: 7 days, &#8361;1)',
         category: 'Causae (Voting & Wagering)',
         icon: '&#128179;', // 🗳️
         example: 'CAUSA Best pizza topping | Pepperoni | Mushrooms | CLOSE 2025-12-31 | MIN 5'
@@ -59,7 +59,7 @@ const Config = (() => {
         pattern: /^VOTE/i,
         service: 'Causae',
         method: 'vote',
-        description: 'Vote on an open causa with a wager. Format: VOTE <causaId> <optionIndex> <wager>. Your wager is deducted immediately. Winners share the pot proportionally',
+        description: 'Vote on an open causa with a wager. Wager is deducted immediately. Winners share pot proportionally',
         category: 'Causae (Voting & Wagering)',
         icon: '&#128179;', // 🗳️
         example: 'VOTE 1 0 10'
@@ -69,7 +69,7 @@ const Config = (() => {
         pattern: /^RESOLVE/i,
         service: 'Causae',
         method: 'resolveCausa',
-        description: 'Resolve a causa and distribute winnings to voters who chose the winning option. Format: RESOLVE <causaId> <winningOptionIndex>. Only the creator can resolve their causa',
+        description: 'Resolve a causa and distribute winnings to voters who chose the winning option. Only creator can resolve',
         category: 'Causae (Voting & Wagering)',
         icon: '&#128179;', // 🗳️
         example: 'RESOLVE 1 0'
@@ -79,7 +79,7 @@ const Config = (() => {
         pattern: /^COMMISSIO/i,
         service: 'Commissio',
         method: 'createCommissio',
-        description: 'Create a bounty task with escrowed reward. Format: COMMISSIO <title> | REWARD <amount> | EXPIRES <YYYY-MM-DD>. Reward and expiry are optional (defaults: &#8361;10, 30 days). Reward is held in escrow until completion',
+        description: 'Create a bounty task with escrowed reward. Optional: REWARD amount, EXPIRES date (defaults: &#8361;10, 30 days)',
         category: 'Commissiones (Bounty Tasks)',
         icon: '&#128203;', // 📋
         example: 'COMMISSIO Fix login bug | REWARD 50 | EXPIRES 2025-12-20'
@@ -89,7 +89,7 @@ const Config = (() => {
         pattern: /^ACCEPT/i,
         service: 'Commissio',
         method: 'acceptCommissio',
-        description: 'Accept and claim an open commissio. Format: ACCEPT <commissionId>. Assigns the task to you and changes status to ASSIGNED',
+        description: 'Accept and claim an open commissio. Assigns the task to you',
         category: 'Commissiones (Bounty Tasks)',
         icon: '&#128203;', // 📋
         example: 'ACCEPT 3'
@@ -99,7 +99,7 @@ const Config = (() => {
         pattern: /^COMPLETE/i,
         service: 'Commissio',
         method: 'completeCommissio',
-        description: 'Mark your assigned commissio as complete and claim the escrowed reward. Format: COMPLETE <commissionId>. Only the assignee can complete their task',
+        description: 'Mark your assigned commissio as complete and claim the escrowed reward. Only assignee can complete',
         category: 'Commissiones (Bounty Tasks)',
         icon: '&#128203;', // 📋
         example: 'COMPLETE 3'
@@ -109,7 +109,7 @@ const Config = (() => {
         pattern: /^TRANSFER/i,
         service: 'DispatchTable',
         method: 'TRANSFER',
-        description: 'Send Wavebucks to another user. Format: TRANSFER <email> <amount>. Requires sufficient balance. Direct peer-to-peer transaction',
+        description: 'Send Wavebucks to another user. Requires sufficient balance',
         category: 'Transfers',
         icon: '&#128184;', // 💸
         example: 'TRANSFER friend@example.com 25'

@@ -1,0 +1,9 @@
+# Local test files - not for Apps Script deployment
+TestsLocal.js
+
+# Git files
+.git/**
+.gitignore
+
+# Clasp files
+.clasp.json

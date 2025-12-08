@@ -29,13 +29,13 @@ const Commissio = (() => {
    */
   function createCommissio(creatorEmail, title, reward, expiry) {
     // Check creator has sufficient balance
-    const balance = Wavebucks.Wavebucks.getBalance(creatorEmail);
+    const balance = Wavebucks.getBalance(creatorEmail);
     if (balance < reward) {
       throw new Error(`Insufficient funds. Your balance: &#8361;${balance}, Required: &#8361;${reward}`);
     }
 
     // Escrow the reward immediately
-    Wavebucks.Wavebucks.debit(creatorEmail, reward, `Created Commissio: ${title}`);
+    Wavebucks.debit(creatorEmail, reward, `Created Commissio: ${title}`);
 
     const sh = getSheet();
     const rows = sh.getDataRange().getValues();
@@ -117,7 +117,7 @@ const Commissio = (() => {
     const title = row[1];
 
     // Credit reward to completer
-    Wavebucks.Wavebucks.credit(completerEmail, reward, `Completed Commissio ${commissionId}: ${title}`);
+    Wavebucks.credit(completerEmail, reward, `Completed Commissio ${commissionId}: ${title}`);
 
     // Mark as completed
     sh.getRange(rowIndex + 1, 6).setValue('COMPLETED');

@@ -9,7 +9,7 @@ const DispatchTable = {
   'HELP': () => Personality.get('HELP'),
 
   'QUOT': (email) => {
-    const balance = Wavebucks.Wavebucks.getBalance(email);
+    const balance = Wavebucks.getBalance(email);
     return MessageBuilder.buildDigest({ balance });
   },
 
@@ -103,19 +103,19 @@ const DispatchTable = {
       const parsed = CommandParsers.parseTransfer(body);
 
       // Check sender has sufficient balance
-      const senderBalance = Wavebucks.Wavebucks.getBalance(email);
+      const senderBalance = Wavebucks.getBalance(email);
       if (senderBalance < parsed.amount) {
         throw new Error(`Insufficient funds. Your balance: &#8361;${senderBalance}`);
       }
 
       // Execute transfer
-      Wavebucks.Wavebucks.debit(email, parsed.amount, `Transfer to ${parsed.to}`);
-      Wavebucks.Wavebucks.credit(parsed.to, parsed.amount, `Transfer from ${email}`);
+      Wavebucks.debit(email, parsed.amount, `Transfer to ${parsed.to}`);
+      Wavebucks.credit(parsed.to, parsed.amount, `Transfer from ${email}`);
 
       return `<h2>&#9989; Transfer Complete</h2>
               <p><b>To:</b> ${parsed.to}</p>
               <p><b>Amount:</b> &#8361;${parsed.amount}</p>
-              <p><b>Your New Balance:</b> &#8361;${Wavebucks.Wavebucks.getBalance(email)}</p>`;
+              <p><b>Your New Balance:</b> &#8361;${Wavebucks.getBalance(email)}</p>`;
     } catch (err) {
       return MessageBuilder.buildErrorMessage(`Transfer failed: ${err.message}`);
     }

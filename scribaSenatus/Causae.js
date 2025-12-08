@@ -86,7 +86,7 @@ const Causae = (() => {
     }
 
     // Debit wager from voter's balance
-    Wavebucks.Wavebucks.debit(voterEmail, wager, `Vote on Causa ${causaId}: ${row[1]}`);
+    Wavebucks.debit(voterEmail, wager, `Vote on Causa ${causaId}: ${row[1]}`);
 
     // Add vote to votes array
     const votes = JSON.parse(row[7]);
@@ -136,7 +136,7 @@ const Causae = (() => {
 
     if (winners.length === 0) {
       // No winners - pot goes to creator
-      Wavebucks.Wavebucks.credit(creator, totalPot, `Causa ${causaId} resolved - no winners`);
+      Wavebucks.credit(creator, totalPot, `Causa ${causaId} resolved - no winners`);
       sh.getRange(rowIndex + 1, 5).setValue('RESOLVED');
       sh.getRange(rowIndex + 1, 9).setValue(`Resolved: ${options[winningOptionIndex]}. No winners, pot to creator.`);
 
@@ -156,7 +156,7 @@ const Causae = (() => {
     // Distribute pot proportionally
     winners.forEach(winner => {
       const share = Math.floor((winner.wager / totalWinnerWagers) * totalPot);
-      Wavebucks.Wavebucks.credit(winner.email, share, `Won Causa ${causaId}: ${row[1]}`);
+      Wavebucks.credit(winner.email, share, `Won Causa ${causaId}: ${row[1]}`);
       Logger.log(`  &#127942; ${winner.email} wins &#8361;${share}`);
     });
 

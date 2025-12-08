@@ -86,8 +86,13 @@ const InboxProcessor = (function() {
 
   function sendReply(msg, htmlBody) {
     const recipient = extractEmail(msg.getFrom());
-    GmailApp.sendEmail(recipient, 'Re: ' + msg.getSubject(), '', { htmlBody: htmlBody });
-    Logger.log(`📨 HTML reply sent to ${recipient}`);
+
+    // Reply directly to the message to maintain thread continuity
+    msg.reply('', {
+      htmlBody: htmlBody
+    });
+
+    Logger.log(`📨 HTML reply sent to ${recipient} in thread`);
   }
 
   return {

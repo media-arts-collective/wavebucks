@@ -1,0 +1,15 @@
+{
+  "timeZone": "America/Chicago",
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8",
+  "dependencies": {
+    "libraries": [
+      {
+        "userSymbol": "Wavebucks",
+        "libraryId": "1cZmJlFXXyez-79HQLeqJmTCjy5eNxnXTEkoVusLnVUeHlZdM6QECTAlf",
+        "version": "0",
+        "developmentMode": true
+      }
+    ]
+  }
+}

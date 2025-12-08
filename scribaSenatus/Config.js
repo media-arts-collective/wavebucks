@@ -32,7 +32,8 @@ const Config = (() => {
         description: 'Display this help message with all available commands, categories, and examples',
         category: 'Balance & Information',
         icon: '&#128176;', // 💰
-        example: 'HELP'
+        example: 'HELP',
+        details: 'Shows all commands organized by category with examples and descriptions'
       },
       {
         type: 'QUOT',
@@ -42,7 +43,8 @@ const Config = (() => {
         description: 'Check your current Wavebucks balance and see all active Causae and Commissiones',
         category: 'Balance & Information',
         icon: '&#128176;', // 💰
-        example: 'QUOT or BALANCE'
+        example: 'QUOT',
+        details: 'Displays your balance, all open causae with pots, and all active commissiones with rewards'
       },
       {
         type: 'CAUSA',
@@ -52,17 +54,19 @@ const Config = (() => {
         description: 'Create a collective vote with wagers. Separate options with |. Optional: CLOSE date, MIN wager (defaults: 7 days, &#8361;1)',
         category: 'Causae (Voting & Wagering)',
         icon: '&#128179;', // 🗳️
-        example: 'CAUSA Best pizza topping | Pepperoni | Mushrooms | CLOSE 2025-12-31 | MIN 5'
+        example: 'CAUSA Best pizza topping | Pepperoni | Mushrooms | CLOSE 2025-12-31 | MIN 5',
+        details: 'Format: CAUSA &lt;title&gt; | &lt;option1&gt; | &lt;option2&gt; | ... | CLOSE &lt;YYYY-MM-DD&gt; | MIN &lt;wager&gt;'
       },
       {
         type: 'VOTE',
         pattern: /^VOTE/i,
         service: 'Causae',
         method: 'vote',
-        description: 'Vote on an open causa with a wager. Wager is deducted immediately. Winners share pot proportionally',
+        description: 'Vote on an open causa with a wager. Format: VOTE &lt;causaId&gt; &lt;optionIndex&gt; &lt;amount&gt;. Options start at 0',
         category: 'Causae (Voting & Wagering)',
         icon: '&#128179;', // 🗳️
-        example: 'VOTE 1 0 10'
+        example: 'VOTE 1 0 10',
+        details: 'Example: VOTE 1 0 10 means vote on causa #1, choose option 0 (first option), wager &#8361;10. Wager deducted immediately'
       },
       {
         type: 'RESOLVE',
@@ -72,7 +76,8 @@ const Config = (() => {
         description: 'Resolve a causa and distribute winnings to voters who chose the winning option. Only creator can resolve',
         category: 'Causae (Voting & Wagering)',
         icon: '&#128179;', // 🗳️
-        example: 'RESOLVE 1 0'
+        example: 'RESOLVE 1 0',
+        details: 'Format: RESOLVE &lt;causaId&gt; &lt;winningOptionIndex&gt;. Distributes pot proportionally to winners'
       },
       {
         type: 'COMMISSIO',
@@ -82,7 +87,8 @@ const Config = (() => {
         description: 'Create a bounty task with escrowed reward. Optional: REWARD amount, EXPIRES date (defaults: &#8361;10, 30 days)',
         category: 'Commissiones (Bounty Tasks)',
         icon: '&#128203;', // 📋
-        example: 'COMMISSIO Fix login bug | REWARD 50 | EXPIRES 2025-12-20'
+        example: 'COMMISSIO Fix login bug | REWARD 50 | EXPIRES 2025-12-20',
+        details: 'Format: COMMISSIO &lt;title&gt; | REWARD &lt;amount&gt; | EXPIRES &lt;YYYY-MM-DD&gt;. Reward is held in escrow until completed'
       },
       {
         type: 'ACCEPT',
@@ -92,7 +98,8 @@ const Config = (() => {
         description: 'Accept and claim an open commissio. Assigns the task to you',
         category: 'Commissiones (Bounty Tasks)',
         icon: '&#128203;', // 📋
-        example: 'ACCEPT 3'
+        example: 'ACCEPT 3',
+        details: 'Format: ACCEPT &lt;commissionId&gt;. Changes status from OPEN to ASSIGNED'
       },
       {
         type: 'COMPLETE',
@@ -102,7 +109,8 @@ const Config = (() => {
         description: 'Mark your assigned commissio as complete and claim the escrowed reward. Only assignee can complete',
         category: 'Commissiones (Bounty Tasks)',
         icon: '&#128203;', // 📋
-        example: 'COMPLETE 3'
+        example: 'COMPLETE 3',
+        details: 'Format: COMPLETE &lt;commissionId&gt;. Releases escrowed reward to you'
       },
       {
         type: 'TRANSFER',
@@ -112,7 +120,8 @@ const Config = (() => {
         description: 'Send Wavebucks to another user. Requires sufficient balance',
         category: 'Transfers',
         icon: '&#128184;', // 💸
-        example: 'TRANSFER friend@example.com 25'
+        example: 'TRANSFER friend@example.com 25',
+        details: 'Format: TRANSFER &lt;email&gt; &lt;amount&gt;. Direct peer-to-peer transaction'
       }
     ];
   }

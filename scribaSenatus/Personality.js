@@ -70,10 +70,14 @@ const Personality = (() => {
       html += `<h2>${data.icon} ${categoryName}</h2><ul>`;
 
       data.commands.forEach(cmd => {
+        // Create simple mailto link using just the command type
+        const mailtoLink = `mailto:scribasenatus@gmail.com?body=${encodeURIComponent(cmd.type)}`;
+
         html += `
           <li>
             <b>${cmd.type}</b> - ${cmd.description || 'No description'}
-            <br/><i>Example: ${cmd.example || cmd.type}</i>
+            ${cmd.details ? `<br/><small>${cmd.details}</small>` : ''}
+            <br/><i>Example: <a href="${mailtoLink}">${cmd.example || cmd.type}</a></i>
           </li>
         `;
       });

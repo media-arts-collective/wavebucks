@@ -135,10 +135,20 @@ const Config = (() => {
   }
 
   /** Append to Log tab */
-  function logEvent(from, subject, command, handler, status, notes) {
+  function logEvent(from, subject, command, handler, status, notes, messageId = '') {
     const sh = SpreadsheetApp.openById(CONFIG_SHEET_ID).getSheetByName('Log');
-    sh.appendRow([new Date(), from, subject, command, handler, status, notes]);
+    sh.appendRow([new Date(), from, subject, command, handler, status, notes, messageId]);
   }
 
-  return { get, getAll, getLexicon, getPersonality, logEvent };
+  /** Check if a message has already been processed */
+  function isMessageProcessed(messageId) {
+    const sh = SpreadsheetApp.openById(CONFIG_SHEET_ID).getSheetByName('Log');
+    if (!sh) return false;
+
+    const data = sh.getDataRange().getValues();
+    // Check column H (index 7) for messageId
+    return data.some(row => row[7] === messageId);
+  }
+
+  return { get, getAll, getLexicon, getPersonality, logEvent, isMessageProcessed };
 })();

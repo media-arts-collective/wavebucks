@@ -15,11 +15,28 @@ const InboxProcessor = (function() {
   function processUnread() {
     const query = Config.get('inboxSearch') || 'is:unread to:scribasenatus@*';
     const threads = _GmailApp.search(query);
+
+    // Get or create "Scriba/Processed" label
+    let processedLabel = _GmailApp.getUserLabelByName('Scriba/Processed');
+    if (!processedLabel) {
+      processedLabel = _GmailApp.createLabel('Scriba/Processed');
+    }
+
     threads.forEach(thread => {
       thread.getMessages().forEach(msg => {
         if (!msg.isUnread()) return;
+
+        // Check if already processed by message ID in log
+        const messageId = msg.getId();
+        if (Config.isMessageProcessed(messageId)) {
+          Logger.log(`⏭️ Skipping already processed message: ${messageId}`);
+          msg.markRead(); // Mark read to avoid checking again
+          return;
+        }
+
         dispatchMessage(msg);
         msg.markRead();
+        thread.addLabel(processedLabel);
       });
     });
   }
@@ -34,29 +51,30 @@ const InboxProcessor = (function() {
     const fromEmail = extractEmail(msg.getFrom());
     const body = normalizeBody(msg.getPlainBody());
     const subject = msg.getSubject();
+    const messageId = msg.getId();
 
     try {
       const command = detectCommand(body);
       if (!command) {
         sendReply(msg, Personality.get('HELP'));
-        logEvent(fromEmail, subject, 'UNKNOWN', 'InboxProcessor', 'help', 'no command found');
+        logEvent(fromEmail, subject, 'UNKNOWN', 'InboxProcessor', 'help', 'no command found', messageId);
         return;
       }
 
       const handler = DispatchTable[command.type];
       if (!handler) {
         sendReply(msg, MessageBuilder.buildErrorMessage("Unrecognized command: " + command.type));
-        logEvent(fromEmail, subject, command.type, 'InboxProcessor', 'error', 'no handler');
+        logEvent(fromEmail, subject, command.type, 'InboxProcessor', 'error', 'no handler', messageId);
         return;
       }
 
       const reply = handler(fromEmail, body, subject, command);
       sendReply(msg, reply);
-      logEvent(fromEmail, subject, command.type, handler.name || 'anon', 'success', '');
+      logEvent(fromEmail, subject, command.type, handler.name || 'anon', 'success', '', messageId);
 
     } catch (err) {
       sendReply(msg, MessageBuilder.buildErrorMessage(err.message));
-      logEvent(fromEmail, subject, 'EXCEPTION', 'InboxProcessor', 'fail', err.message);
+      logEvent(fromEmail, subject, 'EXCEPTION', 'InboxProcessor', 'fail', err.message, messageId);
     }
   }
 

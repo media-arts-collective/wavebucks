@@ -69,7 +69,27 @@ const InboxProcessor = (function() {
   }
 
   function normalizeBody(body) {
-    return body.replace(/\r\n|\r/g, '\n').trim();
+    // Remove quoted reply content (Gmail style)
+    // Looks for "On [date] ... wrote:" pattern
+    const quoteSeparators = [
+      /On .+wrote:/i,           // Gmail: "On Mon, Dec 8, 2025 at 5:46 PM ... wrote:"
+      /^>.*/gm,                 // Lines starting with >
+      /_{5,}/,                  // Underscores (some clients)
+      /^From:.+/m,              // "From: ..." headers
+    ];
+
+    let cleanBody = body;
+
+    // Stop at the first quote separator found
+    for (const separator of quoteSeparators) {
+      const match = cleanBody.match(separator);
+      if (match) {
+        cleanBody = cleanBody.substring(0, match.index);
+        break;
+      }
+    }
+
+    return cleanBody.replace(/\r\n|\r/g, '\n').trim();
   }
 
   /**

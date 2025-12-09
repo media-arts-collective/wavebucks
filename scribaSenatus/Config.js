@@ -51,7 +51,7 @@ const Config = (() => {
         pattern: /^CAUSA/i,
         service: 'Causae',
         method: 'createCausa',
-        description: 'Create a collective vote with wagers. Separate options with |. Optional: CLOSE date, MIN wager (defaults: 7 days, &#8361;1)',
+        description: 'Create a collective vote with wagers. Use | to separate title and each voting option. Optional: CLOSE date, MIN wager (defaults: 7 days, &#8361;1)',
         category: 'Causae (Voting & Wagering)',
         icon: '&#128179;', // 🗳️
         example: 'CAUSA Best pizza topping | Pepperoni | Mushrooms | CLOSE 2025-12-31 | MIN 5',

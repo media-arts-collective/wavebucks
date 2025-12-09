@@ -56,8 +56,8 @@ const InboxProcessor = (function() {
     try {
       const command = detectCommand(body);
       if (!command) {
-        sendReply(msg, Personality.get('HELP'));
-        logEvent(fromEmail, subject, 'UNKNOWN', 'InboxProcessor', 'help', 'no command found', messageId);
+        // No recognized command - silently ignore (may be other email traffic)
+        logEvent(fromEmail, subject, 'UNKNOWN', 'InboxProcessor', 'ignored', 'no command found', messageId);
         return;
       }
 

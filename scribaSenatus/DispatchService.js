@@ -67,7 +67,7 @@ const DispatchTable = {
               <p><b>Title:</b> ${parsed.title}</p>
               <p><b>Reward:</b> &#8361;${parsed.reward}</p>
               <p><b>Expires:</b> ${parsed.expiry.toDateString()}</p>
-              <p><i>Send ACCEPT to claim this task</i></p>`;
+              <p><i>Send ACCEPT ${commissionId} to claim this task</i></p>`;
     } catch (err) {
       return MessageBuilder.buildErrorMessage(`Commissio creation failed: ${err.message}`);
     }

@@ -64,16 +64,13 @@ const InboxProcessor = (function () {
     }).join('\n\n');
   }
 
-  const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
-  const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
-  const ANTHROPIC_VERSION = '2023-06-01';
-
   /**
    * Asks Claude whether this message needs a response and, if so, drafts
    * one. Never sends automatically — the only Gmail mutation this can
    * cause is creating a draft reply. Every review is logged regardless of
-   * outcome (no_action, draft_reply, or error), and no single message's
-   * failure is allowed to propagate up and kill the rest of the batch.
+   * outcome (no_action, draft_reply, flag, or error), and no single
+   * message's failure is allowed to propagate up and kill the rest of the
+   * batch.
    */
   function reviewMessage(msg) {
     let threadId, messageId, from, subject;
@@ -85,58 +82,11 @@ const InboxProcessor = (function () {
       from = extractEmail(msg.getFrom());
       subject = msg.getSubject();
 
-      const apiKey = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
-      if (!apiKey) {
-        Config.logEvent(threadId, messageId, from, subject, 'error', 'Missing ANTHROPIC_API_KEY script property.');
-        return;
-      }
-
-      const response = UrlFetchApp.fetch(ANTHROPIC_URL, {
-        method: 'post',
-        contentType: 'application/json',
-        headers: {
-          'x-api-key': apiKey,
-          'anthropic-version': ANTHROPIC_VERSION
-        },
-        payload: JSON.stringify({
-          model: ANTHROPIC_MODEL,
-          max_tokens: 1000,
-          system: AEDILE_SYSTEM_PROMPT,
-          messages: [{
-            role: 'user',
-            content: buildThreadContent(thread, messageId)
-          }]
-        }),
-        muteHttpExceptions: true
-      });
-
-      if (response.getResponseCode() !== 200) {
-        Config.logEvent(
-          threadId, messageId, from, subject, 'error',
-          `Anthropic API returned ${response.getResponseCode()}: ${response.getContentText()}`
-        );
-        return;
-      }
-
-      const apiResult = JSON.parse(response.getContentText());
-      const rawDecision = apiResult.content[0].text;
-
-      // The model occasionally wraps its JSON in a markdown code fence despite being
-      // told not to. Strip that before parsing — a best-effort cleanup, not a guarantee.
-      const cleanedDecision = rawDecision
-        .trim()
-        .replace(/^```(?:json)?\s*/i, '')
-        .replace(/\s*```$/, '')
-        .trim();
-
       let decision;
       try {
-        decision = JSON.parse(cleanedDecision);
-      } catch (parseErr) {
-        Config.logEvent(
-          threadId, messageId, from, subject, 'error',
-          `Model response was not valid JSON. Raw: ${rawDecision} | Cleaned: ${cleanedDecision}`
-        );
+        decision = AnthropicClient.getJsonDecision(AEDILE_SYSTEM_PROMPT, buildThreadContent(thread, messageId));
+      } catch (err) {
+        Config.logEvent(threadId, messageId, from, subject, 'error', err.message);
         return;
       }
 

@@ -13,34 +13,6 @@
 
 const LAST_CONSOLIDATION_RUN_PROP = 'LAST_CONSOLIDATION_RUN';
 
-// Placeholder pending Change 5 (splitting AEDILE_CONTEXT.md), which will
-// replace this with AEDILE_CONSOLIDATION_PROMPT assembled from the shared
-// core context plus a dedicated consolidation file.
-const CONSOLIDATION_SYSTEM_PROMPT = `You are Aedile, an operations assistant for the Virtual Krewe of
-Vaporwave. Your job here is narrow: decide whether one email thread
-belongs to an existing group of related threads ("shard") or should start
-a new one.
-
-A shard groups threads that are actually the same ongoing situation or
-recurring topic (e.g. "finding a meeting date," "Ball 2026 logistics"),
-not threads that merely share a participant. The krewe's two directors
-appear on almost every thread — a shared participant alone is weak
-evidence. Shared distinctive entities (a named event, a specific date
-under discussion, a project name) are strong evidence.
-
-Score how confidently this thread belongs to the best-matching existing
-shard, from 0.0 (unrelated) to 1.0 (certainly the same situation). You are
-not deciding the join/create cutoff — that threshold is applied separately
-against your score. Never fabricate a relationship to force a merge; if
-nothing existing matches, say so plainly (null match, low score).
-
-Respond with ONLY valid JSON, no other text, in this exact shape:
-{
-  "best_match_shard_id": "<ShardId of the closest existing shard, or null if none are related>",
-  "score": <0.0 to 1.0>,
-  "suggested_label": "<short human-readable label, used only if a new shard is created>"
-}`;
-
 const ConsolidationProcessor = (function () {
 
   /** Separate kill switch from AEDILE_ENABLED — a Config sheet row, not a Script Property,
@@ -121,7 +93,7 @@ relatedness; shared distinctive entities are strong evidence.`;
       let judgment;
       try {
         judgment = AnthropicClient.getJsonDecision(
-          CONSOLIDATION_SYSTEM_PROMPT,
+          AEDILE_CONSOLIDATION_PROMPT,
           buildUserContent(fingerprinted, candidateShards),
           500
         );

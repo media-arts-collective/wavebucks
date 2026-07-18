@@ -4,8 +4,8 @@
  *
  * Tabs expected:
  *   Config       - key/value settings (A: key, B: value)
- *   Personality  - message templates (read directly by Personality.js, not through this module)
  *   Log          - append-only record of every message Aedile has looked at
+ *   Messages     - raw mailing-list archive (read/written by MessageLog.js, not through this module)
  */
 
 const CONFIG_SHEET_ID = '1bBLfPpw618EtkZBpLylBa-Hg-J8cd62nCxHkqbET6BM'; // Aedile Config spreadsheet owned by kreweofvaporwave@kreweofvaporwave.com
@@ -37,11 +37,7 @@ const Config = (() => {
 
   /**
    * Append one row to the Log tab.
-   * Columns: Timestamp | ThreadID | MessageID | From | Subject | Action | Notes | FoldedAt
-   *
-   * FoldedAt is left blank here on every write — it's stamped later by a
-   * consolidation pass that links this row's ThreadID to a Shard, not by
-   * anything in this module. No current code populates it.
+   * Columns: Timestamp | ThreadID | MessageID | From | Subject | Action | Notes
    */
   function logEvent(threadId, messageId, from, subject, action, notes = '') {
     _sheet('Log').appendRow([new Date(), threadId, messageId, from, subject, action, notes]);

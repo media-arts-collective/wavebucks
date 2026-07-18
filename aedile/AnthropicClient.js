@@ -1,11 +1,8 @@
 /**
  * AnthropicClient.js
- * Thin wrapper around the Claude Messages API, shared by every Aedile tier
- * that needs a model call — InboxProcessor's per-message triage today,
- * ConsolidationProcessor's per-thread shard matching as of Change 3.
- * Centralizes the endpoint, the markdown-fence cleanup the model
- * occasionally adds despite instructions, and JSON parsing, so each tier
- * differs only in system prompt and user content.
+ * Thin wrapper around the Claude Messages API, used by InboxProcessor's
+ * per-message triage. Centralizes the endpoint, the markdown-fence cleanup
+ * the model occasionally adds despite instructions, and JSON parsing.
  */
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
@@ -17,9 +14,7 @@ const AnthropicClient = (() => {
   /**
    * Calls the Messages API and returns the parsed JSON object the model
    * returned. Throws on missing API key, transport/non-200 error, or
-   * invalid JSON — callers decide how to log/handle failure per their own
-   * row shape (InboxProcessor and ConsolidationProcessor log to different
-   * tabs with different columns).
+   * invalid JSON — the caller decides how to log/handle failure.
    */
   function getJsonDecision(systemPrompt, userContent, maxTokens = 1000) {
     const apiKey = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');

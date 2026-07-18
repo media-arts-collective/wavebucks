@@ -62,6 +62,12 @@ generally.
   one-time historical-archive import (`migrateMessagesFromDriveId`)
 - `Requests.js` — Requests tab access: logs a bug/feature entry whenever a
   triage decision sets `is_request: true`
+- `ReadApi.js` — read-only, token-gated `doGet` Web App that returns the
+  OpenLoops/Messages/Log/Requests tabs as JSON, so an outside dev-ops
+  workflow can pull institutional-memory state on demand without Sheets/
+  Gmail creds. Strictly read-only (no mutation, no send, no guardrail
+  touch); gated by the `READ_API_TOKEN` script property and fails closed if
+  it's unset. See the file header for deploy steps and scopes.
 
 **Triage** (per-message, `scanInbox()`)
 - `InboxProcessor.js` — classifies each message "dm" or "list"
@@ -114,8 +120,12 @@ director to archive or delete once the historical data in them isn't needed.
   accumulate in `OpenLoops` but nothing ever acts on them. Bump drafts are
   never eligible for auto-send, regardless of `AUTOSEND_ALLOWLIST`.
 - `ANTHROPIC_API_KEY` — the Claude API key `AnthropicClient.js` reads.
+- `READ_API_TOKEN` — secret gating the read-only `ReadApi.js` Web App
+  endpoint. If unset, that endpoint refuses every request (fail closed).
+  Independent of the kill switches above; it has no effect on the
+  trigger-driven triage/bump path.
 
-All five live in Project Settings > Script Properties, not in code.
+All six live in Project Settings > Script Properties, not in code.
 
 `installTrigger()` installs the hourly `scanInbox` trigger;
 `installBumpTrigger()` installs the daily `checkBumps` trigger. Independent

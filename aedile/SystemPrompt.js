@@ -11,6 +11,19 @@
  * directly — see MessageLog.js and aedile/CLAUDE.md.
  */
 
-const AEDILE_SYSTEM_PROMPT_LIST = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_TRIAGE_LIST}`;
-const AEDILE_SYSTEM_PROMPT_DM = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_TRIAGE_DM}`;
-const AEDILE_BUMP_PROMPT = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_BUMP}`;
+// Apps Script re-evaluates globals on every execution, so this reads the
+// current TESTING_MODE property at prompt-assembly time each run — flipping
+// the property takes effect on the next trigger/scan with no redeploy.
+function _testingOverride() {
+  try {
+    return PropertiesService.getScriptProperties().getProperty('TESTING_MODE') === 'true'
+      ? `\n\n${AEDILE_CONTEXT_TESTING}`
+      : '';
+  } catch (err) {
+    return ''; // fail closed to normal (non-testing) behavior
+  }
+}
+
+const AEDILE_SYSTEM_PROMPT_LIST = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_TRIAGE_LIST}${_testingOverride()}`;
+const AEDILE_SYSTEM_PROMPT_DM = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_TRIAGE_DM}${_testingOverride()}`;
+const AEDILE_BUMP_PROMPT = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_BUMP}${_testingOverride()}`;

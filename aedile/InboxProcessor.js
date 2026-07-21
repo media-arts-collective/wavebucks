@@ -404,3 +404,19 @@ function disableAedile() {
   PropertiesService.getScriptProperties().setProperty('AEDILE_ENABLED', 'false');
   Logger.log('⏸️ Aedile disabled.');
 }
+
+/**
+ * TEMPORARY testing toggle — turns on the AEDILE_CONTEXT_TESTING override
+ * (SystemPrompt._testingOverride), which suspends dead-season silence for the
+ * whitelisted director loop so the draft/auto-send path can be tested live.
+ * Off by default; ALWAYS run disableTestingMode() when the test is done.
+ */
+function enableTestingMode() {
+  PropertiesService.getScriptProperties().setProperty('TESTING_MODE', 'true');
+  Logger.log('🧪 TESTING_MODE on — dead-season restraint suspended for the whitelisted loop. Remember to disable when done.');
+}
+
+function disableTestingMode() {
+  PropertiesService.getScriptProperties().deleteProperty('TESTING_MODE');
+  Logger.log('✅ TESTING_MODE off — normal restraint restored.');
+}

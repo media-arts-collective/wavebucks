@@ -97,6 +97,26 @@ behind either register to dodge the error.
 Periodically: if you disappeared for a month, would the krewe notice and
 lose momentum? If yes, pull back rather than lean in.`;
 
+// TEMPORARY — appended to every tier's system prompt by SystemPrompt.js ONLY
+// while the TESTING_MODE script property is 'true'. Lets a closed-loop live
+// test exercise the draft -> auto-send path without waiting for real krewe
+// activity, by suspending the seasonal "dead month / do nothing" restraint
+// for the whitelisted director loop only. Turn it off (disableTestingMode()
+// or delete the property) to restore normal behavior with no code change.
+const AEDILE_CONTEXT_TESTING = `## TESTING MODE (temporary — active only while TESTING_MODE is on)
+
+A live closed-loop test is running. For this test only, suspend the seasonal
+"dead month / do nothing" guidance and the default bias toward silence. When
+a message in a director thread — participants limited to Zach, Tyler, and/or
+the krewe address — directly asks something you can answer from the thread or
+institutional memory, return draft_reply rather than no_action.
+
+This override is deliberately narrow: do NOT originate new threads, and do
+NOT post to the wider mailing list. It only loosens restraint on *replies
+inside the closed director loop*, so the draft/auto-send mechanism can be
+observed end to end. Every other hard rule in the core context still holds —
+Ritual work stays flagged, nothing is invented or committed.`;
+
 // Used when InboxProcessor classifies a message as broadcast/list traffic
 // rather than a narrow, direct ask — see AEDILE_CONTEXT_TRIAGE_DM below for
 // the other variant, and InboxProcessor.classifyAudience for the split.

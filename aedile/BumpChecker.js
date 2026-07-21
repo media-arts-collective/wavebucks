@@ -133,23 +133,38 @@ const BumpChecker = (function () {
       return;
     }
 
-    _autosendCountThisRun = 0;
-    const due = OpenLoops.getDue(new Date());
-    const toProcess = due.slice(0, MAX_BUMPS_PER_RUN);
-
-    if (due.length > toProcess.length) {
-      Logger.log(`⚠️ ${due.length} thread(s) due for a bump check, processing ${toProcess.length} this run (MAX_BUMPS_PER_RUN cap) — the rest will be picked up next run.`);
+    // Same guard as InboxProcessor.scanUnread() and for the same reason —
+    // an overlapping run must not get its own fresh _autosendCountThisRun.
+    // Uses the same script-wide lock so checkBumps and scanUnread also
+    // can't run concurrently with each other, which is a safe side effect
+    // given they both append to shared Log/OpenLoops/MessageLog sheets.
+    const lock = LockService.getScriptLock();
+    if (!lock.tryLock(10000)) {
+      Logger.log('⏸️ checkBumps skipped — could not acquire script lock (another run appears to still be in progress).');
+      return;
     }
 
-    toProcess.forEach(loopRow => {
-      try {
-        reviewForBump(loopRow);
-      } catch (err) {
-        Logger.log(`[BumpChecker] UNCAUGHT for ${loopRow.threadId} — ${err.stack || err}`);
-      }
-    });
+    try {
+      _autosendCountThisRun = 0;
+      const due = OpenLoops.getDue(new Date());
+      const toProcess = due.slice(0, MAX_BUMPS_PER_RUN);
 
-    Logger.log(`✅ Bump check complete. Evaluated ${toProcess.length} of ${due.length} due thread(s), ${_autosendCountThisRun} auto-sent.`);
+      if (due.length > toProcess.length) {
+        Logger.log(`⚠️ ${due.length} thread(s) due for a bump check, processing ${toProcess.length} this run (MAX_BUMPS_PER_RUN cap) — the rest will be picked up next run.`);
+      }
+
+      toProcess.forEach(loopRow => {
+        try {
+          reviewForBump(loopRow);
+        } catch (err) {
+          Logger.log(`[BumpChecker] UNCAUGHT for ${loopRow.threadId} — ${err.stack || err}`);
+        }
+      });
+
+      Logger.log(`✅ Bump check complete. Evaluated ${toProcess.length} of ${due.length} due thread(s), ${_autosendCountThisRun} auto-sent.`);
+    } finally {
+      lock.releaseLock();
+    }
   }
 
   return { checkBumps };

@@ -316,6 +316,22 @@ those three addresses auto-sends via `thread.replyAll()` instead of
 drafting, from both the triage tier (hourly) and the bump tier
 (daily), each with its own separate per-run cap.
 
+**Fixed 2026-07-21:** `scanUnread()` and `checkBumps()` now wrap their
+bodies in `LockService.getScriptLock()` (`tryLock(10000)` / `finally`
+`releaseLock()`), so an overlapping run fails closed (skips, logs, picked
+up next trigger) instead of silently getting its own fresh
+`_autosendCountThisRun`/`MAX_AUTOSEND_PER_RUN` counter. Both tiers share
+one script-wide lock — a safe side effect, since they'd otherwise race on
+the same `Log`/`OpenLoops`/`MessageLog` sheet appends. This closes the
+structural half of the risk noted below; it doesn't touch the still-open
+question of whether `scanInbox`'s trigger was actually firing continuously
+(see "Known bugs"), which needs a director looking at the Triggers page
+directly. Verified via a standalone mocked-`LockService` control-flow check
+(lock-held skips the body and never calls release; lock-free runs the body
+and releases exactly once; a thrown error still releases via `finally`) —
+not exercised against the real Apps Script `LockService` or a live trigger,
+since this cycle can't `clasp push`.
+
 **Needs a director to actually do something (mechanical, not a judgment call):**
 - Optional cleanup: archive/delete the orphaned `Personality`/`Threads`/
   `Shards`/`ConsolidationLog` sheet tabs whenever the historical data in
@@ -325,14 +341,15 @@ drafting, from both the triage tier (hourly) and the bump tier
   same day, after an audit (below) found a real unread thread that had
   never been reviewed at all and raised doubt about whether the trigger
   was ever actually installed/running continuously, plus a structural risk
-  — `scanUnread()` has no `LockService` lock, so at a 1-minute cadence,
+  — `scanUnread()` had no `LockService` lock, so at a 1-minute cadence,
   overlapping runs during a burst of unread mail could each get their own
   fresh `MAX_AUTOSEND_PER_RUN` counter, silently exceeding the intended
-  cap. Hourly makes that overlap effectively impossible without fixing the
-  lock, so it's the current target (`InboxProcessor.installTrigger()`).
-  The code change alone doesn't move the live trigger — `clasp push` then
-  re-run `installTrigger()` from the Apps Script editor to actually
-  reinstall it at the new cadence.
+  cap (now fixed — see above). Hourly remains the current cadence; going
+  back to a faster interval is still a separate decision from the lock fix
+  and needs its own re-evaluation. `clasp push` then re-run
+  `installTrigger()` from the Apps Script editor is still required to move
+  the live trigger onto any updated code/cadence — this cycle can't do
+  that.
 
 **Needs a director's decision (judgment, not mechanical):**
 - Reconsider `DM_RECIPIENT_THRESHOLD` (currently 3, a rough guess) now that

@@ -285,37 +285,51 @@ const InboxProcessor = (function () {
       return;
     }
 
-    _autosendCountThisRun = 0;
-    const reviewedLabel = getReviewedLabel();
-    const threads = _GmailApp.search(SCAN_QUERY);
-    let processed = 0;
-
-    for (const thread of threads) {
-      if (processed >= MAX_MESSAGES_PER_RUN) break;
-
-      let sawEveryUnreadMessage = true;
-
-      for (const msg of thread.getMessages()) {
-        if (!msg.isUnread()) continue;
-
-        if (processed >= MAX_MESSAGES_PER_RUN) {
-          sawEveryUnreadMessage = false;
-          break;
-        }
-
-        const messageId = msg.getId();
-        if (Config.isMessageProcessed(messageId)) continue;
-
-        reviewMessage(msg);
-        processed++;
-      }
-
-      if (sawEveryUnreadMessage) {
-        thread.addLabel(reviewedLabel);
-      }
+    // Without this, two overlapping runs (e.g. a slow prior run still
+    // in flight when the next trigger fires) would each start from a
+    // fresh _autosendCountThisRun of 0, silently exceeding the intended
+    // MAX_AUTOSEND_PER_RUN ceiling. See aedile/CLAUDE.md Open items.
+    const lock = LockService.getScriptLock();
+    if (!lock.tryLock(10000)) {
+      Logger.log('⏸️ scanUnread skipped — could not acquire script lock (another run appears to still be in progress).');
+      return;
     }
 
-    Logger.log(`✅ Aedile scan complete. Reviewed ${processed} new message(s), ${_autosendCountThisRun} auto-sent. No message was marked read.`);
+    try {
+      _autosendCountThisRun = 0;
+      const reviewedLabel = getReviewedLabel();
+      const threads = _GmailApp.search(SCAN_QUERY);
+      let processed = 0;
+
+      for (const thread of threads) {
+        if (processed >= MAX_MESSAGES_PER_RUN) break;
+
+        let sawEveryUnreadMessage = true;
+
+        for (const msg of thread.getMessages()) {
+          if (!msg.isUnread()) continue;
+
+          if (processed >= MAX_MESSAGES_PER_RUN) {
+            sawEveryUnreadMessage = false;
+            break;
+          }
+
+          const messageId = msg.getId();
+          if (Config.isMessageProcessed(messageId)) continue;
+
+          reviewMessage(msg);
+          processed++;
+        }
+
+        if (sawEveryUnreadMessage) {
+          thread.addLabel(reviewedLabel);
+        }
+      }
+
+      Logger.log(`✅ Aedile scan complete. Reviewed ${processed} new message(s), ${_autosendCountThisRun} auto-sent. No message was marked read.`);
+    } finally {
+      lock.releaseLock();
+    }
   }
 
   return {

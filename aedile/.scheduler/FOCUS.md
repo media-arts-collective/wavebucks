@@ -13,15 +13,40 @@
      exempt from the harness's .claude/-write block -- QUESTIONS.md
      writes were ALSO failing for that second reason, now fixed too). -->
 
-Current focus (set 2026-07-20, human-directed -- supersedes "continue
-whatever context-tiers was mid-way through" below until this is
-resolved): **get the current summer director loop (Zach + Tyler) actually
-moving.** They had one meeting; the open loops/action items out of it
-haven't closed. This is a DELIBERATE, NARROW exception to the seasonal
-"July/August is quiet, don't manufacture urgency" default in
-`AEDILE_CONTEXT_CORE`/`AEDILE_CONTEXT_BUMP` -- the exception applies ONLY
-to the closed director loop (Zach, Tyler, the krewe address), not to the
-wider mailing list, which stays on its normal quiet-summer footing.
+**Update 2026-07-22: the director loop this file was written to unblock
+got real, substantial progress in a live human+Claude session tonight --
+not from a nightly batch cycle.** Summary for whoever picks this up next:
+
+- Found both currently-open director-loop threads via `ReadApi` (a
+  read-only, token-gated Web App endpoint added tonight -- `ReadApi.js` --
+  plus a paired `WriteApi.js` that can trigger `scanInbox`/`checkBumps` on
+  demand, with a `dryRun`/`ignoreDue` mode for safely testing decisions
+  against real data without side effects). Both threads' `recheck_after_days`
+  were stuck at 10 (set 7/18, never bumped) -- root cause was the seasonal
+  "dead month" restraint applying uniformly even to an explicit,
+  self-stated blocker ("LOCK A BRUNCH DATE, nothing hits the list till we
+  do"), and a second gap where the model defaulted to `flag` instead of a
+  direct nudge just because the thread was director-to-director.
+- Fixed via new DM-only context blocks (`AEDILE_CONTEXT_TRIAGE_DM`/
+  `AEDILE_CONTEXT_BUMP_DM` in `Context.js`, `AEDILE_BUMP_PROMPT_DM` split
+  out in `SystemPrompt.js`, `BumpChecker.js` now classifies audience per
+  thread like `InboxProcessor` already did) -- explicitly DM-only, list-tier
+  prompts deliberately untouched, see `CLAUDE.md`'s "DM vs. list-broadcast
+  context" section.
+- Validated dry-run against the real threads before shipping, then ran a
+  REAL (non-dry) `checkBumps` -- both threads got a real `replyAll()`
+  nudge proposing a concrete brunch-date window. **Confirmed by the
+  director that Tyler received it but Zach did not** -- root-caused as a
+  real bug (`thread.replyAll()`/`createDraftReply()` only address the
+  LAST message's participants, not the full thread history the allowlist
+  eligibility check uses) -- FIXED same night, see `CLAUDE.md`'s "Known
+  bugs". A second, separate cause of the same symptom was also found and
+  is NOT a code bug -- a human sent manually from the shared
+  `kreweofvaporwave@` alias -- see `CLAUDE.md`'s new "conspicuous" bug
+  entry on archive misattribution risk.
+- This is now genuinely DONE for tonight, not just "attempted" -- don't
+  redo it. What's NOT done and IS real backlog: everything in the new
+  section below.
 
 This is a co-owned repo (Zach + Tyler, Media Arts Collective) and a v0
 email-operations bot with real safety guardrails already designed in --
@@ -102,55 +127,113 @@ director loop is actually closed out, not a one-time ask.
   treat it as the starting point to build on/finish/commit, not something
   to discard or work around.
 
-## Backlog (secondary to "Tonight's actual job" above until the director loop is closed)
+## Backlog (roadmap set 2026-07-22, supersedes the 2026-07-21 version below the note)
 
-**Roadmap set 2026-07-21 -- concrete enough to span the next several
-cycles, not just tonight, since this file's own invisibility bug (see
-top note) meant every prior cycle had nothing real to work from once
-"tonight's actual job" above was addressed. Work top to bottom; each
-item should be genuinely finishable in one cycle.**
+**Work top to bottom; each item should be genuinely finishable in one
+cycle. This whole list came out of tonight's live tuning session -- see
+the update note above for what already shipped. Cross-reference
+`CLAUDE.md`'s Open Items section, which has the fuller writeup for
+several of these.**
 
-1. **Director loop (still THE priority, still not actually done).**
-   Tonight's real first run (2026-07-21) did NOT do this work -- it
-   never saw this file (the bug this roadmap update fixes), and instead
-   fell back to `CLAUDE.md`'s Open items, shipping a `LockService` race
-   fix on `scanUnread()`/`checkBumps()` instead. That fix was good,
-   real, and worth keeping -- but the actual "tonight's actual job"
-   above (find the director meeting's open loops, draft bumps) is still
-   fully outstanding. Do this first, now that you can actually see this
-   instruction.
-2. **Rename the `TESTING_MODE` toggle if it's now serving real
-   production behavior**, not just tests -- `Context.js`/
-   `InboxProcessor.js`/`SystemPrompt.js` already flagged this
-   themselves ("note in the report if repurposing a 'temporary testing'
-   mechanism for real production behavior needs a rename/cleanup").
-   Only do this once item 1 confirms whether the director-loop override
-   actually ended up reusing that mechanism for real.
-3. **Move aedile off the bespoke wrapper, onto `lib/sweep-loop-common.sh`
-   directly** (queued via `scheduler -i` 2026-07-21, human's own idea:
-   "could be as simple as running some functions before or after
-   sweep-loop-common.sh nested inside"). Real constraints to design
-   around, don't lose these while implementing: (a) must still ALWAYS
-   PUSH + `gh pr create` afterward (the shared engine doesn't do this by
-   default -- some post-push hook point would be needed), (b) must
-   stay off `main`/never auto-merge to `context-tiers` (the engine
-   defaults to a single `BRANCH` var and normal push -- would need a
-   dated-branch-per-run pattern the engine doesn't have today), (c) must
-   keep restricting itself to `aedile/` only in a repo that also
-   contains unrelated `scribaSenatus`/`wavebucksCore`. If any of these
-   don't fit cleanly, write up the gap in this file rather than forcing
-   it — this is a real design question, not a mechanical migration like
-   vkv-inventory's was.
-4. **Confirm this file's fix actually worked.** After item 1 is done,
-   note explicitly in the report that `aedile/.scheduler/FOCUS.md` was
-   successfully read this cycle (closing the loop on tonight's bug) --
-   don't just silently assume it, say so, so a human doesn't have to
-   re-verify by hand.
+1. **Batch-driven tuning loop -- the actual point of tonight's session.**
+   The manual loop used tonight (read `OpenLoops`/`Log`/`Messages` via
+   `ReadApi` -> spot a gap -> tune a DM-only prompt -> dry-run validate
+   against real threads via `WriteApi` -> ship) should become something
+   THIS nightly cycle does unattended, not something requiring a live
+   human+Claude session every time. Concretely: pull `scope=requests
+   &status=open` via `ReadApi` (the existing bug/feature-report channel,
+   fed by ordinary director email -- nothing new to build there) as
+   in-cycle context, same as any note a human drops via `scheduler -i`.
+   Build a small, named, RE-RUNNABLE scenario library first (see item 2)
+   so a prompt change can be regression-checked instead of judged fresh
+   each time. Keep actual prompt edits going out as a reviewable PR (this
+   project's existing review-gate), at least until there's a track record
+   of the diagnostic side being reliable -- don't remove that gate as a
+   side effect of automating the diagnosis.
+2. **Scenario library.** Named, re-runnable dry-run test cases against
+   real recent `OpenLoops`/`Messages` state (via `WriteApi`'s
+   `dryRun`/`ignoreDue` support), covering: the 5 bump-check scenarios and
+   3 request-logging scenarios already validated once against the real
+   API per `CLAUDE.md` (currently one-off, not preserved as a re-runnable
+   suite), tonight's brunch-thread live case, and mining the raw mailing-
+   list archive (`scope=messages&q=...` via `ReadApi`) for real historical
+   "dropped ball" cases -- threads that went quiet and never got picked
+   back up -- as a source of realistic regression scenarios, not just
+   synthetic ones. Also: score generated drafts against real archived
+   list VOICE, not just correct action/JSON shape -- tonight's real
+   auto-sent bump got action/timing right but the director flagged its
+   tone as not matching how the mailing list actually sounds.
+3. **Manual-alias-narrowing / archive-misattribution risk (see
+   `CLAUDE.md`'s "Known bugs" -- marked OPEN, conspicuous).** A human
+   sending manually from `kreweofvaporwave@` is indistinguishable in the
+   raw archive from Aedile's own authored/sent output -- risks a future
+   triage/bump call misattributing a human's words as Aedile's own prior
+   commitment, and reads to an auditor as automated even when a director,
+   not Aedile, actually wrote it. Proposed approach (not yet built, needs
+   a design decision before implementing): cross-reference a
+   `kreweofvaporwave@`-From message's `MessageId` against `Log` rows
+   tagged `auto_reply`/`bump_auto_reply`; if a message from the krewe
+   address has no matching Log row, it was very likely sent manually --
+   mark it distinctly wherever it's surfaced (to the model in
+   `buildThreadContent`/`buildBumpUserContent`, and to a director via
+   `ReadApi`).
+4. **Deploy-awareness signal, so the redeploy bottleneck stays tolerable
+   without disappearing entirely.** `clasp push` alone updates the code
+   real triggers run against (`@HEAD`) -- no redeploy needed for that.
+   But the Web App deployment (`ReadApi`/`WriteApi`'s `/exec` URL) needs
+   its OWN manual "New version" redeploy in the Apps Script editor every
+   time either file changes, and `clasp deploy`/`clasp deploy -i` cannot
+   do this (confirmed twice tonight -- it silently drops the Web App's
+   Execute-as/Access config, breaking the endpoint with a 404 until a
+   human redeploys through the editor UI by hand). Human's explicit
+   decision tonight: stick with hand-deploy for this specific step, AS
+   LONG AS scheduler can surface "a redeploy is waiting on you" somewhere
+   the human actually sees it -- don't let this become an invisible
+   bottleneck. Small, concrete mechanism to design: compare the code
+   state as of the last `clasp push` against the currently-live Web App
+   deployment's version, and if they've diverged, surface that via
+   whatever channel scheduler already uses for "needs your attention."
+   Also worth a quick check before building anything: whether a Web App
+   deployment can be pinned to serve `@HEAD` directly (removing the
+   redeploy ceremony entirely, while `clasp push` alone stays the human
+   gate) -- verify this is/isn't possible before assuming the notification
+   mechanism is the only fix available.
+5. **mailto: feedback link on DM-tier bump/nudge emails.** Cheap addition
+   to `decision.draft_body` generation in the DM bump path specifically:
+   a `mailto:kreweofvaporwave@...?subject=Aedile feedback: ...` link so
+   "too aggressive" / "wrong call" feedback rides the existing `Requests`
+   pipeline (item 1 above) with zero new infrastructure. Discussed,
+   agreed on, not yet built.
+6. **September deliberate promotion review (DM lessons -> list-tier),
+   before list traffic resumes in October.** `AEDILE_CONTEXT_TRIAGE_LIST`/
+   `AEDILE_CONTEXT_BUMP_LIST` are UNCHANGED from before tonight, on
+   purpose -- some of what got tuned for the DM tier is universal (the
+   flag-vs-nudge over-routing was probably always wrong), some is
+   deliberately NOT meant to generalize (the "this team is shy/distracted,
+   don't assume organic re-engagement" override is calibrated to two
+   specific co-directors; a ~40-person list has a very different risk
+   shape, where Aedile manufacturing pressure is the worse failure mode).
+   This needs an explicit, deliberate session, not silent inheritance --
+   same category of decision as expanding the autosend allowlist. Idea
+   floated but not yet decided/sent: email a reminder into the krewe
+   inbox itself (so Aedile's own open-loop tracking picks it up and bumps
+   it as September approaches) rather than relying on a human remembering
+   -- `RecheckAfterDays` supports up to 60 days, comfortably enough
+   runway from late July.
+7. **Human-facing digest/summary doc (see `CLAUDE.md`'s "Deferred, not
+   forgotten").** Idea, not yet designed: periodically summarize raw
+   `Messages` dumps (the "we just dumped meeting notes into email
+   knowing the bot would see it" pattern) into a human-readable doc/
+   report, mirroring the `/srv/vaporwave-reports/aedile/` pattern this
+   same nightly batch already writes for its own runs. Explicitly NOT a
+   revival of the retired Threads/Shards tier -- this is a summary as an
+   OUTPUT for a human to read, never fed back in as the model's own
+   source of truth.
 
-No separate feature-request queue yet -- add ideas here as they come up.
-Once the numbered list above is exhausted, fall back to: work
-oldest-open-thread-first per `CLAUDE.md`'s design, or continue whatever
-`context-tiers` was mid-way through.
+No separate feature-request queue beyond this list and the `Requests`
+tab (item 1) -- add new ideas here as they come up. Once this list is
+exhausted, fall back to: work oldest-open-thread-first per `CLAUDE.md`'s
+design, or continue whatever `context-tiers` was mid-way through.
 
 ## Scheduling
 

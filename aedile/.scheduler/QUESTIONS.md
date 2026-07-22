@@ -13,12 +13,40 @@ actually read and dealt with it.
      `CLAUDE.md`) -- worth reconsidering now that
      `AEDILE_CONTEXT_TRIAGE_DM` has a real directness rule to threshold
      against.
-  2. Whether `scanInbox`'s trigger was ever actually firing continuously
-     (2026-07-17 audit finding, still unconfirmed) -- needs a human to
-     check the Apps Script editor's Triggers page directly.
-  3. `TESTING_MODE`'s current live state is unknown (no way for an
-     unattended cycle to check the live script property) -- confirm
-     it's off before assuming so, especially since a later run may
-     repurpose it for real (non-test) director-loop use per
-     `.scheduler/FOCUS.md`.
+  2. **ANSWERED 2026-07-22:** yes, both `scanInbox` and `checkBumps`
+     triggers were confirmed actually installed and firing (checked the
+     Triggers page directly) -- the earlier audit's gap was genuinely no
+     unread mail arriving in that window, not a dead trigger.
+  3. `TESTING_MODE`'s current live state is STILL unknown as of
+     2026-07-22 -- tonight's session didn't touch it (used explicit
+     DM-only `Context.js` overrides instead, see `.scheduler/FOCUS.md`'s
+     update note), so this is still open. Worth a human confirming it's
+     off via `disableTestingMode()` / checking Script Properties directly
+     before assuming so.
+  > (answer inline here)
+
+- **2026-07-22 (from tonight's live human+Claude tuning session, see
+  `.scheduler/FOCUS.md`'s update note and backlog for full context):**
+  1. Should the Web App deployment (`ReadApi`/`WriteApi`) be pinnable to
+     `@HEAD` to remove the manual-redeploy step entirely, or does Apps
+     Script not support that for this deployment type? Needs someone to
+     check directly in the editor -- `clasp`-only investigation tonight
+     couldn't settle it (`clasp deploy`/`clasp deploy -i` both confirmed
+     NOT usable for this: they silently drop the Web App's Execute-as/
+     Access config and 404 the endpoint until a human redeploys by hand
+     through the editor UI).
+  2. Bigger, deliberately not decided tonight: if the `@HEAD` option
+     above doesn't exist, is the ongoing manual-redeploy requirement (for
+     Web App changes specifically) tolerable long-term, or is it a sign
+     Apps Script is the wrong platform for a system meant to improve
+     itself without a human in the loop every time? Human's own framing:
+     "worth flagging on its own whether the system should move to a
+     platform that doesn't bottleneck on me." Treat as its own decision,
+     not something to default into either direction.
+  3. Is the DM-tier's new "explicit blocker overrides seasonal restraint"
+     / "flag isn't a default escape valve" tuning correctly calibrated, or
+     does it risk overcorrecting into nagging? Only tested against one
+     real thread so far (small sample) -- worth a human's honest read on
+     whether the actual sent bump emails felt right in tone/frequency,
+     not just structurally correct.
   > (answer inline here)

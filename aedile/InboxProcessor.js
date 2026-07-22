@@ -80,6 +80,26 @@ const InboxProcessor = (function () {
   }
 
   /**
+   * Every address (From/To/Cc) across every message in the thread, lowercased
+   * and deduped. This is the FULL historical participant set — deliberately
+   * broader than whatever Gmail's own replyAll()/createDraftReply() would
+   * address a reply to, which only looks at the LAST message. Shared by
+   * isAllowlistEligible (eligibility check) and by reviewMessage/
+   * reviewForBump's send/draft calls (actual recipient completion) so the
+   * two can never silently disagree — see getRecipientCompletion below for
+   * why they used to.
+   */
+  function getThreadParticipants(thread) {
+    const participants = new Set();
+    thread.getMessages().forEach(m => {
+      participants.add(extractEmail(m.getFrom()));
+      (m.getTo() || '').split(',').forEach(a => a.trim() && participants.add(extractEmail(a)));
+      (m.getCc() || '').split(',').forEach(a => a.trim() && participants.add(extractEmail(a)));
+    });
+    return Array.from(participants);
+  }
+
+  /**
    * True only when every participant on the thread (every From/To/Cc
    * address, across every message) matches AUTOSEND_ALLOWLIST — one
    * participant outside the allowlist (a third party CC'd in, say)
@@ -96,14 +116,28 @@ const InboxProcessor = (function () {
     const allowlist = getAutosendAllowlist();
     if (!allowlist.length) return false;
 
-    const participants = new Set();
-    thread.getMessages().forEach(m => {
-      participants.add(extractEmail(m.getFrom()));
-      (m.getTo() || '').split(',').forEach(a => a.trim() && participants.add(extractEmail(a)));
-      (m.getCc() || '').split(',').forEach(a => a.trim() && participants.add(extractEmail(a)));
-    });
+    return getThreadParticipants(thread).every(addr => matchesAllowlist(addr, allowlist));
+  }
 
-    return Array.from(participants).every(addr => matchesAllowlist(addr, allowlist));
+  /**
+   * CONFIRMED BUG (found 2026-07-22 via a real auto-sent bump that reached
+   * Tyler but never reached Zach): thread.replyAll()/createDraftReply() only
+   * address a reply to the LAST message's From/To/Cc, not the full thread
+   * history — but isAllowlistEligible() evaluates eligibility against every
+   * message in the thread. A thread can pass eligibility on someone who
+   * participated earlier but isn't on the specific last message, and the
+   * actual send/draft then silently excludes them. Fix: always pass the
+   * full aggregated participant set (minus this account's own address, and
+   * minus whatever Gmail will already address it to/cc it to natively) as
+   * an explicit `cc` on every replyAll()/createDraftReply() call, so nobody
+   * who was part of the eligibility check can be silently dropped from the
+   * actual message. Returns a comma-joined string ready for the `cc` option
+   * (Apps Script tolerates duplicate/self addresses in cc, so this doesn't
+   * bother deduping against the native recipients precisely).
+   */
+  function getRecipientCompletion(thread) {
+    const self = Session.getEffectiveUser().getEmail().toLowerCase();
+    return getThreadParticipants(thread).filter(addr => addr !== self).join(',');
   }
 
   /** isAllowlistEligible() plus scanInbox's own per-run cap. */
@@ -177,7 +211,11 @@ const InboxProcessor = (function () {
    * Log tab shouldn't take down the rest of reviewMessage(), and a failure
    * here is worth seeing in the execution log even though success isn't.
    */
-  function logResult(threadId, messageId, from, subject, action, notes) {
+  function logResult(threadId, messageId, from, subject, action, notes, dryRun) {
+    if (dryRun) {
+      Logger.log(`[reviewMessage] DRY RUN — would Config.logEvent(${action}): ${notes}`);
+      return;
+    }
     try {
       Config.logEvent(threadId, messageId, from, subject, action, notes);
     } catch (err) {
@@ -185,8 +223,16 @@ const InboxProcessor = (function () {
     }
   }
 
-  /** OpenLoops.upsert wrapped the same way as logResult. */
-  function recordOpenLoop(threadId, decision, lastMessageDate) {
+  /**
+   * OpenLoops.upsert wrapped the same way as logResult. Fully suppressed in
+   * dry-run — writing a real row here would contaminate OpenLoops.getDue()
+   * on a subsequent real checkBumps() run.
+   */
+  function recordOpenLoop(threadId, decision, lastMessageDate, dryRun) {
+    if (dryRun) {
+      Logger.log(`[reviewMessage] DRY RUN — would OpenLoops.upsert(open=${!!decision.open_loop}, recheckAfterDays=${decision.recheck_after_days})`);
+      return;
+    }
     try {
       OpenLoops.upsert(threadId, {
         open: !!decision.open_loop,
@@ -203,7 +249,11 @@ const InboxProcessor = (function () {
    * called when the triage decision set is_request: true (see Context.js's
    * "Reporting bugs and features" section).
    */
-  function recordRequest(threadId, messageId, from, decision) {
+  function recordRequest(threadId, messageId, from, decision, dryRun) {
+    if (dryRun) {
+      Logger.log(`[reviewMessage] DRY RUN — would Requests.append(${decision.request_type}): ${decision.request_summary}`);
+      return;
+    }
     try {
       Requests.append(threadId, messageId, from, decision.request_type, decision.request_summary);
     } catch (err) {
@@ -222,7 +272,7 @@ const InboxProcessor = (function () {
    * is ground truth about what arrived, independent of whether the model
    * call itself succeeded.
    */
-  function reviewMessage(msg) {
+  function reviewMessage(msg, dryRun) {
     let threadId, messageId, from, subject;
 
     try {
@@ -232,12 +282,16 @@ const InboxProcessor = (function () {
       from = extractEmail(msg.getFrom());
       subject = msg.getSubject();
       const audience = classifyAudience(msg);
-      Logger.log(`[reviewMessage] messageId=${messageId} threadId=${threadId} from=${from} subject="${subject}" audience=${audience}`);
+      Logger.log(`[reviewMessage]${dryRun ? ' [DRY RUN]' : ''} messageId=${messageId} threadId=${threadId} from=${from} subject="${subject}" audience=${audience}`);
 
-      try {
-        MessageLog.append(messageId, threadId, from, msg.getDate(), subject, msg.getPlainBody());
-      } catch (err) {
-        Logger.log(`[reviewMessage] MessageLog.append: FAILED — ${err.stack || err}`);
+      if (dryRun) {
+        Logger.log('[reviewMessage] DRY RUN — skipping MessageLog.append');
+      } else {
+        try {
+          MessageLog.append(messageId, threadId, from, msg.getDate(), subject, msg.getPlainBody());
+        } catch (err) {
+          Logger.log(`[reviewMessage] MessageLog.append: FAILED — ${err.stack || err}`);
+        }
       }
 
       const systemPrompt = audience === 'dm' ? AEDILE_SYSTEM_PROMPT_DM : AEDILE_SYSTEM_PROMPT_LIST;
@@ -247,27 +301,41 @@ const InboxProcessor = (function () {
         Logger.log(`[reviewMessage] decision: ${JSON.stringify(decision)}`);
       } catch (err) {
         Logger.log(`[reviewMessage] AnthropicClient.getJsonDecision: FAILED — ${err.stack || err}`);
-        logResult(threadId, messageId, from, subject, 'error', err.message);
-        return;
+        logResult(threadId, messageId, from, subject, 'error', err.message, dryRun);
+        return { threadId, messageId, from, subject, error: err.message };
       }
 
       const autoSend = decision.action === 'draft_reply' && isAutosendEligible(thread);
-      if (autoSend) {
-        thread.replyAll('', { htmlBody: decision.draft_body });
-        _autosendCountThisRun++;
-      } else if (decision.action === 'draft_reply') {
-        msg.createDraftReply('', { htmlBody: decision.draft_body });
-      } else if (decision.action === 'flag') {
-        thread.addLabel(getFlaggedLabel());
+      if (dryRun) {
+        if (autoSend) {
+          Logger.log(`[reviewMessage] DRY RUN — would thread.replyAll() (auto-send, eligible+within cap)`);
+          _autosendCountThisRun++;
+        } else if (decision.action === 'draft_reply') {
+          Logger.log('[reviewMessage] DRY RUN — would msg.createDraftReply()');
+        } else if (decision.action === 'flag') {
+          Logger.log('[reviewMessage] DRY RUN — would thread.addLabel(aedile-flagged)');
+        }
+      } else {
+        if (autoSend) {
+          thread.replyAll('', { htmlBody: decision.draft_body, cc: getRecipientCompletion(thread) });
+          _autosendCountThisRun++;
+        } else if (decision.action === 'draft_reply') {
+          msg.createDraftReply('', { htmlBody: decision.draft_body, cc: getRecipientCompletion(thread) });
+        } else if (decision.action === 'flag') {
+          thread.addLabel(getFlaggedLabel());
+        }
       }
 
-      recordOpenLoop(threadId, decision, msg.getDate());
-      if (decision.is_request) recordRequest(threadId, messageId, from, decision);
-      logResult(threadId, messageId, from, subject, autoSend ? 'auto_reply' : decision.action, decision.reasoning);
+      recordOpenLoop(threadId, decision, msg.getDate(), dryRun);
+      if (decision.is_request) recordRequest(threadId, messageId, from, decision, dryRun);
+      logResult(threadId, messageId, from, subject, autoSend ? 'auto_reply' : decision.action, decision.reasoning, dryRun);
+
+      return { threadId, messageId, from, subject, decision, autoSend: !!autoSend };
 
     } catch (err) {
       Logger.log(`[reviewMessage] UNCAUGHT — ${err.stack || err}`);
-      logResult(threadId, messageId, from, subject, 'error', err.message);
+      logResult(threadId, messageId, from, subject, 'error', err.message, dryRun);
+      return { threadId, messageId, from, subject, error: err.message };
     }
   }
 
@@ -279,16 +347,17 @@ const InboxProcessor = (function () {
    * thread cut off mid-way by the cap is left unlabeled so it's picked up
    * again next run instead of silently dropped.
    */
-  function scanUnread() {
+  function scanUnread(dryRun) {
     if (!isEnabled()) {
       Logger.log('⏸️ Aedile is disabled (Script Property AEDILE_ENABLED is not "true"). Skipping run.');
-      return;
+      return { skipped: 'disabled' };
     }
 
     _autosendCountThisRun = 0;
-    const reviewedLabel = getReviewedLabel();
+    const reviewedLabel = dryRun ? null : getReviewedLabel();
     const threads = _GmailApp.search(SCAN_QUERY);
     let processed = 0;
+    const results = [];
 
     for (const thread of threads) {
       if (processed >= MAX_MESSAGES_PER_RUN) break;
@@ -306,16 +375,21 @@ const InboxProcessor = (function () {
         const messageId = msg.getId();
         if (Config.isMessageProcessed(messageId)) continue;
 
-        reviewMessage(msg);
+        results.push(reviewMessage(msg, dryRun));
         processed++;
       }
 
       if (sawEveryUnreadMessage) {
-        thread.addLabel(reviewedLabel);
+        if (dryRun) {
+          Logger.log(`[scanUnread] DRY RUN — would thread.addLabel(aedile-reviewed) on thread ${thread.getId()}`);
+        } else {
+          thread.addLabel(reviewedLabel);
+        }
       }
     }
 
-    Logger.log(`✅ Aedile scan complete. Reviewed ${processed} new message(s), ${_autosendCountThisRun} auto-sent. No message was marked read.`);
+    Logger.log(`✅${dryRun ? ' [DRY RUN]' : ''} Aedile scan complete. Reviewed ${processed} new message(s), ${_autosendCountThisRun} auto-sent. No message was marked read.`);
+    return { dryRun: !!dryRun, processed, autosent: _autosendCountThisRun, results };
   }
 
   return {
@@ -323,17 +397,19 @@ const InboxProcessor = (function () {
     reviewMessage,
     setGmailApp,
     // Shared with BumpChecker.js so it doesn't duplicate thread-rendering /
-    // labeling logic, or the auto-send allowlist check, for its own,
-    // differently-scheduled Claude calls.
+    // labeling logic, the auto-send allowlist check, or DM/list audience
+    // classification, for its own, differently-scheduled Claude calls.
     extractEmail,
     buildThreadContent,
     getFlaggedLabel,
-    isAllowlistEligible
+    isAllowlistEligible,
+    classifyAudience,
+    getRecipientCompletion
   };
 })();
 
-function scanInbox() {
-  InboxProcessor.scanUnread();
+function scanInbox(dryRun) {
+  return InboxProcessor.scanUnread(!!dryRun);
 }
 
 /**

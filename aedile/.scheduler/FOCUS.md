@@ -148,7 +148,24 @@ several of these.**
    so a prompt change can be regression-checked instead of judged fresh
    each time.
 2. **Scenario library — DECIDED 2026-07-22 to become the actual PR-review
-   replacement, not just a nice-to-have.** Human's explicit call: the
+   replacement, not just a nice-to-have. FIRST PIECE NOW EXISTS:
+   `aedile/TestsLocal.js`** (added 2026-07-22, run with plain `node
+   TestsLocal.js`, no secrets/network needed) — a fast, local, pure-logic
+   regression suite mirroring `scribaSenatus/TestsLocal.js`'s existing
+   convention. Currently covers `getRecipientCompletion` (encodes tonight's
+   real recipient-completion bug as a permanent regression case),
+   `isAllowlistEligible`, and `classifyAudience`. **Every nightly cycle
+   from now on should run `node aedile/TestsLocal.js` as step one of its
+   scenario check** — if it fails, treat that as equivalent to a live-data
+   scenario failing (push branch + open PR, do not auto-merge). This is
+   necessary but not sufficient on its own: it doesn't cover the live-data
+   dry-run scenarios (bump-check judgment, request-logging, DM voice/tone)
+   described below, which still need building before the merge gate can
+   switch on for real. **When you add or change logic in
+   `InboxProcessor.js`/`BumpChecker.js`, mirror the change into
+   `TestsLocal.js`'s inline copies or this suite will silently test stale
+   logic** — same discipline `scribaSenatus`'s version already documents.
+   Human's explicit call on removing the PR gate itself: the
    PR-review gate on the nightly batch (never-auto-merge) is tedious and
    not something he'll do regularly, so it's being removed — but NOT
    unconditionally (that was explicitly rejected as "full auto-merge, no
@@ -174,8 +191,13 @@ several of these.**
    ones. Also score generated drafts against real archived list VOICE,
    not just correct action/JSON shape — tonight's real auto-sent bump got
    action/timing right but the director flagged its tone as not matching
-   how the mailing list actually sounds. Rationale for keeping this
-   contingent rather than flipping the gate now: the PR gate wasn't only
+   how the mailing list actually sounds. **Credentials for these live-data
+   scenarios** (the `ReadApi`/`WriteApi` exec URL, `READ_API_TOKEN`,
+   `WRITE_API_TOKEN`) live at `/srv/vaporwave-reports/aedile/
+   .aedile-api-secrets` (shared, group-readable by `zach` and
+   `svc-vaporwave` only, mode 640, NOT in git) — read from there, never
+   hardcode or commit them. Rationale for keeping this gate contingent
+   rather than flipping it now: the PR gate wasn't only
    protecting against risky email behavior (the allowlist/draft-only
    guardrails already bound that) — it's also the thing that catches
    non-runtime bugs (like both of tonight's) and gives Tyler, a co-owner

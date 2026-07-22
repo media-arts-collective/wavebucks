@@ -360,17 +360,50 @@ exercised end-to-end in production Gmail):**
   and request-logging were before shipping.
 
 **Known bugs:**
-- **2026-07-17, unconfirmed:** an audit of the Log tab found a real 4-message
-  thread ("updates?", Abraham/Tyler/Zach, substantive laser-harp/venue
-  content) unread since 6/28–7/7 with zero rows in the Log at any point —
-  meaning `scanUnread()` never reviewed it, not that it reviewed it and
-  chose silence. The Log's own timestamps (clustered on 7/8, 7/9, then a
-  gap to 7/15, 7/16, 7/17) read more like manual test runs than a
-  continuously-firing trigger. Needs a director to check the Apps Script
-  editor's Triggers page directly to confirm whether `scanInbox` was
-  actually installed/firing on schedule this whole time, or whether the
-  "Live" status claimed in `README.md` was aspirational. Not yet
-  root-caused.
+- **2026-07-17, since checked (2026-07-22):** the Triggers page confirms
+  both `scanInbox` (hourly) and `checkBumps` (daily) are actually installed
+  and firing — a manual `scanUnread()` run same-day logged "Reviewed 0 new
+  message(s)," confirming the earlier 4-message-thread gap was genuinely no
+  unread mail arriving in that window, not a dead trigger. `scanInbox`'s
+  ~10.65% error rate (visible on the Triggers page) is still unexplained
+  and worth a director skimming Apps Script's execution log for the actual
+  stack traces next time it's convenient — not urgent, since scanUnread's
+  per-message try/catch already isolates one bad message from killing a
+  whole run.
+- **2026-07-22, FIXED same day:** `thread.replyAll()`/`createDraftReply()`
+  only address a reply to the LAST message in a thread's From/To/Cc, not
+  the full thread history — but `isAllowlistEligible()` (the autosend
+  safety check) evaluates eligibility against every message in the thread.
+  A thread could pass eligibility on someone who participated earlier but
+  wasn't on the specific last message, and the actual send/draft would then
+  silently exclude them. Caught live: an auto-sent bump reached Tyler but
+  never reached Zach. Fixed in `InboxProcessor.js`/`BumpChecker.js` — every
+  `replyAll()`/`createDraftReply()` call now explicitly `cc`s the full
+  aggregated participant set (`InboxProcessor.getRecipientCompletion`), so
+  eligibility and delivery can't disagree again.
+- **2026-07-22, OPEN, needs conspicuous handling:** a director manually sent
+  a reply from the shared `kreweofvaporwave@` alias (rather than their own
+  `@nomac.org` address) mid-thread, which is a *separate* cause of the same
+  symptom as the bug above (a narrower recipient set than intended) — but a
+  materially different risk. The raw archive (`MessageLog`, see
+  "Institutional memory" above) records only a `From` address; it has no
+  way to distinguish a message Aedile itself authored and sent from one a
+  human sent manually while logged into the same shared identity. That
+  ambiguity means: (a) a future triage/bump call reading thread history
+  could misattribute a human's words as Aedile's own prior commitment or
+  reasoning, and (b) information sent this way carries none of Aedile's own
+  scrutiny (voice, guardrails, allowlist checks) while still reading, to
+  the model and to anyone auditing the archive later, as if it came from
+  the automated account — a real leak/misattribution risk, not just a
+  cosmetic one. No detection mechanism exists yet. A plausible approach
+  (not yet built, needs its own decision before implementing): cross-
+  reference a `kreweofvaporwave@`-authored message's `MessageId` against
+  `Log` rows tagged `auto_reply`/`bump_auto_reply` — if a message from the
+  krewe address exists with no matching Log row, it was very likely sent
+  manually, and could be marked distinctly wherever it's surfaced (to the
+  model in `buildThreadContent`/`buildBumpUserContent`, and to a director
+  via `ReadApi`). Flagged for the batch-driven tuning loop's diagnostic
+  pass (see below) rather than fixed ad hoc tonight.
 
 (The earlier, separate "reviewed but no row in any sheet" issue was
 root-caused and fixed — confirmed by a later clean execution log showing
@@ -380,3 +413,23 @@ successful writes end to end.)
 - `aedile/holon_fold.py` — entity-clustering experiment over the raw
   archive, explicitly "for later, maybe implement in JS." Not wired into
   anything; revisit only when actually prioritized.
+- **2026-07-22, feature idea — human-facing digest, not a new model-context
+  tier:** in a live test case, Zach and Tyler had a real meeting and then
+  deliberately dumped raw brainstorm notes into an email exchange with the
+  krewe address specifically so Aedile's archive (`MessageLog`, see
+  "Institutional memory" above) would pick them up — content nobody
+  expected a reply to, closer to a deposit than an ask. Right now that
+  content only exists as raw rows in `Messages`, unless a director thinks
+  to go read the thread directly. The idea: periodically (the batch-driven
+  tuning loop discussed above is a natural home for this) generate a
+  human-readable summary/digest of recent raw dumps — a doc or dated
+  report, mirroring the existing `/srv/vaporwave-reports/aedile/` pattern
+  svc-vaporwave's nightly batch already writes for its own runs — so a
+  director can catch up without re-reading raw email. Important distinction
+  from the retired Threads/Shards consolidation tier (see "Institutional
+  memory" above): that pipeline fed model-derived summaries back into the
+  model's own reasoning as a replacement for raw history, and got retired
+  because of the drift/staleness risk that created. This is the opposite
+  shape — a summary as an OUTPUT for a human to read, never fed back in as
+  the model's source of truth — so it doesn't reopen that same risk. Not
+  scoped or built; needs its own design pass before implementing.

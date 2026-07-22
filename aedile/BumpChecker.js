@@ -3,7 +3,9 @@
  * Daily tier that revisits threads InboxProcessor's regular triage call
  * flagged as open loops (see OpenLoops.js) and are now due for a recheck.
  * Makes one Claude call per due thread — the same draft/flag/no_action
- * decision shape as triage, via AEDILE_BUMP_PROMPT — and always re-upserts
+ * decision shape as triage, via AEDILE_BUMP_PROMPT_LIST/_DM (split by
+ * InboxProcessor.classifyAudience on the thread's last message, same as
+ * triage — see SystemPrompt.js) — and always re-upserts
  * OpenLoops with the model's fresh open_loop/recheck_after_days call,
  * whether or not it decides to actually bump.
  *
@@ -58,7 +60,7 @@ const BumpChecker = (function () {
    * so a "no, still fine" call still pushes the next check out rather than
    * re-asking every single day.
    */
-  function reviewForBump(loopRow) {
+  function reviewForBump(loopRow, dryRun) {
     const threadId = loopRow.threadId;
 
     let thread;
@@ -66,37 +68,53 @@ const BumpChecker = (function () {
       thread = GmailApp.getThreadById(threadId);
     } catch (err) {
       Logger.log(`[BumpChecker] GmailApp.getThreadById(${threadId}) FAILED — ${err.stack || err}`);
-      return;
+      return { threadId, error: String(err) };
     }
     if (!thread) {
       Logger.log(`[BumpChecker] thread ${threadId} not found (deleted?) — skipping.`);
-      return;
+      return { threadId, error: 'thread not found' };
     }
 
     const idleDays = Math.floor((new Date() - new Date(loopRow.lastMessageDate)) / (24 * 60 * 60 * 1000));
 
-    let decision;
-    try {
-      decision = AnthropicClient.getJsonDecision(AEDILE_BUMP_PROMPT, buildBumpUserContent(thread, loopRow, idleDays));
-      Logger.log(`[BumpChecker] ${threadId} decision: ${JSON.stringify(decision)}`);
-    } catch (err) {
-      Logger.log(`[BumpChecker] AnthropicClient.getJsonDecision FAILED for ${threadId} — ${err.stack || err}`);
-      return;
-    }
-
     const messages = thread.getMessages();
     const lastMsg = messages[messages.length - 1];
+    const audience = InboxProcessor.classifyAudience(lastMsg);
+    const bumpPrompt = audience === 'dm' ? AEDILE_BUMP_PROMPT_DM : AEDILE_BUMP_PROMPT_LIST;
+
+    let decision;
+    try {
+      decision = AnthropicClient.getJsonDecision(bumpPrompt, buildBumpUserContent(thread, loopRow, idleDays));
+      Logger.log(`[BumpChecker]${dryRun ? ' [DRY RUN]' : ''} ${threadId} audience=${audience} decision: ${JSON.stringify(decision)}`);
+    } catch (err) {
+      Logger.log(`[BumpChecker] AnthropicClient.getJsonDecision FAILED for ${threadId} — ${err.stack || err}`);
+      return { threadId, error: String(err) };
+    }
 
     const autoSend = decision.action === 'draft_reply'
       && InboxProcessor.isAllowlistEligible(thread)
       && _autosendCountThisRun < MAX_BUMP_AUTOSEND_PER_RUN;
 
+    if (dryRun) {
+      if (autoSend) {
+        Logger.log(`[BumpChecker] DRY RUN — would thread.replyAll() (auto-send bump) on ${threadId}`);
+        _autosendCountThisRun++;
+      } else if (decision.action === 'draft_reply') {
+        Logger.log(`[BumpChecker] DRY RUN — would lastMsg.createDraftReply() on ${threadId}`);
+      } else if (decision.action === 'flag') {
+        Logger.log(`[BumpChecker] DRY RUN — would thread.addLabel(aedile-flagged) on ${threadId}`);
+      }
+      Logger.log(`[BumpChecker] DRY RUN — would OpenLoops.upsert(open=${!!decision.open_loop}, recheckAfterDays=${decision.recheck_after_days}) on ${threadId}, skipping to avoid contaminating getDue()`);
+      Logger.log(`[BumpChecker] DRY RUN — would Config.logEvent(${autoSend ? 'bump_auto_reply' : `bump_${decision.action}`}): ${decision.reasoning}`);
+      return { threadId, decision, autoSend: !!autoSend };
+    }
+
     if (autoSend) {
-      thread.replyAll('', { htmlBody: decision.draft_body });
+      thread.replyAll('', { htmlBody: decision.draft_body, cc: InboxProcessor.getRecipientCompletion(thread) });
       _autosendCountThisRun++;
       OpenLoops.markBumped(threadId, new Date());
     } else if (decision.action === 'draft_reply') {
-      lastMsg.createDraftReply('', { htmlBody: decision.draft_body });
+      lastMsg.createDraftReply('', { htmlBody: decision.draft_body, cc: InboxProcessor.getRecipientCompletion(thread) });
       OpenLoops.markBumped(threadId, new Date());
     } else if (decision.action === 'flag') {
       thread.addLabel(InboxProcessor.getFlaggedLabel());
@@ -119,6 +137,8 @@ const BumpChecker = (function () {
       autoSend ? 'bump_auto_reply' : `bump_${decision.action}`,
       decision.reasoning
     );
+
+    return { threadId, decision, autoSend: !!autoSend };
   }
 
   /**
@@ -127,36 +147,38 @@ const BumpChecker = (function () {
    * run, not dropped), and reviews each one independently — one thread's
    * failure doesn't stop the rest.
    */
-  function checkBumps() {
+  function checkBumps(dryRun, ignoreDue) {
     if (!isEnabled()) {
       Logger.log('⏸️ Bump checking is disabled (Script Property BUMP_ENABLED is not "true"). Skipping run.');
-      return;
+      return { skipped: 'disabled' };
     }
 
     _autosendCountThisRun = 0;
-    const due = OpenLoops.getDue(new Date());
+    const due = OpenLoops.getDue(new Date(), { ignoreDue });
     const toProcess = due.slice(0, MAX_BUMPS_PER_RUN);
 
     if (due.length > toProcess.length) {
       Logger.log(`⚠️ ${due.length} thread(s) due for a bump check, processing ${toProcess.length} this run (MAX_BUMPS_PER_RUN cap) — the rest will be picked up next run.`);
     }
 
-    toProcess.forEach(loopRow => {
+    const results = toProcess.map(loopRow => {
       try {
-        reviewForBump(loopRow);
+        return reviewForBump(loopRow, dryRun);
       } catch (err) {
         Logger.log(`[BumpChecker] UNCAUGHT for ${loopRow.threadId} — ${err.stack || err}`);
+        return { threadId: loopRow.threadId, error: String(err) };
       }
     });
 
-    Logger.log(`✅ Bump check complete. Evaluated ${toProcess.length} of ${due.length} due thread(s), ${_autosendCountThisRun} auto-sent.`);
+    Logger.log(`✅${dryRun ? ' [DRY RUN]' : ''} Bump check complete. Evaluated ${toProcess.length} of ${due.length} due thread(s), ${_autosendCountThisRun} auto-sent.`);
+    return { dryRun: !!dryRun, due: due.length, evaluated: toProcess.length, autosent: _autosendCountThisRun, results };
   }
 
   return { checkBumps };
 })();
 
-function checkBumps() {
-  BumpChecker.checkBumps();
+function checkBumps(dryRun, ignoreDue) {
+  return BumpChecker.checkBumps(!!dryRun, !!ignoreDue);
 }
 
 /**

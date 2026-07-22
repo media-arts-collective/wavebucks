@@ -81,8 +81,15 @@ const OpenLoops = (() => {
     sh.appendRow([threadId, open, lastMessageDate, recheckDays, nextCheckDate, '', now]);
   }
 
-  /** Open threads whose NextCheckDate has arrived, for BumpChecker.checkBumps(). */
-  function getDue(now) {
+  /**
+   * Open threads whose NextCheckDate has arrived, for BumpChecker.checkBumps().
+   * `ignoreDue: true` returns every currently-open loop regardless of its
+   * scheduled NextCheckDate — for re-evaluating existing loops against
+   * improved judgment (e.g. a prompt tuning) without waiting out a schedule
+   * set before the improvement existed. Not the normal path; BumpChecker's
+   * daily trigger always calls this without ignoreDue.
+   */
+  function getDue(now, { ignoreDue } = {}) {
     const rows = _sheet().getDataRange().getValues().slice(1);
     return rows
       .map((r, i) => ({
@@ -94,7 +101,7 @@ const OpenLoops = (() => {
         nextCheckDate: r[COL.NEXT_CHECK_DATE],
         lastBumpDate: r[COL.LAST_BUMP_DATE] || null
       }))
-      .filter(r => r.open === true && r.nextCheckDate && new Date(r.nextCheckDate) <= now);
+      .filter(r => r.open === true && (ignoreDue || (r.nextCheckDate && new Date(r.nextCheckDate) <= now)));
   }
 
   /** Stamp LastBumpDate after BumpChecker actually sends/drafts a nudge for threadId. */

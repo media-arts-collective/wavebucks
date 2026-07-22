@@ -146,23 +146,42 @@ several of these.**
    in-cycle context, same as any note a human drops via `scheduler -i`.
    Build a small, named, RE-RUNNABLE scenario library first (see item 2)
    so a prompt change can be regression-checked instead of judged fresh
-   each time. Keep actual prompt edits going out as a reviewable PR (this
-   project's existing review-gate), at least until there's a track record
-   of the diagnostic side being reliable -- don't remove that gate as a
-   side effect of automating the diagnosis.
-2. **Scenario library.** Named, re-runnable dry-run test cases against
-   real recent `OpenLoops`/`Messages` state (via `WriteApi`'s
-   `dryRun`/`ignoreDue` support), covering: the 5 bump-check scenarios and
-   3 request-logging scenarios already validated once against the real
-   API per `CLAUDE.md` (currently one-off, not preserved as a re-runnable
-   suite), tonight's brunch-thread live case, and mining the raw mailing-
-   list archive (`scope=messages&q=...` via `ReadApi`) for real historical
-   "dropped ball" cases -- threads that went quiet and never got picked
-   back up -- as a source of realistic regression scenarios, not just
-   synthetic ones. Also: score generated drafts against real archived
-   list VOICE, not just correct action/JSON shape -- tonight's real
-   auto-sent bump got action/timing right but the director flagged its
-   tone as not matching how the mailing list actually sounds.
+   each time.
+2. **Scenario library — DECIDED 2026-07-22 to become the actual PR-review
+   replacement, not just a nice-to-have.** Human's explicit call: the
+   PR-review gate on the nightly batch (never-auto-merge) is tedious and
+   not something he'll do regularly, so it's being removed — but NOT
+   unconditionally (that was explicitly rejected as "full auto-merge, no
+   gate at all"). The replacement gate is this scenario library: the
+   batch runs it after any prompt/behavior change, and only auto-merges to
+   `context-tiers`/`main` directly (no PR, no wait) if every scenario
+   still passes — otherwise it still opens a PR (or holds/flags) for a
+   human, same as today. Sequencing matters: DO NOT change the wrapper's
+   merge behavior until this library exists and is itself validated
+   against real known failures — specifically, both of tonight's real
+   bugs (the recipient-completion gap, the stale-recheck-window issue)
+   should be encoded as regression cases the library actually catches,
+   proving the check works before it's trusted to replace a human. Scope:
+   named, re-runnable dry-run test cases against real recent
+   `OpenLoops`/`Messages` state (via `WriteApi`'s `dryRun`/`ignoreDue`
+   support), covering: the 5 bump-check scenarios and 3 request-logging
+   scenarios already validated once against the real API per `CLAUDE.md`
+   (currently one-off, not preserved as a re-runnable suite), tonight's
+   brunch-thread live case, and mining the raw mailing-list archive
+   (`scope=messages&q=...` via `ReadApi`) for real historical "dropped
+   ball" cases — threads that went quiet and never got picked back up —
+   as a source of realistic regression scenarios, not just synthetic
+   ones. Also score generated drafts against real archived list VOICE,
+   not just correct action/JSON shape — tonight's real auto-sent bump got
+   action/timing right but the director flagged its tone as not matching
+   how the mailing list actually sounds. Rationale for keeping this
+   contingent rather than flipping the gate now: the PR gate wasn't only
+   protecting against risky email behavior (the allowlist/draft-only
+   guardrails already bound that) — it's also the thing that catches
+   non-runtime bugs (like both of tonight's) and gives Tyler, a co-owner
+   of this repo, visibility into changes landing on shared code. Losing
+   that requires something that actually replaces both functions, not
+   just the human's attention span.
 3. **Manual-alias-narrowing / archive-misattribution risk (see
    `CLAUDE.md`'s "Known bugs" -- marked OPEN, conspicuous).** A human
    sending manually from `kreweofvaporwave@` is indistinguishable in the

@@ -332,6 +332,20 @@ and releases exactly once; a thrown error still releases via `finally`) —
 not exercised against the real Apps Script `LockService` or a live trigger,
 since this cycle can't `clasp push`.
 
+**Added 2026-07-21 (second cycle):** `TestsLocal.js`, a local test suite
+(`node TestsLocal.js`) mirroring `scribaSenatus/TestsLocal.js`'s pattern —
+re-declares the pure guardrail logic (`extractEmail`, `matchesAllowlist`,
+`isAllowlistEligible`, `classifyAudience`, and the `LockService`
+tryLock/finally-releaseLock shape from the fix above) inline, since Apps
+Script globals aren't loadable under plain `node`. This is engine work
+closing a real gap the same day's earlier report flagged: the lock fix
+above was verified with a throwaway, uncommitted `/tmp` script, so nothing
+regression-tested it going forward. 24 assertions, all passing. Doesn't
+touch anything requiring real `GmailApp`/`PropertiesService`/`LockService`/
+Claude — see "Needs live testing" below, unchanged by this addition. Keep
+this file's copies in sync with the real logic when either changes (same
+discipline `scribaSenatus/CLAUDE.md` documents for its own suite).
+
 **Needs a director to actually do something (mechanical, not a judgment call):**
 - Optional cleanup: archive/delete the orphaned `Personality`/`Threads`/
   `Shards`/`ConsolidationLog` sheet tabs whenever the historical data in

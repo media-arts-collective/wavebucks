@@ -96,6 +96,17 @@ generally.
   runtime; tests emergent hierarchy depth over the raw archive as a
   possible future input to hand-curated context. Not wired into anything.
 
+**Local tests**
+- `TestsLocal.js` — `node TestsLocal.js`. Mirrors
+  `scribaSenatus/TestsLocal.js`'s pattern: re-declares the pure guardrail
+  logic under test inline (Apps Script globals aren't available under
+  plain `node`), so mirror any change to `extractEmail`/`matchesAllowlist`/
+  `isAllowlistEligible`/`classifyAudience`/the `LockService` guard shape
+  here too or the suite silently tests stale logic. Covers the allowlist
+  and audience-classification guardrails; anything needing real
+  `GmailApp`/`PropertiesService`/`LockService`/Claude still needs a live
+  run (see `CLAUDE.md`'s Open items).
+
 ## Config spreadsheet tabs
 
 `Config`, `Log`, `Messages`, `OpenLoops`, `Requests` are live. `Personality`,

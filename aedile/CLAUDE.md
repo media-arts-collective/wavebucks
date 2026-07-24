@@ -433,3 +433,13 @@ successful writes end to end.)
   shape — a summary as an OUTPUT for a human to read, never fed back in as
   the model's source of truth — so it doesn't reopen that same risk. Not
   scoped or built; needs its own design pass before implementing.
+
+## Build discipline (realisateur baseline — see realisateur/BUILD-DISCIPLINE.md)
+Before marking anything done:
+- [ ] Fails **loud**? (no exit-0 no-ops; pipefail+SIGPIPE guarded)
+- [ ] **Wired to a real path** (boot/timer/enabled-flag), not just built?
+- [ ] "Working" backed by a **test name or human-sense witness**, not exit code alone?
+- [ ] New mechanism **names what it retires**?
+- [ ] Config read from **one source**, not retyped per file?
+- [ ] Deploy verified against a **git ref**; drift fails loud?
+- [ ] **No secret** in a tracked file; tree clean of build debris?

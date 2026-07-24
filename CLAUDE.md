@@ -77,30 +77,33 @@ Key conventions to preserve when extending this:
 - `CONTRIBUTING.md` documents the full clasp setup/auth flow and deployment steps in detail; `COMMANDS.md` is the user-facing reference for every email command, its exact syntax, and the sheet schemas — keep both in sync with `Config.getLexicon()` when commands change. Both describe Wavebucks (`scribaSenatus`/`wavebucksCore`) only, not `aedile`.
 - `aedile/` doesn't share Wavebucks's spreadsheet-as-database design, lexicon/dispatch pattern, or command set — don't assume conventions from the Architecture section above carry over there. Read `aedile/CLAUDE.md` before working in that directory.
 
-## Push permission (2026-07-24, human-directed, env-gated)
+## Push permission (2026-07-24, human-directed)
 
 Claude may push committed changes directly to `origin/<current-branch>`
-without asking each time, but **only when the environment variable
-`WAVEBUCKS_AUTOPUSH=1` is set** in the shell running the session. If it's
-unset (the default), commit locally as usual but ask before pushing —
-same as the default behavior everywhere else.
+without asking each time, for ordinary work in this repo — same standing
+grant as every other repo realisateur touches. Flag every such push in
+the next report/summary (what was pushed, why, and how to revert it —
+`git revert <sha>`). This does not license skipping review of what goes
+into a commit in the first place, only the push step itself.
 
-**Why gated, unlike realisateur's own scaffolded projects:** this is a
-shared, co-directed nonprofit repo (Zach + Tyler, Media Arts Collective),
-not a solo sandbox — a blanket always-push grant doesn't fit here by
-default. **Why the gate is acceptable at env-var granularity rather than
-asking every time:** code here isn't in production and the institution
-(Virtual Krewe of Vaporwave) is currently dormant — genuinely low
-consequence if a push needs reverting, so a deliberate opt-in switch
-(rather than a standing blanket grant) is the right amount of friction.
+**Why this is fine here despite being a shared, co-directed nonprofit
+repo (Zach + Tyler):** the real safety boundary already lives on the
+Apps Script *production* side, not in git — `aedile`'s own env vars
+there enforce a recipient whitelist/kill switch that prevents it from
+acting outside approved bounds regardless of what's pushed to this repo.
+A git push here changes source under version control; it does not by
+itself change production behavior or reach beyond the whitelist. Given
+that, gating pushes behind an extra opt-in switch here would be
+redundant friction, not real safety — removed the earlier
+`WAVEBUCKS_AUTOPUSH` env-var gate from this file (2026-07-24) for
+exactly that reason.
 
-To enable for a session: `export WAVEBUCKS_AUTOPUSH=1` before starting
-Claude Code. To make it the default for your own interactive use, add
-that line to your shell profile or a `direnv` `.envrc` in this directory
-— but don't bake it into any committed file (it's a per-human toggle, not
-project config).
-
-Every autonomous push must still be flagged in the next report/summary —
-what was pushed, why, and how to revert (`git revert <sha>`) — same
-requirement as every other repo with this permission. This does not
-license skipping review of what goes into a commit, only the push step.
+**Prefer noisy failures over silent guards in this phase.** This project
+is pre-full-list-deployment — the whitelist scope is intentionally
+narrow right now specifically so problems surface loudly and get fixed
+before wider rollout. Don't add defensive try/catch or fallback paths
+that would quiet an error instead of surfacing it; a loud failure now is
+cheaper than a silent one discovered after the list widens. Matches
+`BUILD-DISCIPLINE.md`'s "fail loud by default" rule (stamped into
+`aedile/CLAUDE.md` same night) — applies to this whole repo, not just
+`aedile`.

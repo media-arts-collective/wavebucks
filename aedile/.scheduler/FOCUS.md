@@ -13,6 +13,33 @@
      exempt from the harness's .claude/-write block -- QUESTIONS.md
      writes were ALSO failing for that second reason, now fixed too). -->
 
+## Stability milestone
+
+**Current:** the scenario library (`aedile/TestsLocal.js`) covers both of this project's known real bugs plus the validated live-data dry-run scenarios, proving out as the PR-review gate's actual replacement — so the nightly cycle can auto-merge on a clean scenario run instead of always waiting on a human, without losing the bug-catching/Tyler-visibility function the PR gate exists for today — status: in-progress
+Done when:
+- [x] `TestsLocal.js` exists as a fast, local, no-secrets regression suite (2026-07-22)
+- [x] the recipient-completion bug encoded as a permanent regression case (2026-07-22)
+- [ ] the stale-recheck-window bug (both director-loop threads stuck at `recheck_after_days=10`) also encoded as a regression case — the second of the two real bugs this session found, not yet in the suite
+- [ ] the already-validated live-data dry-run scenarios (5 bump-check + 3 request-logging cases, checked once against the real API per `CLAUDE.md`) preserved as a re-runnable suite via `WriteApi`'s `dryRun`/`ignoreDue` support, instead of one-off
+- [ ] the nightly cycle actually runs `node aedile/TestsLocal.js` as step one of every scenario check (stated as the standing rule in this file's backlog item 2; not yet confirmed wired as an enforced invariant of the cycle itself)
+- [ ] the merge-gate change (auto-merge to `context-tiers` on a clean scenario run, PR-and-hold otherwise) is implemented and validated against both known real bugs before it goes live — sequencing already decided by the user, not a new call: don't flip the gate until the library the gate depends on is itself proven
+
+Ideas beyond this bar are PARKED by default (see
+realisateur/STABILITY-MILESTONES.md): manual-alias-narrowing/archive-
+misattribution detection (item 3 — real and flagged "conspicuous," but a
+design decision away from being buildable, not urgent), the deploy-
+awareness signal for the Web-App redeploy bottleneck (item 4), the
+`mailto:` feedback link (item 5 — cheap, but not core), the September
+DM→list-tier promotion review (item 6 — explicitly can't happen before
+September regardless), and the human-facing digest doc (item 7 — "not
+yet designed"). None discarded — all real, all past this specific bar.
+*(Milestone drafted 2026-07-24 via realisateur's `/ideate`, human-
+directed this pass — every checklist item above is this file's own
+already-stated backlog item 2, formalized into a checkable bar, not new
+scope. The scenario library was the user's own explicit prerequisite for
+loosening the PR gate — this doesn't introduce that decision, it makes
+its finish line checkable.)*
+
 **Update 2026-07-22: the director loop this file was written to unblock
 got real, substantial progress in a live human+Claude session tonight --
 not from a nightly batch cycle.** Summary for whoever picks this up next:

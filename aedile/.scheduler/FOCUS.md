@@ -315,3 +315,10 @@ Dedicated clone lives at `svc-vaporwave`'s
 `git reset --hard` (now stash-guarded, not destructive to interactive WIP
 -- see the wrapper script's own comments) each cycle, NOT a worktree off
 zach's real checkout anymore.
+
+## Fable review (2026-07-25)
+
+<!-- Appended by realisateur/fable-like/inject-suggestions.sh. Full context: fable-like/FABLE_REPORT.md. Triage these like any dated entries; delete freely. -->
+
+- **2026-07-25 (fable-review):** silently orphaned since 2026-07-20 (svc-vaporwave crontab never installed) — the 15-minute human step is the sole blocker for real email ops; surface its AGE daily until done
+- **2026-07-25 (fable-review):** two flagged one-liners still unapplied: SCHEDULER_SUBDIR=".scheduler" missing from schedule/aedile.conf (milestone-audit misreports "no focus" every pass) and scheduler's questions/aedile.md symlink pointing at the wrong file — apply on sight; known-wrong survey output trains everyone to ignore the survey

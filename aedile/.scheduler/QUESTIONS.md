@@ -22,3 +22,22 @@ actually read and dealt with it.
      repurpose it for real (non-test) director-loop use per
      `.scheduler/FOCUS.md`.
   > (answer inline here)
+
+- **2026-07-25:** Renamed `TESTING_MODE` to `DIRECTOR_LOOP_OVERRIDE`
+  throughout the code (`Context.js`, `SystemPrompt.js`,
+  `InboxProcessor.js`) -- FOCUS.md's backlog item 2 asked for this once
+  item 1 (a real director-loop nudge) confirmed the mechanism was being
+  reused for production, but that confirmation itself needs live
+  Gmail/Sheets access this unattended run doesn't have (see this cycle's
+  report). Renamed anyway on the merits: the old name actively misled --
+  a director enabling it for a *real* nudge, not a test, would see
+  "TESTING_MODE"/"🧪" in both the script property and the log output.
+  Behavior is byte-for-byte identical, so **the old `TESTING_MODE`
+  script property (if it's currently set to `'true'` live -- still
+  unconfirmed, see item 3 above) now has NO effect** -- if a director
+  wants the override active, it needs to be re-set under the new name
+  `DIRECTOR_LOOP_OVERRIDE` after this branch's next `clasp push`.
+  Old item 3 above still stands, now doubly so: confirm the live value
+  under the *old* name (harmless leftover either way) and, if the
+  override is wanted, set the *new* one.
+  > (answer inline here)

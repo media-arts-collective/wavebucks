@@ -12,18 +12,19 @@
  */
 
 // Apps Script re-evaluates globals on every execution, so this reads the
-// current TESTING_MODE property at prompt-assembly time each run — flipping
-// the property takes effect on the next trigger/scan with no redeploy.
-function _testingOverride() {
+// current DIRECTOR_LOOP_OVERRIDE property at prompt-assembly time each run —
+// flipping the property takes effect on the next trigger/scan with no
+// redeploy.
+function _directorLoopOverride() {
   try {
-    return PropertiesService.getScriptProperties().getProperty('TESTING_MODE') === 'true'
-      ? `\n\n${AEDILE_CONTEXT_TESTING}`
+    return PropertiesService.getScriptProperties().getProperty('DIRECTOR_LOOP_OVERRIDE') === 'true'
+      ? `\n\n${AEDILE_CONTEXT_DIRECTOR_LOOP_OVERRIDE}`
       : '';
   } catch (err) {
-    return ''; // fail closed to normal (non-testing) behavior
+    return ''; // fail closed to normal (restrained) behavior
   }
 }
 
-const AEDILE_SYSTEM_PROMPT_LIST = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_TRIAGE_LIST}${_testingOverride()}`;
-const AEDILE_SYSTEM_PROMPT_DM = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_TRIAGE_DM}${_testingOverride()}`;
-const AEDILE_BUMP_PROMPT = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_BUMP}${_testingOverride()}`;
+const AEDILE_SYSTEM_PROMPT_LIST = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_TRIAGE_LIST}${_directorLoopOverride()}`;
+const AEDILE_SYSTEM_PROMPT_DM = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_TRIAGE_DM}${_directorLoopOverride()}`;
+const AEDILE_BUMP_PROMPT = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_BUMP}${_directorLoopOverride()}`;

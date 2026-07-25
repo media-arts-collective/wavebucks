@@ -124,8 +124,15 @@ director to archive or delete once the historical data in them isn't needed.
   endpoint. If unset, that endpoint refuses every request (fail closed).
   Independent of the kill switches above; it has no effect on the
   trigger-driven triage/bump path.
+- `DIRECTOR_LOOP_OVERRIDE` — opt-in, off by default. When `'true'`,
+  suspends the seasonal "dead month / do nothing" restraint for replies
+  inside the closed director loop (Zach, Tyler, and/or the krewe address
+  only) — used either to live-test the draft/auto-send path or for real
+  director-loop nudging (see `CLAUDE.md`'s Current status). Never widens
+  who can be sent to; every other guardrail still applies. Toggle via
+  `enableDirectorLoopOverride()`/`disableDirectorLoopOverride()`.
 
-All six live in Project Settings > Script Properties, not in code.
+All seven live in Project Settings > Script Properties, not in code.
 
 `installTrigger()` installs the hourly `scanInbox` trigger;
 `installBumpTrigger()` installs the daily `checkBumps` trigger. Independent

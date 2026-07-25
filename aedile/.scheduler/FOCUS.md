@@ -117,8 +117,20 @@ item should be genuinely finishable in one cycle.**
    fix on `scanUnread()`/`checkBumps()` instead. That fix was good,
    real, and worth keeping -- but the actual "tonight's actual job"
    above (find the director meeting's open loops, draft bumps) is still
-   fully outstanding. Do this first, now that you can actually see this
-   instruction.
+   fully outstanding.
+   **2026-07-25: still outstanding, and now root-caused as a hard
+   blocker, not just an unlucky miss.** Steps 1-2 of "tonight's actual
+   job" above ("read the Log/Messages/OpenLoops tabs", "GmailApp.getThreadById")
+   require live Google Sheets/Gmail access. This account's aedile job has
+   never had that -- it's commit-only against a disposable git clone, no
+   `clasp push`/`clasp open`/live API creds (see `CLAUDE.md`'s hard
+   scope boundaries and every prior cycle's report). No unattended cycle
+   of this job, as currently wired, can ever find real open-loop threads
+   or draft a real bump against them -- that step needs either a human
+   running it from the Apps Script editor, or this job gaining a live,
+   read-only credential (a real design change, not something to default
+   into unilaterally). Flagged in `.scheduler/QUESTIONS.md` and tonight's
+   report rather than worked around.
 2. **Rename the `TESTING_MODE` toggle if it's now serving real
    production behavior**, not just tests -- `Context.js`/
    `InboxProcessor.js`/`SystemPrompt.js` already flagged this
@@ -126,6 +138,15 @@ item should be genuinely finishable in one cycle.**
    mechanism for real production behavior needs a rename/cleanup").
    Only do this once item 1 confirms whether the director-loop override
    actually ended up reusing that mechanism for real.
+   **Done 2026-07-25, on the merits rather than waiting on item 1's
+   confirmation** (which, per the note just above, this job can never
+   produce on its own): renamed to `DIRECTOR_LOOP_OVERRIDE` throughout
+   (`Context.js`/`SystemPrompt.js`/`InboxProcessor.js`) since the old
+   name was actively misleading regardless of which use case ends up
+   applying -- see `.scheduler/QUESTIONS.md`'s 2026-07-25 entry for the
+   live-script-property implication (old `TESTING_MODE` value, if any,
+   now has no effect; the override needs re-enabling under the new name
+   post-deploy if wanted).
 3. **Move aedile off the bespoke wrapper, onto `lib/sweep-loop-common.sh`
    directly** (queued via `scheduler -i` 2026-07-21, human's own idea:
    "could be as simple as running some functions before or after

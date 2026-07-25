@@ -406,17 +406,21 @@ function disableAedile() {
 }
 
 /**
- * TEMPORARY testing toggle — turns on the AEDILE_CONTEXT_TESTING override
- * (SystemPrompt._testingOverride), which suspends dead-season silence for the
- * whitelisted director loop so the draft/auto-send path can be tested live.
- * Off by default; ALWAYS run disableTestingMode() when the test is done.
+ * Director-loop override toggle — turns on the
+ * AEDILE_CONTEXT_DIRECTOR_LOOP_OVERRIDE addition (SystemPrompt._directorLoopOverride),
+ * which suspends dead-season silence for the closed director loop (Zach,
+ * Tyler, and/or the krewe address only) so it can either be exercised as a
+ * live test of the draft/auto-send path, or used for real to help close open
+ * loops from a Zach/Tyler meeting — same narrow scope either way (see
+ * Context.js). Off by default; ALWAYS run disableDirectorLoopOverride() once
+ * the test or the real push is done, so seasonal restraint resumes normally.
  */
-function enableTestingMode() {
-  PropertiesService.getScriptProperties().setProperty('TESTING_MODE', 'true');
-  Logger.log('🧪 TESTING_MODE on — dead-season restraint suspended for the whitelisted loop. Remember to disable when done.');
+function enableDirectorLoopOverride() {
+  PropertiesService.getScriptProperties().setProperty('DIRECTOR_LOOP_OVERRIDE', 'true');
+  Logger.log('🧪 DIRECTOR_LOOP_OVERRIDE on — dead-season restraint suspended for the closed director loop. Remember to disable when done.');
 }
 
-function disableTestingMode() {
-  PropertiesService.getScriptProperties().deleteProperty('TESTING_MODE');
-  Logger.log('✅ TESTING_MODE off — normal restraint restored.');
+function disableDirectorLoopOverride() {
+  PropertiesService.getScriptProperties().deleteProperty('DIRECTOR_LOOP_OVERRIDE');
+  Logger.log('✅ DIRECTOR_LOOP_OVERRIDE off — normal restraint restored.');
 }

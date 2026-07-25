@@ -320,6 +320,18 @@ drafting, from both the triage tier (hourly) and the bump tier
 - Optional cleanup: archive/delete the orphaned `Personality`/`Threads`/
   `Shards`/`ConsolidationLog` sheet tabs whenever the historical data in
   them isn't needed anymore. No code touches them.
+- **2026-07-25: `TESTING_MODE` renamed to `DIRECTOR_LOOP_OVERRIDE`**
+  (`Context.js`/`SystemPrompt.js`/`InboxProcessor.js` —
+  `enableTestingMode`/`disableTestingMode` are now
+  `enableDirectorLoopOverride`/`disableDirectorLoopOverride`). Same exact
+  behavior and scope (suspends dead-season restraint for replies inside
+  the closed Zach/Tyler/krewe-address loop only); renamed because the old
+  name misleadingly implied "test only" even though this mechanism is
+  also the intended vehicle for the real director-loop-nudging work in
+  `aedile/.scheduler/FOCUS.md`. **If `TESTING_MODE` was ever set live to
+  `'true'`, it now has no effect** — after the next `clasp push`, a
+  director needs to set the new `DIRECTOR_LOOP_OVERRIDE` script property
+  instead if the override is wanted.
 - **2026-07-17: `scanInbox`'s trigger interval was dropped from 10 minutes
   to 1 (for a live-chat-like response feel), then walked back to hourly**
   same day, after an audit (below) found a real unread thread that had

@@ -6,6 +6,14 @@ especially anything touching a guardrail (allowlist, kill switch,
 draft-vs-autosend, caps). Clear an entry by deleting its line once you've
 actually read and dealt with it.
 
+**2026-07-26: hard stops (this job structurally cannot do the thing,
+not just "hasn't yet") now go in `BLOCKERS.md`, not just here** -- per
+human feedback on the 2026-07-25 report that a real blocker buried in
+report prose "is going to be forgotten." Item 2026-07-22 #2 below is a
+genuine blocker (this job cannot find/bump real threads) and is now
+ALSO recorded there in stronger language; keeping it here too since it
+was already here.
+
 - **2026-07-21 (from the first real run's report, folded in by hand --
   this file couldn't be written automatically that cycle, see
   `.scheduler/FOCUS.md`'s top note for why):**

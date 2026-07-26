@@ -156,6 +156,8 @@ director loop is actually closed out, not a one-time ask.
 
 ## Backlog (roadmap set 2026-07-22, supersedes the 2026-07-21 version below the note)
 
+- **2026-07-25 19:16 (via `scheduler -i`):** See note in 7-25 report: the DIRECTOR_LOOP_OVERRIDE toggle needs to announce itself, to a user with no code access i.e. email kreweofvaporwave@kreweofvaporwave from itself with information like Change this Env Var to Do X Y Z. Noisy failure inside the end user environment is the only way. We must bake it in now as a core principle. The system needs to be fully configurable and interactive via the gmail interface. Gmail is the front door. It may send you to a sheet, it will rarely send you to apps script, and it should never send you to the code backend here.
+
 **Work top to bottom; each item should be genuinely finishable in one
 cycle. This whole list came out of tonight's live tuning session -- see
 the update note above for what already shipped. Cross-reference

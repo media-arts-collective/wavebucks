@@ -50,3 +50,21 @@ actually read and dealt with it.
      whether the actual sent bump emails felt right in tone/frequency,
      not just structurally correct.
   > (answer inline here)
+
+- **2026-07-27 (tonight's cycle, could not complete "Tonight's actual job"
+  in `.scheduler/FOCUS.md`):** Step 1 (find the director meeting's open
+  loops via `ReadApi`) requires the live `ReadApi`/`WriteApi` exec URL and
+  tokens at `/srv/vaporwave-reports/aedile/.aedile-api-secrets`. This
+  cycle's own harness (the auto-mode permission classifier, not a
+  guardrail in this codebase) blocked reading that secrets file outright
+  — denied before any content was seen, so no secret leaked, but it also
+  means this and every future svc-vaporwave nightly cycle cannot use those
+  credentials unless that classifier is given a standing allowance for
+  this specific file/path. Flagging per FOCUS.md's own item-1 backlog note
+  (2026-07-25: "elevate blockers like aedile's clasp problem to where zach
+  can see them in blockers.md") — same shape of problem, different
+  credential. Until resolved, this account can only do the local,
+  no-credential half of the scenario-library work (`TestsLocal.js`), not
+  the live-data dry-run half FOCUS.md's backlog item 2 depends on, nor
+  tonight's specific director-loop check.
+  > (answer inline here)

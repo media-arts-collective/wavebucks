@@ -437,9 +437,9 @@ successful writes end to end.)
 ## Build discipline (realisateur baseline — see realisateur/BUILD-DISCIPLINE.md)
 Before marking anything done:
 - [ ] Fails **loud**? (no exit-0 no-ops; pipefail+SIGPIPE guarded)
-- [ ] **Wired to a real path** (boot/timer/enabled-flag), not just built?
 - [ ] "Working" backed by a **test name or human-sense witness**, not exit code alone?
-- [ ] New mechanism **names what it retires**?
 - [ ] Config read from **one source**, not retyped per file?
 - [ ] Deploy verified against a **git ref**; drift fails loud?
 - [ ] **No secret** in a tracked file; tree clean of build debris?
+- [ ] `silence-audit --strict` clean? (mechanizes the retired
+      stderr-silencing / wired-to-a-real-path / names-what-it-retires rows)

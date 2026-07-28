@@ -9,8 +9,9 @@
  * Session objects standing in for the real services.
  *
  * When you change the real logic in InboxProcessor.js (getThreadParticipants,
- * getRecipientCompletion, isAllowlistEligible, classifyAudience), mirror the
- * change here or this suite will silently test stale logic.
+ * getRecipientCompletion, isAllowlistEligible, classifyAudience) or
+ * OpenLoops.js (upsert/getDue), mirror the change here or this suite will
+ * silently test stale logic.
  *
  * This is the first piece of the scenario library discussed in
  * .scheduler/FOCUS.md's backlog item 2 — the part that needs no live data
@@ -59,6 +60,47 @@ function classifyAudience(msg) {
   (msg.getTo() || '').split(',').forEach(a => a.trim() && recipients.add(extractEmail(a)));
   (msg.getCc() || '').split(',').forEach(a => a.trim() && recipients.add(extractEmail(a)));
   return recipients.size <= DM_RECIPIENT_THRESHOLD ? 'dm' : 'list';
+}
+
+// --- Inline copy of OpenLoops.js's upsert/getDue (see OpenLoops.js) ---
+// Same mechanical sheet-row logic, backed by an in-memory mock sheet instead
+// of a real Spreadsheet.
+
+const MIN_RECHECK_DAYS = 1;
+const MAX_RECHECK_DAYS = 60;
+const DEFAULT_RECHECK_DAYS = 3;
+
+function _sanitizeRecheckDays(days) {
+  const n = Number(days);
+  if (!Number.isFinite(n) || n < MIN_RECHECK_DAYS) return DEFAULT_RECHECK_DAYS;
+  return Math.min(n, MAX_RECHECK_DAYS);
+}
+
+function mockOpenLoopsSheet() {
+  // rows[0] is the header, mirroring a real sheet's getDataRange().getValues().
+  const rows = [['ThreadId', 'Open', 'LastMessageDate', 'RecheckAfterDays', 'NextCheckDate', 'LastBumpDate', 'UpdatedAt']];
+  return {
+    upsert(threadId, { open, lastMessageDate, recheckAfterDays }, now) {
+      const recheckDays = _sanitizeRecheckDays(recheckAfterDays);
+      const nextCheckDate = new Date(lastMessageDate);
+      nextCheckDate.setDate(nextCheckDate.getDate() + recheckDays);
+      for (let i = 1; i < rows.length; i++) {
+        if (rows[i][0] === threadId) {
+          rows[i][1] = open;
+          rows[i][2] = lastMessageDate;
+          rows[i][3] = recheckDays;
+          rows[i][4] = nextCheckDate;
+          rows[i][6] = now;
+          return;
+        }
+      }
+      rows.push([threadId, open, lastMessageDate, recheckDays, nextCheckDate, '', now]);
+    },
+    getRow(threadId) {
+      const r = rows.find(r => r[0] === threadId);
+      return r && { threadId: r[0], open: r[1], lastMessageDate: r[2], recheckAfterDays: r[3], nextCheckDate: r[4], lastBumpDate: r[5] || null };
+    },
+  };
 }
 
 // --- Minimal mock helpers ---
@@ -151,6 +193,47 @@ console.log('\nclassifyAudience');
     cc: 'a@example.com, b@example.com, c@example.com, d@example.com',
   });
   assertEqual(classifyAudience(listMsg), 'list', 'a 5-recipient message classifies as list');
+}
+
+console.log('\nOpenLoops.upsert — stale-recheck-window bug (2026-07-22)');
+{
+  // Regression case for the second real bug found the 2026-07-22 session:
+  // both director-loop threads were stuck at RecheckAfterDays=10 (set
+  // 7/18, an explicit blocker never got re-bumped) because the model kept
+  // returning a conservative recheck window under seasonal restraint. The
+  // fix was prompt-level (DM-tier context now overrides restraint for an
+  // explicit blocker), but the mechanism that lets a corrected decision
+  // actually take effect is upsert() always OVERWRITING RecheckAfterDays/
+  // NextCheckDate from the model's latest call rather than merging with
+  // (or preserving) whatever was stored before. If upsert ever regressed
+  // to a merge/preserve-on-existing-row behavior, a stale window would
+  // get "stuck" again regardless of how good the prompt is — this locks
+  // that invariant in place.
+  const sheet = mockOpenLoopsSheet();
+  const threadId = 'thread-director-loop';
+  const firstMessageDate = new Date('2026-07-18T00:00:00Z');
+
+  // Initial (buggy-era) decision: a 10-day recheck window on an explicit blocker.
+  sheet.upsert(threadId, { open: true, lastMessageDate: firstMessageDate, recheckAfterDays: 10 }, new Date('2026-07-18T12:00:00Z'));
+  const stale = sheet.getRow(threadId);
+  assertEqual(stale.recheckAfterDays, 10, 'initial upsert records the stale 10-day window');
+
+  // A later call (fresh model decision, corrected prompt) on the same
+  // thread with a shorter, more urgent window and a newer LastMessageDate.
+  const secondMessageDate = new Date('2026-07-22T00:00:00Z');
+  sheet.upsert(threadId, { open: true, lastMessageDate: secondMessageDate, recheckAfterDays: 2 }, new Date('2026-07-22T09:00:00Z'));
+  const fixed = sheet.getRow(threadId);
+  assertEqual(fixed.recheckAfterDays, 2, 'later upsert overwrites the stale window with the fresh, shorter one');
+  assertEqual(fixed.lastMessageDate, secondMessageDate, 'later upsert overwrites LastMessageDate rather than preserving the first one');
+
+  const expectedNextCheck = new Date(secondMessageDate);
+  expectedNextCheck.setDate(expectedNextCheck.getDate() + 2);
+  assertEqual(fixed.nextCheckDate.getTime(), expectedNextCheck.getTime(), 'NextCheckDate is derived from the fresh LastMessageDate + fresh window, not stuck on the old one');
+
+  // Sanity check on the sanitizer itself: an out-of-range or garbage value
+  // from the model never silently reintroduces a stuck/oversized window.
+  assertEqual(_sanitizeRecheckDays(999), MAX_RECHECK_DAYS, 'recheck days above MAX_RECHECK_DAYS clamp down');
+  assertEqual(_sanitizeRecheckDays('not-a-number'), DEFAULT_RECHECK_DAYS, 'garbage recheck days fall back to the default');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -9,8 +9,10 @@
  * Session objects standing in for the real services.
  *
  * When you change the real logic in InboxProcessor.js (getThreadParticipants,
- * getRecipientCompletion, isAllowlistEligible, classifyAudience), mirror the
- * change here or this suite will silently test stale logic.
+ * getRecipientCompletion, isAllowlistEligible, classifyAudience) or
+ * OpenLoops.js (_sanitizeRecheckDays, the NextCheckDate math, getDue's
+ * ignoreDue filter), mirror the change here or this suite will silently
+ * test stale logic.
  *
  * This is the first piece of the scenario library discussed in
  * .scheduler/FOCUS.md's backlog item 2 — the part that needs no live data
@@ -59,6 +61,29 @@ function classifyAudience(msg) {
   (msg.getTo() || '').split(',').forEach(a => a.trim() && recipients.add(extractEmail(a)));
   (msg.getCc() || '').split(',').forEach(a => a.trim() && recipients.add(extractEmail(a)));
   return recipients.size <= DM_RECIPIENT_THRESHOLD ? 'dm' : 'list';
+}
+
+// --- Inline copies of OpenLoops.js's date/scheduling logic ---
+
+const MIN_RECHECK_DAYS = 1;
+const MAX_RECHECK_DAYS = 60;
+const DEFAULT_RECHECK_DAYS = 3;
+
+function sanitizeRecheckDays(days) {
+  const n = Number(days);
+  if (!Number.isFinite(n) || n < MIN_RECHECK_DAYS) return DEFAULT_RECHECK_DAYS;
+  return Math.min(n, MAX_RECHECK_DAYS);
+}
+
+function computeNextCheckDate(lastMessageDate, recheckAfterDays) {
+  const recheckDays = sanitizeRecheckDays(recheckAfterDays);
+  const nextCheckDate = new Date(lastMessageDate);
+  nextCheckDate.setDate(nextCheckDate.getDate() + recheckDays);
+  return nextCheckDate;
+}
+
+function getDueFromRows(rows, now, { ignoreDue } = {}) {
+  return rows.filter(r => r.open === true && (ignoreDue || (r.nextCheckDate && new Date(r.nextCheckDate) <= now)));
 }
 
 // --- Minimal mock helpers ---
@@ -151,6 +176,33 @@ console.log('\nclassifyAudience');
     cc: 'a@example.com, b@example.com, c@example.com, d@example.com',
   });
   assertEqual(classifyAudience(listMsg), 'list', 'a 5-recipient message classifies as list');
+}
+
+console.log('\nOpenLoops scheduling — stale-recheck-window bug (2026-07-22)');
+{
+  // Regression case for the second real bug found 2026-07-22: two director-
+  // loop threads got stuck at RecheckAfterDays=10 (set 2026-07-18, never
+  // bumped) because the seasonal "dead month" restraint applied uniformly
+  // even to an explicit, self-stated blocker. The prompt-side root cause
+  // (Context.js's DM-only overrides) isn't unit-testable here — it needs a
+  // real model call — but the mechanical fix path that actually unstuck the
+  // live threads that night (WriteApi's `ignoreDue` re-evaluation, bypassing
+  // a stale NextCheckDate to force a fresh recheck) IS pure logic, and is
+  // what this asserts: a loop scheduled far in the future is correctly
+  // skipped by the normal due-check, but IS returned when ignoreDue is set,
+  // so a prompt fix can always be re-validated against a stuck loop without
+  // waiting out its stale schedule.
+  const lastMessageDate = new Date('2026-07-18T00:00:00Z');
+  const nextCheckDate = computeNextCheckDate(lastMessageDate, 10);
+  const stuckLoop = { threadId: 'director-loop-1', open: true, lastMessageDate, nextCheckDate };
+  const now = new Date('2026-07-22T00:00:00Z'); // still 6 days short of the 10-day recheck window
+
+  assertEqual(getDueFromRows([stuckLoop], now).length, 0, 'a loop not yet due is excluded from the normal due-check');
+  assertEqual(getDueFromRows([stuckLoop], now, { ignoreDue: true }).length, 1, 'ignoreDue still surfaces the stuck loop for re-evaluation');
+
+  assertEqual(sanitizeRecheckDays(10), 10, 'a within-range recheckAfterDays passes through unchanged');
+  assertEqual(sanitizeRecheckDays(9999), MAX_RECHECK_DAYS, 'an out-of-range recheckAfterDays clamps to MAX_RECHECK_DAYS');
+  assertEqual(sanitizeRecheckDays('garbage'), DEFAULT_RECHECK_DAYS, 'a non-numeric recheckAfterDays falls back to DEFAULT_RECHECK_DAYS');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

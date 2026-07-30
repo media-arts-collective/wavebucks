@@ -19,7 +19,7 @@
 Done when:
 - [x] `TestsLocal.js` exists as a fast, local, no-secrets regression suite (2026-07-22)
 - [x] the recipient-completion bug encoded as a permanent regression case (2026-07-22)
-- [ ] the stale-recheck-window bug (both director-loop threads stuck at `recheck_after_days=10`) also encoded as a regression case — the second of the two real bugs this session found, not yet in the suite
+- [x] the stale-recheck-window bug's mechanical half (2026-07-30) — `getDue`'s `ignoreDue` bypass and `_sanitizeRecheckDays`'s clamp, added to `TestsLocal.js`. Note: the bug's actual root cause was a model-judgment gap (seasonal restraint applying even to an explicit blocker), fixed via `Context.js` prompt text, not code — that half isn't testable without a live API call, so it still needs the live-data dry-run suite (next checklist item) before this bug is fully covered
 - [ ] the already-validated live-data dry-run scenarios (5 bump-check + 3 request-logging cases, checked once against the real API per `CLAUDE.md`) preserved as a re-runnable suite via `WriteApi`'s `dryRun`/`ignoreDue` support, instead of one-off
 - [ ] the nightly cycle actually runs `node aedile/TestsLocal.js` as step one of every scenario check (stated as the standing rule in this file's backlog item 2; not yet confirmed wired as an enforced invariant of the cycle itself)
 - [ ] the merge-gate change (auto-merge to `context-tiers` on a clean scenario run, PR-and-hold otherwise) is implemented and validated against both known real bugs before it goes live — sequencing already decided by the user, not a new call: don't flip the gate until the library the gate depends on is itself proven

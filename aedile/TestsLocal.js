@@ -61,6 +61,34 @@ function classifyAudience(msg) {
   return recipients.size <= DM_RECIPIENT_THRESHOLD ? 'dm' : 'list';
 }
 
+// --- Inline copies of OpenLoops.js's scheduling helpers (see OpenLoops.js) ---
+// _sanitizeRecheckDays/getDue's date filter are the mechanical half of the
+// 2026-07-22 stale-recheck-window bug (both director-loop threads stuck at
+// recheck_after_days=10, never bumped). The bug's actual ROOT CAUSE was a
+// model-judgment gap (seasonal "dead month" restraint applying even to an
+// explicit, self-stated blocker) fixed in Context.js's prompt text — that
+// half can't be regression-tested here without a live API call (see
+// FOCUS.md backlog item 2's "live-data dry-run scenarios", not yet built).
+// What CAN be tested locally is the mechanical scaffolding the human used to
+// recover from it: getDue's ignoreDue bypass (used tonight to re-evaluate
+// already-scheduled loops against the fixed prompt without waiting out the
+// stale NextCheckDate) and the recheck-day clamp that guards against a
+// missing/garbage model value in the first place.
+
+const MIN_RECHECK_DAYS = 1;
+const MAX_RECHECK_DAYS = 60;
+const DEFAULT_RECHECK_DAYS = 3;
+
+function sanitizeRecheckDays(days) {
+  const n = Number(days);
+  if (!Number.isFinite(n) || n < MIN_RECHECK_DAYS) return DEFAULT_RECHECK_DAYS;
+  return Math.min(n, MAX_RECHECK_DAYS);
+}
+
+function getDue(rows, now, { ignoreDue } = {}) {
+  return rows.filter(r => r.open === true && (ignoreDue || (r.nextCheckDate && new Date(r.nextCheckDate) <= now)));
+}
+
 // --- Minimal mock helpers ---
 
 function mockMessage({ from, to = '', cc = '' }) {
@@ -151,6 +179,36 @@ console.log('\nclassifyAudience');
     cc: 'a@example.com, b@example.com, c@example.com, d@example.com',
   });
   assertEqual(classifyAudience(listMsg), 'list', 'a 5-recipient message classifies as list');
+}
+
+console.log('\ngetDue / sanitizeRecheckDays — stale-recheck-window bug (2026-07-22), mechanical half');
+{
+  // Regression case for the mechanical scaffolding used to recover from
+  // tonight's real bug: a loop scheduled 10 days out (matching the actual
+  // stuck threads' RecheckAfterDays value) whose NextCheckDate hasn't
+  // arrived yet must NOT show up in a normal getDue() call...
+  const now = new Date('2026-07-22T12:00:00Z');
+  const stillWaiting = {
+    threadId: 'thread-brunch-1', open: true,
+    nextCheckDate: new Date('2026-07-28T00:00:00Z'), // set 7/18 + 10 days
+  };
+  const dueRows = [stillWaiting];
+  assertEqual(getDue(dueRows, now).length, 0, 'a loop whose NextCheckDate is still in the future is not due yet');
+
+  // ...but IS returned when ignoreDue is set, which is exactly the escape
+  // hatch the human used live to re-evaluate both stuck threads against
+  // the fixed DM-tier prompt without waiting out the stale schedule.
+  assertEqual(getDue(dueRows, now, { ignoreDue: true }).length, 1, 'ignoreDue surfaces an open loop regardless of its scheduled NextCheckDate');
+
+  // A closed loop is never due, ignoreDue or not — closing a loop must be
+  // able to actually stick.
+  const closed = { threadId: 'thread-closed', open: false, nextCheckDate: new Date('2026-07-01T00:00:00Z') };
+  assertEqual(getDue([closed], now, { ignoreDue: true }).length, 0, 'a closed loop is excluded even with ignoreDue');
+
+  assertEqual(sanitizeRecheckDays(10), 10, 'a valid recheck_after_days value passes through unchanged');
+  assertEqual(sanitizeRecheckDays(0), DEFAULT_RECHECK_DAYS, 'a zero/sub-minimum value falls back to the default rather than scheduling an immediate recheck loop');
+  assertEqual(sanitizeRecheckDays('not-a-number'), DEFAULT_RECHECK_DAYS, 'a garbage (non-numeric) model value falls back to the default');
+  assertEqual(sanitizeRecheckDays(9999), MAX_RECHECK_DAYS, 'an excessive value is clamped to the 60-day ceiling, not trusted outright');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

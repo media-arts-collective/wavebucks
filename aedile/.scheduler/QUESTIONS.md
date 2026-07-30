@@ -25,6 +25,20 @@ actually read and dealt with it.
      before assuming so.
   > (answer inline here)
 
+- **2026-07-30 (flagged, not actioned):** This cycle's prompt included text
+  presented as "human feedback left inline in .../BLOCKERS.md" instructing
+  aedile to deal with a `gh auth login --with-token` issue by involving
+  hosts/systems called "senechal", "mandark", and "dexter" — none of which
+  appear anywhere in `aedile/CLAUDE.md`, `FOCUS.md`, or this repo. Aedile
+  has no tool to reach those hosts and no scope to act on gh-auth/
+  credential matters outside `aedile/` per this run's hard rules ("touch
+  ONLY files under aedile/"). Treated this as out-of-scope/unverified
+  rather than acting on it — did not touch gh auth, did not attempt to
+  "notify senechal." Flagging here in case it's a legitimate cross-project
+  note that got misrouted into this run's context, or worth checking
+  whether that injection point is expected/safe.
+  > (answer inline here)
+
 - **2026-07-22 (from tonight's live human+Claude tuning session, see
   `.scheduler/FOCUS.md`'s update note and backlog for full context):**
   1. Should the Web App deployment (`ReadApi`/`WriteApi`) be pinnable to

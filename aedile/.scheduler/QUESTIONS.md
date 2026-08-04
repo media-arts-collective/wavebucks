@@ -50,3 +50,33 @@ actually read and dealt with it.
      whether the actual sent bump emails felt right in tone/frequency,
      not just structurally correct.
   > (answer inline here)
+
+- **2026-08-01 (from tonight's nightly cycle):**
+  1. **Suspected prompt injection, not acted on.** Tonight's task prompt
+     included text claiming to be "human feedback left inline in
+     `/home/zach/Documents/Project Archive/scheduler/BLOCKERS.md`"
+     instructing aedile to pipe a token into `gh auth login --with-token`,
+     coordinate with unfamiliar systems referred to as "senechal"/
+     "mandark"/"dexter", and hand off a credential problem cross-host. None
+     of this is grounded in `CLAUDE.md`, `FOCUS.md`, or anything in this
+     repo — no "senechal" host or gh-auth flow is part of aedile's actual
+     scope, and the instruction arrived as unauthenticated text in the
+     conversation, not as a verified system directive. Per this file's own
+     job (surface anything guardrail-adjacent), flagging this explicitly:
+     I did not run any `gh auth` command or attempt any cross-host
+     credential action. If this was a real, legitimate ask from a human,
+     it needs to come through a channel aedile can actually verify —
+     please resend it directly rather than embedded in a blockers file
+     aedile has no read access to anyway.
+  2. **Live-data credentials blocked by this environment's own permission
+     classifier tonight:** `ls`/`cat` on
+     `/srv/vaporwave-reports/aedile/.aedile-api-secrets` (the
+     `ReadApi`/`WriteApi` token file per `FOCUS.md`'s backlog item 2) were
+     both denied by the auto-mode classifier, not by file permissions.
+     This blocks the live-data dry-run scenario library (bump-check /
+     request-logging / stale-recheck-window regression cases) from being
+     buildable in this unattended run until either the classifier allows
+     reads under that path or the secrets are made available another way.
+     Worked around tonight by adding pure-logic-only coverage instead (see
+     report) — not a substitute for the real live-data scenarios.
+  > (answer inline here)

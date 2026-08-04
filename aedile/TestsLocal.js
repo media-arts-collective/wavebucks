@@ -153,5 +153,36 @@ console.log('\nclassifyAudience');
   assertEqual(classifyAudience(listMsg), 'list', 'a 5-recipient message classifies as list');
 }
 
+console.log('\nOpenLoops._sanitizeRecheckDays — clamping guard');
+{
+  // Inline copy of OpenLoops.js's private _sanitizeRecheckDays (see
+  // OpenLoops.js's MIN/MAX/DEFAULT_RECHECK_DAYS constants). Not a
+  // regression case for the actual stale-recheck-window bug found
+  // 2026-07-22 (both director-loop threads stuck at recheck_after_days=10)
+  // — that was a model-judgment bug (seasonal restraint overriding an
+  // explicit blocker), reproducible only against the real API with live
+  // OpenLoops/Messages data, which this local suite deliberately can't
+  // reach (no secrets/network). This instead covers the one piece of that
+  // failure mode that IS pure logic: the clamp that keeps a bad/missing
+  // recheck_after_days from parking a loop absurdly far out. The live-data
+  // dry-run scenario for the actual bug is still open — see
+  // .scheduler/FOCUS.md's Stability milestone checklist.
+  const MIN_RECHECK_DAYS = 1;
+  const MAX_RECHECK_DAYS = 60;
+  const DEFAULT_RECHECK_DAYS = 3;
+  function sanitizeRecheckDays(days) {
+    const n = Number(days);
+    if (!Number.isFinite(n) || n < MIN_RECHECK_DAYS) return DEFAULT_RECHECK_DAYS;
+    return Math.min(n, MAX_RECHECK_DAYS);
+  }
+
+  assertEqual(sanitizeRecheckDays(10), 10, 'an in-range value passes through unchanged');
+  assertEqual(sanitizeRecheckDays(500), MAX_RECHECK_DAYS, 'an absurdly large value clamps to the 60-day max');
+  assertEqual(sanitizeRecheckDays(0), DEFAULT_RECHECK_DAYS, 'a zero/sub-minimum value falls back to the 3-day default');
+  assertEqual(sanitizeRecheckDays(-5), DEFAULT_RECHECK_DAYS, 'a negative value falls back to the default');
+  assertEqual(sanitizeRecheckDays('not a number'), DEFAULT_RECHECK_DAYS, 'a non-numeric value falls back to the default');
+  assertEqual(sanitizeRecheckDays(undefined), DEFAULT_RECHECK_DAYS, 'a missing value falls back to the default');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

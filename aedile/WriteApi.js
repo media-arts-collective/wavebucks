@@ -70,6 +70,15 @@
  *       credential for this mailbox. Same bounds as draftRecap -- honours
  *       RECAP_ENABLED, addresses the hard-coded RECAP_RECIPIENT, never sends.
  *
+ *   ?action=setRecapEnabled[&dryRun=true]  + an `enabled` form field
+ *       Flips RECAP_ENABLED, both directions, without the editor. Scoped to
+ *       that ONE property on purpose -- see MeetingRecap.js for why the same
+ *       is deliberately not offered for AEDILE_ENABLED, which gates a path
+ *       that auto-sends mail. `enabled` takes the exact strings "true" and
+ *       "false" and nothing else.
+ *
+ *         curl -sL "<exec-url>" --data-binary @form   # token/action/enabled
+ *
  * dryRun and ignoreDue accept ONLY the exact strings "true" and "false".
  * Absent or empty means false, so no existing caller changes behaviour, but a
  * value this endpoint cannot read is refused with a 400 rather than guessed
@@ -99,6 +108,7 @@ const WRITE_API = (() => {
     checkBumps: checkBumps,
     draftRecap: draftRecap,
     createDraft: createDraft,
+    setRecapEnabled: setRecapEnabled,
   };
 
   // draftRecap is the one action that carries a payload rather than just
@@ -106,7 +116,7 @@ const WRITE_API = (() => {
   // the form-encoded body, NOT the query string — so a 40-minute transcript
   // is fine and no URL length limit applies. Send it as
   // `-d action=draftRecap -d token=... --data-urlencode transcript@file`.
-  const PAYLOAD_ACTIONS = { draftRecap: 'transcript', createDraft: 'draft' };
+  const PAYLOAD_ACTIONS = { draftRecap: 'transcript', createDraft: 'draft', setRecapEnabled: 'enabled' };
 
   /**
    * Strictly parse a boolean query parameter, defaulting to false when absent.
@@ -162,7 +172,10 @@ const WRITE_API = (() => {
     return { status: 200, body: { ok: true, action, dryRun, ignoreDue, result } };
   }
 
-  return { handle };
+  // strictBool is exposed so the payload actions, which are top-level
+  // functions outside this closure, parse booleans the same way doPost does
+  // rather than each growing its own looser copy.
+  return { handle, strictBool };
 })();
 
 function doPost(e) {

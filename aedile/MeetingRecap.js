@@ -199,6 +199,57 @@ const MeetingRecap = (function () {
   return { draftRecap, createDraft, isEnabled };
 })();
 
+/**
+ * Entry point for WriteApi's setRecapEnabled action: flip RECAP_ENABLED from
+ * outside the editor, both directions.
+ *
+ * WHY THIS ONE PROPERTY AND NOT A GENERAL SETTER. The objection to a
+ * remotely-flippable kill switch is real but it is not uniform, and the
+ * difference is what can happen while the switch is on:
+ *
+ *   AEDILE_ENABLED gates scanInbox, which can auto-send mail via replyAll()
+ *   to anyone clearing AUTOSEND_ALLOWLIST. A remote flip there puts mail in
+ *   other people's inboxes and no human sees it first. It stays editor-only.
+ *
+ *   RECAP_ENABLED gates a tier whose only Gmail mutation is createDraft().
+ *   The worst a wrongly-flipped switch does here is put an unwanted draft in
+ *   the krewe's own drafts folder, where a director sees it and deletes it.
+ *   Nothing leaves. That is a mess, not an incident.
+ *
+ * So: one named property, not `action=setProperty&key=...`. A general setter
+ * would reach AEDILE_ENABLED and AUTOSEND_ENABLED, and the argument above
+ * would no longer hold. (Zach, 2026-09-06, overriding an earlier refusal of
+ * mine that had not made this distinction.)
+ *
+ * Being able to turn it OFF from here is the half that improves safety: the
+ * tier can now be stopped without a browser.
+ */
+function setRecapEnabled(enabled, dryRun) {
+  let want;
+  try {
+    // Same strict parse as dryRun/ignoreDue: "true"/"false" and nothing else.
+    // `enabled=1` or `enabled=ture` is refused rather than read as "off".
+    want = WRITE_API.strictBool(enabled, 'enabled');
+  } catch (err) {
+    Logger.log(`[setRecapEnabled] ${err.message} — switch not touched.`);
+    return { error: String(err.message) };
+  }
+
+  const was = MeetingRecap.isEnabled();
+
+  if (dryRun) {
+    Logger.log(`[setRecapEnabled] DRY RUN — would set ${RECAP_ENABLED_PROPERTY} ${was} -> ${want}`);
+    return { dryRun: true, was, wouldBe: want };
+  }
+
+  // Through the existing switches rather than setProperty directly, so the
+  // editor route and this one cannot drift apart.
+  if (want) enableMeetingRecap();
+  else disableMeetingRecap();
+
+  return { was, now: MeetingRecap.isEnabled() };
+}
+
 /** Kill switch on for the recap tier only — independent of AEDILE_ENABLED/BUMP_ENABLED */
 function enableMeetingRecap() {
   PropertiesService.getScriptProperties().setProperty(RECAP_ENABLED_PROPERTY, 'true');

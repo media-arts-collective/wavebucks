@@ -362,5 +362,64 @@ console.log('\nMeetingRecap.createDraft — the sink takes a finished recap and 
   assertEqual(drafts[0].opts.htmlBody, '<p>b</p>', 'no open questions adds no section');
 }
 
+console.log('\nsetRecapEnabled — a kill switch that can be flipped from outside the editor');
+{
+  // Inline copies from MeetingRecap.js / WriteApi.js. Change one, change both.
+  const RECAP_ENABLED_PROPERTY = 'RECAP_ENABLED';
+  let prop = null;                       // stands in for the Script Property
+  const Logger = { log: () => {} };
+  const MeetingRecap = { isEnabled: () => prop === 'true' };
+  const enableMeetingRecap = () => { prop = 'true'; };
+  const disableMeetingRecap = () => { prop = 'false'; };
+
+  function strictBool(value, name) {
+    if (value === undefined || value === null || value === '') return false;
+    const s = String(value);
+    if (s === 'true') return true;
+    if (s === 'false') return false;
+    throw new Error(`${name} must be exactly "true" or "false" (got "${s}").`);
+  }
+  const WRITE_API = { strictBool };
+
+  function setRecapEnabled(enabled, dryRun) {
+    let want;
+    try {
+      want = WRITE_API.strictBool(enabled, 'enabled');
+    } catch (err) {
+      Logger.log(`[setRecapEnabled] ${err.message} — switch not touched.`);
+      return { error: String(err.message) };
+    }
+    const was = MeetingRecap.isEnabled();
+    if (dryRun) {
+      Logger.log(`[setRecapEnabled] DRY RUN — would set ${RECAP_ENABLED_PROPERTY} ${was} -> ${want}`);
+      return { dryRun: true, was, wouldBe: want };
+    }
+    if (want) enableMeetingRecap();
+    else disableMeetingRecap();
+    return { was, now: MeetingRecap.isEnabled() };
+  }
+
+  prop = null;
+  assertEqual(setRecapEnabled('true', false), { was: false, now: true }, 'unset -> true, and it reports both ends');
+  assertEqual(setRecapEnabled('false', false), { was: true, now: false }, 'and back off again — both directions');
+
+  // A misread value must not silently mean "off". Same failure direction the
+  // strictBool guard was added for on dryRun.
+  prop = 'true';
+  for (const bad of ['1', 'yes', 'ture', 'TRUE', 'on']) {
+    assertTrue(setRecapEnabled(bad, false).error, `enabled=${bad} is refused, not guessed at`);
+  }
+  assertEqual(prop, 'true', 'and no refusal moved the switch');
+
+  // Absent reads as false everywhere else in this endpoint, so it does here.
+  prop = 'true';
+  assertEqual(setRecapEnabled(undefined, false), { was: true, now: false }, 'an absent value is false, consistently with dryRun');
+
+  // dryRun answers what it would do and changes nothing.
+  prop = 'false';
+  assertEqual(setRecapEnabled('true', true), { dryRun: true, was: false, wouldBe: true }, 'dryRun reports the transition it would make');
+  assertEqual(prop, 'false', 'and dryRun leaves the switch alone');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

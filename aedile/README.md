@@ -183,7 +183,10 @@ director to archive or delete once the historical data in them isn't needed.
 - `RECAP_ENABLED` — gates the meeting-recap tier, independent of every switch
   above. Off/unset means off. Note what it does *not* gate: nothing in that
   tier can send, so this switch governs whether a draft is written, not
-  whether mail leaves.
+  whether mail leaves. **The only switch here that `WriteApi` can flip**
+  (`action=setRecapEnabled`), and that is exactly why: the others gate paths
+  that put mail in other people's inboxes, this one gates a path that puts a
+  draft in ours.
 
 All ten live in Project Settings > Script Properties, not in code.
 `checkGuardrails()` prints the first four.

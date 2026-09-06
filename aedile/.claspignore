@@ -22,3 +22,8 @@ TestsLocal.js
 
 # Not JavaScript, and not wanted in the project either way.
 holon_fold.py
+
+# The generator. Node ESM -- `import`, `fs`, `process`, `execFileSync` -- none of
+# which exist in Apps Script. Pushing it would break the project at load, the
+# same way TestsLocal.js would. It runs on mandark, where the vault is.
+recap/**

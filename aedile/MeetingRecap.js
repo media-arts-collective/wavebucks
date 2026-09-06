@@ -61,10 +61,10 @@ const MeetingRecap = (function () {
    * recap context tells the model to report these rather than resolve them;
    * dropping them here would undo that.
    */
-  function appendOpenQuestions(bodyHtml, openQuestions) {
-    if (!openQuestions || !openQuestions.length) return bodyHtml;
-    const items = openQuestions.map(q => `<li>${q}</li>`).join('\n');
-    return `${bodyHtml}\n<p><strong>Still open:</strong></p>\n<ul>\n${items}\n</ul>`;
+  function appendOpenQuestions(body, openQuestions) {
+    if (!openQuestions || !openQuestions.length) return body;
+    const items = openQuestions.map(q => `  - ${q}`).join('\n');
+    return `${body}\n\nStill open:\n${items}`;
   }
 
   /**
@@ -96,14 +96,14 @@ const MeetingRecap = (function () {
       return { error: String(err) };
     }
 
-    if (!decision.subject || !decision.body_html) {
-      const why = 'model returned no subject or no body_html';
+    if (!decision.subject || !decision.body) {
+      const why = 'model returned no subject or no body';
       Logger.log(`[MeetingRecap] ${why} — nothing drafted.`);
       if (!dryRun) Config.logEvent('', 'recap', RECAP_RECIPIENT, String(decision.subject || ''), 'recap_error', why);
       return { error: why, decision };
     }
 
-    const body = appendOpenQuestions(decision.body_html, decision.open_questions);
+    const body = appendOpenQuestions(decision.body, decision.open_questions);
 
     if (dryRun) {
       Logger.log(`[MeetingRecap] DRY RUN — would GmailApp.createDraft(${RECAP_RECIPIENT}) and nothing else`);
@@ -111,7 +111,10 @@ const MeetingRecap = (function () {
     }
 
     // The ONLY Gmail mutation in this file. Never .send(), never replyAll().
-    GmailApp.createDraft(RECAP_RECIPIENT, decision.subject, '', { htmlBody: body });
+    // Plain body, no htmlBody: the archive is plain text (628 threads, one
+    // carries markup and it is a forwarded message from outside), and HTML
+    // actively costs us -- `<3` has to be escaped to survive a tag stripper.
+    GmailApp.createDraft(RECAP_RECIPIENT, decision.subject, body);
 
     Config.logEvent(
       '', 'recap', RECAP_RECIPIENT, decision.subject,
@@ -141,8 +144,8 @@ const MeetingRecap = (function () {
    * hard-coded RECAP_RECIPIENT, so a caller holding the token cannot turn the
    * endpoint into a general mailer.
    *
-   * `draftJson` carries the decision's own fields, not finished HTML:
-   * {"subject": "...", "body_html": "...", "open_questions": ["..."]}.
+   * `draftJson` carries the decision's own fields, not a finished body:
+   * {"subject": "...", "body": "...", "open_questions": ["..."]}.
    */
   function createDraft(draftJson, dryRun) {
     if (!isEnabled()) {
@@ -162,9 +165,9 @@ const MeetingRecap = (function () {
     }
 
     const subject = String(draft.subject || '').trim();
-    const bodyHtml = String(draft.body_html || '').trim();
-    if (!subject || !bodyHtml) {
-      const why = 'draft needs both a subject and a body_html';
+    const body = String(draft.body || '').trim();
+    if (!subject || !body) {
+      const why = 'draft needs both a subject and a body';
       Logger.log(`[createDraft] ${why} — nothing drafted.`);
       return { error: why };
     }
@@ -174,7 +177,7 @@ const MeetingRecap = (function () {
     // what reaches the drafts folder is byte-identical whichever path wrote
     // the recap, and "Still open:" has one definition rather than a copy on
     // each side of the POST.
-    const html = appendOpenQuestions(bodyHtml, draft.open_questions);
+    const full = appendOpenQuestions(body, draft.open_questions);
 
     if (dryRun) {
       Logger.log(`[createDraft] DRY RUN — would GmailApp.createDraft(${RECAP_RECIPIENT}) and nothing else`);
@@ -182,7 +185,7 @@ const MeetingRecap = (function () {
     }
 
     // The second and last Gmail mutation in this file. Never .send().
-    GmailApp.createDraft(RECAP_RECIPIENT, subject, '', { htmlBody: html });
+    GmailApp.createDraft(RECAP_RECIPIENT, subject, full);
 
     // Logged as its own action so the two paths are told apart in the Log tab:
     // recap_draft_<confidence> was written up there, recap_draft_posted came
@@ -274,7 +277,7 @@ function draftRecap(transcript, dryRun) {
 /**
  * Entry point for WriteApi's createDraft action. The recap arrives written,
  * from the generator on mandark; this end assembles and files it. `draft` is a
- * JSON string: {"subject", "body_html", "open_questions"}.
+ * JSON string: {"subject", "body", "open_questions"}.
  */
 function createDraft(draft, dryRun) {
   return MeetingRecap.createDraft(draft, dryRun);

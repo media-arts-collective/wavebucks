@@ -195,9 +195,9 @@ function buildSystemPrompt(vault) {
  *  This is the only step that touches Google, and it is deliberately the only
  *  one: aedile already runs AS the krewe account, so the capability lives
  *  where the credential already is and no Google credential has to exist on
- *  mandark at all. What crosses the wire is the decision's own fields, not
- *  rendered HTML -- the sink assembles those with the same appendOpenQuestions
- *  the in-script path uses, so both paths file the same artifact.
+ *  mandark at all. What crosses the wire is the decision's own fields, not an
+ *  assembled body -- the sink joins them with the same appendOpenQuestions the
+ *  in-script path uses, so both paths file the same artifact.
  */
 function post(decision, dryRun) {
   const token = process.env.WRITE_API_TOKEN;
@@ -207,7 +207,7 @@ function post(decision, dryRun) {
 
   const draft = JSON.stringify({
     subject: decision.subject,
-    body_html: decision.body_html,
+    body: decision.body,
     open_questions: decision.open_questions || [],
   });
 
@@ -303,15 +303,29 @@ function main(argv) {
   process.exit(blocking.length ? 6 : 0);
 }
 
+/** What you read here is what the krewe receives, character for character.
+ *
+ *  It did not used to be. The body was HTML and this function un-marked-up a
+ *  rough approximation of it for the terminal, so reviewing a draft meant
+ *  reading one thing and sending another -- and the two differed in exactly the
+ *  place a reviewer would not look, the open-questions section, which the sink
+ *  assembles rather than the model. Plain text ended that, and the only reason
+ *  it can now be promised is that `body` needs no rendering at all.
+ *
+ *  So this is a copy of MeetingRecap.js's appendOpenQuestions -- change one,
+ *  change both -- plus a subject line and the confidence, neither of which is
+ *  part of the body. */
 function render(d) {
-  const strip = s => s.replace(/<li>/g, '  - ').replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
-  const lines = [`Subject: ${d.subject}`, '', strip(d.body_html || '')];
-  if (d.open_questions?.length) {
-    lines.push('', '--- still open ---', ...d.open_questions.map(q => `  - ${q}`));
-  }
-  lines.push('', `[confidence: ${d.confidence}]`);
-  return lines.join('\n');
+  const open = d.open_questions?.length
+    ? `\n\nStill open:\n${d.open_questions.map(q => `  - ${q}`).join('\n')}`
+    : '';
+  return [
+    `Subject: ${d.subject}`,
+    '',
+    (d.body || '') + open,
+    '',
+    `[confidence: ${d.confidence}]`,
+  ].join('\n');
 }
 
 main(process.argv);

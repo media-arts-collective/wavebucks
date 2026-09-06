@@ -221,10 +221,10 @@ console.log('\nMeetingRecap — the two guards that keep a draft from becoming a
   const RECAP_RECIPIENT = 'kreweofvaporwave@googlegroups.com';
   const MIN_TRANSCRIPT_CHARS = 500;
 
-  function appendOpenQuestions(bodyHtml, openQuestions) {
-    if (!openQuestions || !openQuestions.length) return bodyHtml;
-    const items = openQuestions.map(q => `<li>${q}</li>`).join('\n');
-    return `${bodyHtml}\n<p><strong>Still open:</strong></p>\n<ul>\n${items}\n</ul>`;
+  function appendOpenQuestions(body, openQuestions) {
+    if (!openQuestions || !openQuestions.length) return body;
+    const items = openQuestions.map(q => `  - ${q}`).join('\n');
+    return `${body}\n\nStill open:\n${items}`;
   }
 
   function tooShort(transcript) {
@@ -247,19 +247,11 @@ console.log('\nMeetingRecap — the two guards that keep a draft from becoming a
   // Open questions must survive into the draft. The recap context tells the
   // model to report what the meeting did NOT settle rather than resolve it;
   // dropping them here would quietly undo that instruction.
-  const body = appendOpenQuestions('<p>1. THE LIVESTREAM. Building Sunday at 1.</p>', ['Who is getting the tires?']);
+  const body = appendOpenQuestions('1. THE LIVESTREAM. Building Sunday at 1.', ['Who is getting the tires?']);
   assertTrue(body.includes('Who is getting the tires?'), 'an open question reaches the draft body');
   assertTrue(body.includes('Still open:'), 'open questions are labelled, not silently appended');
-  assertEqual(
-    appendOpenQuestions('<p>body</p>', []),
-    '<p>body</p>',
-    'no open questions adds no empty section'
-  );
-  assertEqual(
-    appendOpenQuestions('<p>body</p>', undefined),
-    '<p>body</p>',
-    'a missing open_questions field is not an error'
-  );
+  assertEqual(appendOpenQuestions('body', []), 'body', 'no open questions adds no empty section');
+  assertEqual(appendOpenQuestions('body', undefined), 'body', 'a missing open_questions field is not an error');
 }
 
 console.log('\nMeetingRecap.createDraft — the sink takes a finished recap and can still refuse it');
@@ -268,10 +260,10 @@ console.log('\nMeetingRecap.createDraft — the sink takes a finished recap and 
   const RECAP_RECIPIENT = 'kreweofvaporwave@googlegroups.com';
   const RECAP_ENABLED_PROPERTY = 'RECAP_ENABLED';
 
-  function appendOpenQuestions(bodyHtml, openQuestions) {
-    if (!openQuestions || !openQuestions.length) return bodyHtml;
-    const items = openQuestions.map(q => `<li>${q}</li>`).join('\n');
-    return `${bodyHtml}\n<p><strong>Still open:</strong></p>\n<ul>\n${items}\n</ul>`;
+  function appendOpenQuestions(body, openQuestions) {
+    if (!openQuestions || !openQuestions.length) return body;
+    const items = openQuestions.map(q => `  - ${q}`).join('\n');
+    return `${body}\n\nStill open:\n${items}`;
   }
 
   // Stands in for Apps Script's services. `drafts` IS the assertion: this
@@ -280,7 +272,7 @@ console.log('\nMeetingRecap.createDraft — the sink takes a finished recap and 
   let enabled = true;
   const Logger = { log: () => {} };
   const Config = { logEvent: () => {} };
-  const GmailApp = { createDraft: (to, subject, plain, opts) => drafts.push({ to, subject, opts }) };
+  const GmailApp = { createDraft: (to, subject, body) => drafts.push({ to, subject, body }) };
   const isEnabled = () => enabled;
 
   function createDraft(draftJson, dryRun) {
@@ -297,18 +289,18 @@ console.log('\nMeetingRecap.createDraft — the sink takes a finished recap and 
       return { error: why };
     }
     const subject = String(draft.subject || '').trim();
-    const bodyHtml = String(draft.body_html || '').trim();
-    if (!subject || !bodyHtml) {
-      const why = 'draft needs both a subject and a body_html';
+    const body = String(draft.body || '').trim();
+    if (!subject || !body) {
+      const why = 'draft needs both a subject and a body';
       Logger.log(`[createDraft] ${why} — nothing drafted.`);
       return { error: why };
     }
-    const html = appendOpenQuestions(bodyHtml, draft.open_questions);
+    const full = appendOpenQuestions(body, draft.open_questions);
     if (dryRun) {
       Logger.log(`[createDraft] DRY RUN — would GmailApp.createDraft(${RECAP_RECIPIENT}) and nothing else`);
       return { dryRun: true, wouldSendTo: RECAP_RECIPIENT, subject };
     }
-    GmailApp.createDraft(RECAP_RECIPIENT, subject, '', { htmlBody: html });
+    GmailApp.createDraft(RECAP_RECIPIENT, subject, full);
     Config.logEvent(
       '', 'recap', RECAP_RECIPIENT, subject, 'recap_draft_posted',
       'written by aedile/recap/redige.mjs on mandark'
@@ -319,7 +311,7 @@ console.log('\nMeetingRecap.createDraft — the sink takes a finished recap and 
 
   const good = JSON.stringify({
     subject: '1. LASER HARP: a playable machine by next month',
-    body_html: '<p>1. LASER HARP. Working group is Tyler, Zach and Adam.</p>',
+    body: '1. LASER HARP. Working group is Tyler, Zach and Adam.',
     open_questions: ['Relays or not — slated for the next monthly meeting.'],
   });
 
@@ -335,9 +327,9 @@ console.log('\nMeetingRecap.createDraft — the sink takes a finished recap and 
   reset();
   assertTrue(createDraft('{"subject": "half a p', false).error, 'a truncated body is refused');
   assertTrue(createDraft('', false).error, 'an empty payload is refused');
-  assertTrue(createDraft('{"subject": "x", "body_html": ""}', false).error, 'a subject with no body is refused');
-  assertTrue(createDraft('{"body_html": "<p>x</p>"}', false).error, 'a body with no subject is refused');
-  assertTrue(createDraft('{"subject": "   ", "body_html": "  "}', false).error, 'whitespace is not content');
+  assertTrue(createDraft('{"subject": "x", "body": ""}', false).error, 'a subject with no body is refused');
+  assertTrue(createDraft('{"body": "x"}', false).error, 'a body with no subject is refused');
+  assertTrue(createDraft('{"subject": "   ", "body": "  "}', false).error, 'whitespace is not content');
   assertEqual(drafts.length, 0, 'no refusal drafted anything');
 
   // dryRun means the round trip happens and the mailbox does not change.
@@ -353,13 +345,21 @@ console.log('\nMeetingRecap.createDraft — the sink takes a finished recap and 
   assertEqual(real.drafted, true, 'a valid draft is filed');
   assertEqual(drafts.length, 1, 'exactly one draft, not one per anything');
   assertEqual(drafts[0].to, RECAP_RECIPIENT, 'addressed to the Google Group, not to a caller-supplied address');
-  assertTrue(drafts[0].opts.htmlBody.includes('Still open:'), 'open questions are appended by the sink, not by the generator');
-  assertTrue(drafts[0].opts.htmlBody.includes('Relays or not'), 'the open question itself reaches the draft');
+  assertTrue(drafts[0].body.includes('Still open:'), 'open questions are appended by the sink, not by the generator');
+  assertTrue(drafts[0].body.includes('Relays or not'), 'the open question itself reaches the draft');
+  assertEqual(/<[a-z]/i.test(drafts[0].body), false, 'nothing markup-shaped reaches the mailbox');
 
   // A recap with nothing left open must not grow an empty section.
   reset();
-  createDraft(JSON.stringify({ subject: 's', body_html: '<p>b</p>' }), false);
-  assertEqual(drafts[0].opts.htmlBody, '<p>b</p>', 'no open questions adds no section');
+  createDraft(JSON.stringify({ subject: 's', body: 'b' }), false);
+  assertEqual(drafts[0].body, 'b', 'no open questions adds no section');
+
+  // The sign-off is why plain text is not merely a simplification: in HTML,
+  // `<3 SM</p>` is swallowed whole by a `<[^>]+>` stripper, so the krewe's
+  // signature survived only while the model remembered to write `&lt;3 SM`.
+  reset();
+  createDraft(JSON.stringify({ subject: 's', body: 'thanks all\n\n<3 SM' }), false);
+  assertTrue(drafts[0].body.endsWith('<3 SM'), 'the `<3 SM` sign-off reaches the mailbox unescaped');
 }
 
 console.log('\nsetRecapEnabled — a kill switch that can be flipped from outside the editor');

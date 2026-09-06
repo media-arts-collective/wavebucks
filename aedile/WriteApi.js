@@ -56,7 +56,7 @@
  *   ?action=createDraft[&dryRun=true]  + a `draft` form field
  *       Puts an ALREADY-WRITTEN recap in the krewe's drafts folder. `draft`
  *       is a JSON string carrying the same fields the model produces --
- *       {"subject", "body_html", "open_questions"} -- in the POST body for
+ *       {"subject", "body", "open_questions"} -- in the POST body for
  *       the same reason a transcript is:
  *
  *         curl -X POST "<exec-url>" \

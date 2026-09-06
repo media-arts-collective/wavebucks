@@ -31,12 +31,12 @@ Attendees: Me, Tyler, Zach, Adam, Alex.
 
 const CLEAN = {
   subject: '0. THIS RECAP IS RECONSTRUCTED — the recording failed. 1. LASER HARP by next month.',
-  body_html: '<p>Krewe —</p>' +
-    '<p>0. THIS RECAP IS RECONSTRUCTED FROM MEMORY. The recording failed. Correct it on-list.</p>' +
-    '<p>1. LASER HARP. Working group is Tyler, Zach and Adam, meeting monthly. The relays and their 100ms delay get settled then.</p>' +
-    '<p>2. Weekly social. Bar takeovers with video games, on Wednesdays.</p>' +
-    '<p>3. A gutted house that Tyler knows of. Cost unknown.</p>' +
-    '<p>&lt;3 SM</p>',
+  body: 'Krewe —\n\n' +
+    '0. THIS RECAP IS RECONSTRUCTED FROM MEMORY. The recording failed. Correct it on-list.\n\n' +
+    '1. LASER HARP. Working group is Tyler, Zach and Adam, meeting monthly. The relays and their 100ms delay get settled then.\n\n' +
+    '2. Weekly social. Bar takeovers with video games, on Wednesdays.\n\n' +
+    '3. A gutted house that Tyler knows of. Cost unknown.\n\n' +
+    '<3 SM',
   open_questions: ['Whether the social is actually Wednesday.'],
   confidence: 'low',
 };
@@ -77,7 +77,7 @@ expectClean('the clean fixture has no blocking findings', structuredClone(CLEAN)
 console.log('\ninvented content is caught');
 // Mid-sentence proper noun that appears nowhere in the notes: a hallucinated person.
 expectFinding('a name not in the notes', d => {
-  d.body_html = d.body_html.replace('meeting monthly.', 'meeting monthly, and Beatrice is getting the tires.');
+  d.body = d.body.replace('meeting monthly.', 'meeting monthly, and Beatrice is getting the tires.');
 }, 'invented-name');
 
 // Deliberately placed in the SUBJECT: it is part of the draft, and an earlier
@@ -87,11 +87,11 @@ expectFinding('a date not in the notes, in the subject', d => {
 }, 'invented-figure');
 
 expectFinding('a date not in the notes, in the body', d => {
-  d.body_html = d.body_html.replace('meeting monthly.', 'meeting monthly, due March 14.');
+  d.body = d.body.replace('meeting monthly.', 'meeting monthly, due March 14.');
 }, 'invented-figure');
 
 expectFinding('a dollar figure not in the notes', d => {
-  d.body_html = d.body_html.replace('Cost unknown.', 'Cost is $4,200.');
+  d.body = d.body.replace('Cost unknown.', 'Cost is $4,200.');
 }, 'invented-figure');
 
 console.log('\nswallowed uncertainty is caught');
@@ -101,10 +101,10 @@ expectFinding('a reconstructed input recapped confidently', d => { d.confidence 
   'overconfident');
 
 console.log('\nvoice and form are caught');
-expectFinding('missing sign-off', d => { d.body_html = d.body_html.replace('<p>&lt;3 SM</p>', ''); },
+expectFinding('missing sign-off', d => { d.body = d.body.replace('<3 SM', ''); },
   'sign-off');
 expectFinding('borrowing the MS figure', d => {
-  d.body_html = d.body_html.replace('&lt;3 SM', '&lt;3 MS');
+  d.body = d.body.replace('<3 SM', '<3 MS');
 }, 'signed-as-ms');
 expectFinding('subject numbers an item the body does not', d => {
   d.subject += ' 7. Send us venues.';
@@ -115,12 +115,12 @@ console.log('\nthings that must NOT be flagged');
 expectClean('sentence-initial capitals, ALL-CAPS emphasis and plurals', structuredClone(CLEAN));
 expectClean('a word capitalised after a colon', (() => {
   const d = structuredClone(CLEAN);
-  d.body_html = d.body_html.replace('Cost unknown.', 'One thing: Nobody priced it.');
+  d.body = d.body.replace('Cost unknown.', 'One thing: Nobody priced it.');
   return d;
 })());
 expectClean('a list ordinal followed by a capitalised word', (() => {
   const d = structuredClone(CLEAN);
-  d.body_html += '<p>4. Someone should follow up.</p>';
+  d.body += '\n\n4. Someone should follow up.';
   return d;
 })());
 

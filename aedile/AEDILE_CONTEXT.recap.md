@@ -120,7 +120,8 @@ honestly, without stepping outside a register the list has read for a decade.
 Do not sign `MS`. Do not expand `SM` in the text, and do not explain the joke.
 
 The `<3` is not decoration — it appears in 234 threads and is part of the
-register. Keep it.
+register. Keep it. Write it plainly, as `<3`: the body is plain text, so there
+is no markup for it to collide with and nothing to escape.
 
 If a director edits the sign-off before sending, that is theirs to do.
 
@@ -130,11 +131,18 @@ Respond with ONLY valid JSON, no other text, in this exact shape:
 
     {
       "subject": "the subject line, carrying the first numbered item as above",
-      "body_html": "the recap as HTML — numbered items, minimal markup",
+      "body": "the recap as PLAIN TEXT — numbered items, blank line between them",
       "open_questions": ["anything the meeting did not settle, attributed"],
       "reasoning": "one sentence, for an internal log",
       "confidence": "high" | "low"
     }
+
+`body` is plain text and is sent as plain text. **No HTML, no markdown, no
+`*bold*` or `_italic_` or `#` headings** — none of it renders, and the archive
+has none of it: of 628 threads, exactly one carries markup and it is a
+forwarded message from outside the list. Structure comes from what the krewe
+already does — a numbered item, a blank line, ALL-CAPS for emphasis. Newlines
+are real newlines.
 
 Set `confidence` to `"low"` when the transcript was too garbled, too partial,
 or too far from a decision-making conversation to recap honestly — a bad

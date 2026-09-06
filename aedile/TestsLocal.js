@@ -184,5 +184,36 @@ console.log('\nOpenLoops._sanitizeRecheckDays — clamping guard');
   assertEqual(sanitizeRecheckDays(undefined), DEFAULT_RECHECK_DAYS, 'a missing value falls back to the default');
 }
 
+console.log('\nWriteApi.strictBool — a misread safety flag must not mean "no safety"');
+{
+  // Inline copy of WriteApi.js's strictBool (see WriteApi.js).
+  //
+  // Regression case for the fail-open dryRun parse. The old form was
+  // `String(params.dryRun) === 'true'`, so every value it did not recognise
+  // read as false and ran FOR REAL — on an endpoint that can auto-send mail
+  // via replyAll() with no human between the decision and delivery.
+  // `dryRun=1` and `dryRun=ture` are the realistic ways to hit it.
+  function strictBool(value, name) {
+    if (value === undefined || value === null || value === '') return false;
+    const s = String(value);
+    if (s === 'true') return true;
+    if (s === 'false') return false;
+    throw new Error(`${name} must be exactly "true" or "false" (got "${s}").`);
+  }
+
+  const refuses = v => {
+    try { strictBool(v, 'dryRun'); return false; } catch (err) { return true; }
+  };
+
+  assertEqual(strictBool('true', 'dryRun'), true, 'the exact string "true" is a dry run');
+  assertEqual(strictBool('false', 'dryRun'), false, 'the exact string "false" is a real run');
+  assertEqual(strictBool(undefined, 'dryRun'), false, 'absent stays a real run — no existing caller changes behaviour');
+  assertEqual(strictBool('', 'dryRun'), false, 'empty stays a real run');
+  assertEqual(refuses('1'), true, 'dryRun=1 is refused, not silently run for real');
+  assertEqual(refuses('ture'), true, 'a typo is refused, not silently run for real');
+  assertEqual(refuses('yes'), true, 'dryRun=yes is refused, not silently run for real');
+  assertEqual(refuses('TRUE'), true, 'a case variant is refused rather than guessed at');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

@@ -40,6 +40,15 @@
  *       improved judgment without waiting out a schedule set before the
  *       improvement existed. Not the normal daily-trigger path.
  *
+ * dryRun and ignoreDue accept ONLY the exact strings "true" and "false".
+ * Absent or empty means false, so no existing caller changes behaviour, but a
+ * value this endpoint cannot read is refused with a 400 rather than guessed
+ * at. It used to be `String(params.dryRun) === 'true'`, which read every
+ * unrecognised value as false — so `dryRun=1`, `dryRun=yes` and `dryRun=ture`
+ * each executed a REAL run that can auto-send mail. A misspelled safety flag
+ * meaning "no safety" is the wrong direction for this endpoint to fail in,
+ * and it disagreed with the token check above, which fails closed.
+ *
  * dryRun=true runs the full pipeline — Claude decision-making, eligibility/
  * cap checks — but suppresses every real side effect: no thread.replyAll(),
  * no createDraftReply(), no Gmail labels, no Sheets writes (Log/OpenLoops/
@@ -60,6 +69,28 @@ const WRITE_API = (() => {
     checkBumps: checkBumps,
   };
 
+  /**
+   * Strictly parse a boolean query parameter, defaulting to false when absent.
+   *
+   * The old form was `String(params.dryRun) === 'true'`, which treated every
+   * value it did not recognise as false. `dryRun=1`, `dryRun=yes` and
+   * `dryRun=ture` all read as "not a dry run" and executed a REAL run — one
+   * that can auto-send mail via replyAll() with no human between the decision
+   * and delivery. A misspelled safety flag quietly meaning "no safety" is the
+   * wrong direction for this endpoint to fail in, and it disagreed with the
+   * token check two lines up, which fails closed.
+   *
+   * Absent still means false, so no existing caller changes behaviour; a value
+   * this function cannot read is now refused instead of guessed at.
+   */
+  function strictBool(value, name) {
+    if (value === undefined || value === null || value === '') return false;
+    const s = String(value);
+    if (s === 'true') return true;
+    if (s === 'false') return false;
+    throw new Error(`${name} must be exactly "true" or "false" (got "${s}").`);
+  }
+
   function handle(params) {
     const configured = PropertiesService.getScriptProperties().getProperty('WRITE_API_TOKEN');
     if (!configured) return { status: 503, body: { ok: false, error: 'WRITE_API_TOKEN not set; endpoint disabled.' } };
@@ -69,8 +100,14 @@ const WRITE_API = (() => {
     const fn = ACTIONS[action];
     if (!fn) return { status: 400, body: { ok: false, error: 'Unknown action. Use one of: ' + Object.keys(ACTIONS).join(', ') } };
 
-    const dryRun = String(params.dryRun) === 'true';
-    const ignoreDue = String(params.ignoreDue) === 'true';
+    let dryRun, ignoreDue;
+    try {
+      dryRun = strictBool(params.dryRun, 'dryRun');
+      ignoreDue = strictBool(params.ignoreDue, 'ignoreDue');
+    } catch (err) {
+      return { status: 400, body: { ok: false, error: String(err.message) } };
+    }
+
     const result = action === 'checkBumps' ? fn(dryRun, ignoreDue) : fn(dryRun);
     return { status: 200, body: { ok: true, action, dryRun, ignoreDue, result } };
   }

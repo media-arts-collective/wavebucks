@@ -50,6 +50,14 @@ generally.
 
 ## Files
 
+**Deployment**
+- `.claspignore` — what `clasp push` must NOT upload. Load-bearing, not
+  hygiene: Apps Script runs every file in one shared global scope, and
+  `TestsLocal.js` declares a top-level `const` that `InboxProcessor.js`
+  already declares. Pushing both is a `SyntaxError` at load, which stops the
+  whole project — triage, bumps and both Web App endpoints. Do not delete
+  this file to "just push everything once".
+
 **Shared**
 - `Config.js` — Config/Log tab access
 - `AnthropicClient.js` — Claude Messages API wrapper
@@ -117,15 +125,32 @@ director to archive or delete once the historical data in them isn't needed.
   and why it exists. Must include Aedile's own inbox address explicitly.
 - `BUMP_ENABLED` — gates `checkBumps()` entirely, independent of
   `AEDILE_ENABLED`/`AUTOSEND_ENABLED`. Off/unset means open loops
-  accumulate in `OpenLoops` but nothing ever acts on them. Bump drafts are
-  never eligible for auto-send, regardless of `AUTOSEND_ALLOWLIST`.
+  accumulate in `OpenLoops` but nothing ever acts on them. Bump drafts
+  **are** eligible for auto-send, under the same allowlist condition as the
+  triage tier (`InboxProcessor.isAllowlistEligible`), with their own
+  separate per-run cap — decided 2026-07-16, see `CLAUDE.md`. *(This line
+  used to say the opposite. It was wrong from the day that decision landed,
+  and it was wrong in the dangerous direction: it described a narrower blast
+  radius than the code has.)*
 - `ANTHROPIC_API_KEY` — the Claude API key `AnthropicClient.js` reads.
 - `READ_API_TOKEN` — secret gating the read-only `ReadApi.js` Web App
   endpoint. If unset, that endpoint refuses every request (fail closed).
   Independent of the kill switches above; it has no effect on the
   trigger-driven triage/bump path.
+- `WRITE_API_TOKEN` — separate secret gating `WriteApi.js`'s `doPost`, which
+  can trigger a real `scanInbox`/`checkBumps` run and therefore real
+  auto-sent mail. Deliberately not shared with `READ_API_TOKEN`, so read
+  access and trigger access are revocable independently. Fails closed.
+- `TESTING_MODE` — temporary override that suspends dead-season restraint
+  for the whitelisted director loop (`SystemPrompt.js`). Set by
+  `enableTestingMode()`, cleared by `disableTestingMode()`. Only the exact
+  string `'true'` is on. **Leaving this set is a live behaviour change**, so
+  check it before assuming aedile is observing seasonal silence.
+- `MIGRATION_DRIVE_FILE_ID` — read only by the one-time, non-idempotent
+  `migrateMessages()` archive import. Not part of any trigger path.
 
-All six live in Project Settings > Script Properties, not in code.
+All nine live in Project Settings > Script Properties, not in code.
+`checkGuardrails()` prints the first four.
 
 `installTrigger()` installs the hourly `scanInbox` trigger;
 `installBumpTrigger()` installs the daily `checkBumps` trigger. Independent

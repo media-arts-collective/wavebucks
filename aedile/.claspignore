@@ -1,0 +1,24 @@
+# Local test files - not for Apps Script deployment.
+#
+# TestsLocal.js is not merely unwanted up there, it is BREAKING: Apps Script
+# runs every file in one shared global scope, and TestsLocal.js declares
+# `const DM_RECIPIENT_THRESHOLD` at top level, which InboxProcessor.js already
+# declares. Two top-level `const`s of one name in one scope is a SyntaxError at
+# load, so a push carrying both stops the whole project -- triage, bumps and
+# both Web App endpoints -- not just the tests.
+TestsLocal.js
+
+# Git files
+.git/**
+.gitignore
+
+# Clasp files
+.clasp.json
+.claspignore
+
+# The nightly job's own working files. Tracked in git on purpose, never part of
+# the deployed script.
+.scheduler/**
+
+# Not JavaScript, and not wanted in the project either way.
+holon_fold.py

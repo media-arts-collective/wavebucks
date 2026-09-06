@@ -153,25 +153,38 @@ const BumpChecker = (function () {
       return { skipped: 'disabled' };
     }
 
-    _autosendCountThisRun = 0;
-    const due = OpenLoops.getDue(new Date(), { ignoreDue });
-    const toProcess = due.slice(0, MAX_BUMPS_PER_RUN);
-
-    if (due.length > toProcess.length) {
-      Logger.log(`⚠️ ${due.length} thread(s) due for a bump check, processing ${toProcess.length} this run (MAX_BUMPS_PER_RUN cap) — the rest will be picked up next run.`);
+    // Same guard, same reason as InboxProcessor.scanUnread() — an
+    // overlapping run must not get its own fresh _autosendCountThisRun.
+    // Shared script lock, so a bump run and a scan run also can't overlap.
+    const lock = LockService.getScriptLock();
+    if (!lock.tryLock(10000)) {
+      Logger.log('⏸️ checkBumps skipped — could not acquire the script lock (another run is still in progress).');
+      return { skipped: 'locked' };
     }
 
-    const results = toProcess.map(loopRow => {
-      try {
-        return reviewForBump(loopRow, dryRun);
-      } catch (err) {
-        Logger.log(`[BumpChecker] UNCAUGHT for ${loopRow.threadId} — ${err.stack || err}`);
-        return { threadId: loopRow.threadId, error: String(err) };
-      }
-    });
+    try {
+      _autosendCountThisRun = 0;
+      const due = OpenLoops.getDue(new Date(), { ignoreDue });
+      const toProcess = due.slice(0, MAX_BUMPS_PER_RUN);
 
-    Logger.log(`✅${dryRun ? ' [DRY RUN]' : ''} Bump check complete. Evaluated ${toProcess.length} of ${due.length} due thread(s), ${_autosendCountThisRun} auto-sent.`);
-    return { dryRun: !!dryRun, due: due.length, evaluated: toProcess.length, autosent: _autosendCountThisRun, results };
+      if (due.length > toProcess.length) {
+        Logger.log(`⚠️ ${due.length} thread(s) due for a bump check, processing ${toProcess.length} this run (MAX_BUMPS_PER_RUN cap) — the rest will be picked up next run.`);
+      }
+
+      const results = toProcess.map(loopRow => {
+        try {
+          return reviewForBump(loopRow, dryRun);
+        } catch (err) {
+          Logger.log(`[BumpChecker] UNCAUGHT for ${loopRow.threadId} — ${err.stack || err}`);
+          return { threadId: loopRow.threadId, error: String(err) };
+        }
+      });
+
+      Logger.log(`✅${dryRun ? ' [DRY RUN]' : ''} Bump check complete. Evaluated ${toProcess.length} of ${due.length} due thread(s), ${_autosendCountThisRun} auto-sent.`);
+      return { dryRun: !!dryRun, due: due.length, evaluated: toProcess.length, autosent: _autosendCountThisRun, results };
+    } finally {
+      lock.releaseLock();
+    }
   }
 
   return { checkBumps };

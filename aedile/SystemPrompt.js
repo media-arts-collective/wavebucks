@@ -30,3 +30,10 @@ const AEDILE_SYSTEM_PROMPT_LIST = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_TR
 const AEDILE_SYSTEM_PROMPT_DM = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_TRIAGE_DM}${_testingOverride()}`;
 const AEDILE_BUMP_PROMPT_LIST = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_BUMP_LIST}${_testingOverride()}`;
 const AEDILE_BUMP_PROMPT_DM = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_BUMP_DM}${_testingOverride()}`;
+
+// The meeting-recap tier (MeetingRecap.js). Deliberately does NOT take
+// _testingOverride(): that override suspends dead-season restraint so the
+// director loop can be exercised out of season, and this tier has no seasonal
+// behaviour to suspend — it runs when a meeting happened. Adding it here would
+// widen a testing switch's reach for no purpose.
+const AEDILE_RECAP_PROMPT = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_RECAP}`;

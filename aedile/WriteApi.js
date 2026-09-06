@@ -39,6 +39,18 @@
  *       scheduled NextCheckDate — for re-checking existing loops against
  *       improved judgment without waiting out a schedule set before the
  *       improvement existed. Not the normal daily-trigger path.
+ *   ?action=draftRecap[&dryRun=true]  + a `transcript` form field
+ *       Drafts a meeting recap to the krewe mailing list (MeetingRecap.js).
+ *       The transcript goes in the POST BODY as a form field, not the query
+ *       string, so length is not a constraint:
+ *
+ *         curl -X POST "<exec-url>" \
+ *           -d token=<WRITE_API_TOKEN> -d action=draftRecap \
+ *           --data-urlencode transcript@transcript.txt
+ *
+ *       This action can never send mail. Its only Gmail effect is
+ *       GmailApp.createDraft() -- see MeetingRecap.js for why that carve-out
+ *       from "never originate threads" is bounded.
  *
  * dryRun and ignoreDue accept ONLY the exact strings "true" and "false".
  * Absent or empty means false, so no existing caller changes behaviour, but a
@@ -67,7 +79,15 @@ const WRITE_API = (() => {
   const ACTIONS = {
     scanInbox: scanInbox,
     checkBumps: checkBumps,
+    draftRecap: draftRecap,
   };
+
+  // draftRecap is the one action that carries a payload rather than just
+  // flipping switches. It reads e.parameter.transcript, which for a POST is
+  // the form-encoded body, NOT the query string — so a 40-minute transcript
+  // is fine and no URL length limit applies. Send it as
+  // `-d action=draftRecap -d token=... --data-urlencode transcript@file`.
+  const PAYLOAD_ACTIONS = { draftRecap: 'transcript' };
 
   /**
    * Strictly parse a boolean query parameter, defaulting to false when absent.
@@ -108,7 +128,18 @@ const WRITE_API = (() => {
       return { status: 400, body: { ok: false, error: String(err.message) } };
     }
 
-    const result = action === 'checkBumps' ? fn(dryRun, ignoreDue) : fn(dryRun);
+    let result;
+    if (PAYLOAD_ACTIONS[action]) {
+      const payload = params[PAYLOAD_ACTIONS[action]];
+      if (!payload) {
+        return { status: 400, body: { ok: false, error: `${action} requires a "${PAYLOAD_ACTIONS[action]}" parameter. POST it as a form field, not in the query string.` } };
+      }
+      result = fn(payload, dryRun);
+    } else if (action === 'checkBumps') {
+      result = fn(dryRun, ignoreDue);
+    } else {
+      result = fn(dryRun);
+    }
     return { status: 200, body: { ok: true, action, dryRun, ignoreDue, result } };
   }
 

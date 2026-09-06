@@ -215,5 +215,52 @@ console.log('\nWriteApi.strictBool — a misread safety flag must not mean "no s
   assertEqual(refuses('TRUE'), true, 'a case variant is refused rather than guessed at');
 }
 
+console.log('\nMeetingRecap — the two guards that keep a draft from becoming a send');
+{
+  // Inline copies from MeetingRecap.js (see that file).
+  const RECAP_RECIPIENT = 'kreweofvaporwave@googlegroups.com';
+  const MIN_TRANSCRIPT_CHARS = 500;
+
+  function appendOpenQuestions(bodyHtml, openQuestions) {
+    if (!openQuestions || !openQuestions.length) return bodyHtml;
+    const items = openQuestions.map(q => `<li>${q}</li>`).join('\n');
+    return `${bodyHtml}\n<p><strong>Still open:</strong></p>\n<ul>\n${items}\n</ul>`;
+  }
+
+  function tooShort(transcript) {
+    return String(transcript || '').trim().length < MIN_TRANSCRIPT_CHARS;
+  }
+
+  // The recipient is the LIST, not the Workspace account Aedile runs as.
+  // Confusing the two sends krewe mail to Aedile's own inbox, where nobody
+  // reads it — and it is one character of difference in a plausible typo.
+  assertEqual(RECAP_RECIPIENT, 'kreweofvaporwave@googlegroups.com', 'recap is addressed to the Google Group');
+  assertEqual(RECAP_RECIPIENT === 'kreweofvaporwave@kreweofvaporwave.com', false, 'recap is NOT addressed to Aedile\'s own Workspace inbox');
+
+  // A silent upstream failure (whisper returning nothing, a truncated upload)
+  // must not produce a confident recap of an empty meeting.
+  assertTrue(tooShort(''), 'an empty transcript is refused');
+  assertTrue(tooShort('   \n  '), 'a whitespace-only transcript is refused');
+  assertTrue(tooShort('we met and talked about the parade'), 'a one-line transcript is refused');
+  assertEqual(tooShort('x'.repeat(MIN_TRANSCRIPT_CHARS)), false, 'a transcript at the floor is accepted');
+
+  // Open questions must survive into the draft. The recap context tells the
+  // model to report what the meeting did NOT settle rather than resolve it;
+  // dropping them here would quietly undo that instruction.
+  const body = appendOpenQuestions('<p>1. THE LIVESTREAM. Building Sunday at 1.</p>', ['Who is getting the tires?']);
+  assertTrue(body.includes('Who is getting the tires?'), 'an open question reaches the draft body');
+  assertTrue(body.includes('Still open:'), 'open questions are labelled, not silently appended');
+  assertEqual(
+    appendOpenQuestions('<p>body</p>', []),
+    '<p>body</p>',
+    'no open questions adds no empty section'
+  );
+  assertEqual(
+    appendOpenQuestions('<p>body</p>', undefined),
+    '<p>body</p>',
+    'a missing open_questions field is not an error'
+  );
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

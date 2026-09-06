@@ -96,6 +96,19 @@ generally.
   and next-check date, populated by triage, read by the bump check
 - `AEDILE_CONTEXT.bump.md` — the bump-specific judgment model
 
+**Meeting recap** (on demand, `draftRecap()`)
+- `MeetingRecap.js` — turns a meeting transcript into a recap DRAFT addressed
+  to the mailing list. The only tier that originates a thread, and the only
+  one that can never send: its sole Gmail mutation is `GmailApp.createDraft()`.
+  A director opens the draft and presses send, so the human originates and
+  Aedile drafted. Deliberately does **not** append to `MessageLog` — the recap
+  is institutional memory, the raw transcript is not, and anything in
+  `Messages` is re-injected into every triage call for a year.
+- `AEDILE_CONTEXT.recap.md` — the recap judgment model and the krewe's own
+  recap form, drawn from the archive. Signs `<3 SM`.
+- No trigger. Meetings are not a cadence; a transcript arrives via
+  `WriteApi`'s `draftRecap` action.
+
 **Shared context**
 - `AEDILE_CONTEXT.core.md` — identity, Engine/Ritual split, voice, lore
 
@@ -148,8 +161,12 @@ director to archive or delete once the historical data in them isn't needed.
   check it before assuming aedile is observing seasonal silence.
 - `MIGRATION_DRIVE_FILE_ID` — read only by the one-time, non-idempotent
   `migrateMessages()` archive import. Not part of any trigger path.
+- `RECAP_ENABLED` — gates the meeting-recap tier, independent of every switch
+  above. Off/unset means off. Note what it does *not* gate: nothing in that
+  tier can send, so this switch governs whether a draft is written, not
+  whether mail leaves.
 
-All nine live in Project Settings > Script Properties, not in code.
+All ten live in Project Settings > Script Properties, not in code.
 `checkGuardrails()` prints the first four.
 
 `installTrigger()` installs the hourly `scanInbox` trigger;

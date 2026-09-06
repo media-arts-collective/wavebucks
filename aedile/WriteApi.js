@@ -53,6 +53,23 @@
  *       GmailApp.createDraft() -- see MeetingRecap.js for why that carve-out
  *       from "never originate threads" is bounded.
  *
+ *   ?action=createDraft[&dryRun=true]  + a `draft` form field
+ *       Puts an ALREADY-WRITTEN recap in the krewe's drafts folder. `draft`
+ *       is a JSON string carrying the same fields the model produces --
+ *       {"subject", "body_html", "open_questions"} -- in the POST body for
+ *       the same reason a transcript is:
+ *
+ *         curl -X POST "<exec-url>" \
+ *           -d token=<WRITE_API_TOKEN> -d action=createDraft \
+ *           --data-urlencode draft@draft.json
+ *
+ *       This is the sink for aedile/recap/redige.mjs, the generator that runs
+ *       on mandark because the Obsidian vault and the checks are there and
+ *       Apps Script has no filesystem. It writes nothing and judges nothing:
+ *       it is the one capability the generator cannot have, which is a
+ *       credential for this mailbox. Same bounds as draftRecap -- honours
+ *       RECAP_ENABLED, addresses the hard-coded RECAP_RECIPIENT, never sends.
+ *
  * dryRun and ignoreDue accept ONLY the exact strings "true" and "false".
  * Absent or empty means false, so no existing caller changes behaviour, but a
  * value this endpoint cannot read is refused with a 400 rather than guessed
@@ -81,6 +98,7 @@ const WRITE_API = (() => {
     scanInbox: scanInbox,
     checkBumps: checkBumps,
     draftRecap: draftRecap,
+    createDraft: createDraft,
   };
 
   // draftRecap is the one action that carries a payload rather than just
@@ -88,7 +106,7 @@ const WRITE_API = (() => {
   // the form-encoded body, NOT the query string — so a 40-minute transcript
   // is fine and no URL length limit applies. Send it as
   // `-d action=draftRecap -d token=... --data-urlencode transcript@file`.
-  const PAYLOAD_ACTIONS = { draftRecap: 'transcript' };
+  const PAYLOAD_ACTIONS = { draftRecap: 'transcript', createDraft: 'draft' };
 
   /**
    * Strictly parse a boolean query parameter, defaulting to false when absent.

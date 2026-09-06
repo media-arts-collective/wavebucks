@@ -108,6 +108,23 @@ generally.
   recap form, drawn from the archive. Signs `<3 SM`.
 - No trigger. Meetings are not a cadence; a transcript arrives via
   `WriteApi`'s `draftRecap` action.
+- `recap/redige.mjs` — **the generator, and it does not run here.** It runs on
+  mandark under node, because it needs a filesystem: the Obsidian voice
+  corpus, the context files, whisper. Apps Script has none of those, which is
+  why putting a document generator inside an inbox watcher kept failing. It
+  writes the recap, runs `recap/checks.mjs` over its own output, and hands the
+  result to `WriteApi`'s `createDraft` action. Excluded from `clasp push` by
+  `.claspignore` — it is node ESM and pushing it would break the project at
+  load.
+- `createDraft` is the sink for that generator: it assembles and files a recap
+  that arrived already written. It judges nothing and calls no model. Same
+  bounds as `draftRecap`, on purpose — `RECAP_ENABLED` gates it, the recipient
+  is hard-coded, and it cannot send. The generator holds no Google credential;
+  aedile already runs as the krewe account, so the capability stays where the
+  credential already is.
+- Transcription rides the same whisper the Zaxon relay calls (the container at
+  `/srv/zaxon` on dexter), by the same two steps `whisper_stt.sh` uses. There
+  is no second STT.
 
 **Shared context**
 - `AEDILE_CONTEXT.core.md` — identity, Engine/Ritual split, voice, lore
@@ -152,7 +169,9 @@ director to archive or delete once the historical data in them isn't needed.
   trigger-driven triage/bump path.
 - `WRITE_API_TOKEN` — separate secret gating `WriteApi.js`'s `doPost`, which
   can trigger a real `scanInbox`/`checkBumps` run and therefore real
-  auto-sent mail. Deliberately not shared with `READ_API_TOKEN`, so read
+  auto-sent mail. `recap/redige.mjs --post` reads it from the **environment**;
+  it is not read from a path in source, because the tree it lives in today
+  (`/srv/vaporwave-reports`) is being retired. Deliberately not shared with `READ_API_TOKEN`, so read
   access and trigger access are revocable independently. Fails closed.
 - `TESTING_MODE` — temporary override that suspends dead-season restraint
   for the whitelisted director loop (`SystemPrompt.js`). Set by

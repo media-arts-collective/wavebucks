@@ -123,7 +123,80 @@ const MeetingRecap = (function () {
     return { drafted: true, decision, recipient: RECAP_RECIPIENT };
   }
 
-  return { draftRecap, isEnabled };
+  /**
+   * The sink: put an already-written recap in the drafts folder, and nothing
+   * else.
+   *
+   * draftRecap above writes the recap here, inside Apps Script. This one does
+   * not write anything -- the recap arrives finished, from the generator on
+   * mandark (aedile/recap/redige.mjs), which is where the Obsidian vault, the
+   * voice corpus and the checks are. Apps Script has no filesystem and can
+   * read none of that, which is the whole reason the generator is not in this
+   * file. So this function decides nothing, reads no context and calls no
+   * model: everything it might have judged was judged before the POST.
+   *
+   * It is bounded by the same two things draftRecap is, and deliberately so:
+   * RECAP_ENABLED, so one switch stops every recap however it was written --
+   * a sink that ignored the kill switch would be a hole in it -- and a
+   * hard-coded RECAP_RECIPIENT, so a caller holding the token cannot turn the
+   * endpoint into a general mailer.
+   *
+   * `draftJson` carries the decision's own fields, not finished HTML:
+   * {"subject": "...", "body_html": "...", "open_questions": ["..."]}.
+   */
+  function createDraft(draftJson, dryRun) {
+    if (!isEnabled()) {
+      Logger.log(`⏸️ Meeting recap is disabled (Script Property ${RECAP_ENABLED_PROPERTY} is not "true"). Skipping.`);
+      return { skipped: 'disabled' };
+    }
+
+    let draft;
+    try {
+      draft = JSON.parse(draftJson);
+    } catch (err) {
+      // A truncated or mangled POST body fails HERE, whole, rather than
+      // reaching the drafts folder as half a recap.
+      const why = `draft is not JSON: ${err.message}`;
+      Logger.log(`[createDraft] ${why} — nothing drafted.`);
+      return { error: why };
+    }
+
+    const subject = String(draft.subject || '').trim();
+    const bodyHtml = String(draft.body_html || '').trim();
+    if (!subject || !bodyHtml) {
+      const why = 'draft needs both a subject and a body_html';
+      Logger.log(`[createDraft] ${why} — nothing drafted.`);
+      return { error: why };
+    }
+
+    // Assembled HERE, by the same function draftRecap uses, rather than
+    // arriving pre-rendered. The generator posts the decision's own fields, so
+    // what reaches the drafts folder is byte-identical whichever path wrote
+    // the recap, and "Still open:" has one definition rather than a copy on
+    // each side of the POST.
+    const html = appendOpenQuestions(bodyHtml, draft.open_questions);
+
+    if (dryRun) {
+      Logger.log(`[createDraft] DRY RUN — would GmailApp.createDraft(${RECAP_RECIPIENT}) and nothing else`);
+      return { dryRun: true, wouldSendTo: RECAP_RECIPIENT, subject };
+    }
+
+    // The second and last Gmail mutation in this file. Never .send().
+    GmailApp.createDraft(RECAP_RECIPIENT, subject, '', { htmlBody: html });
+
+    // Logged as its own action so the two paths are told apart in the Log tab:
+    // recap_draft_<confidence> was written up there, recap_draft_posted came
+    // in from mandark already written.
+    Config.logEvent(
+      '', 'recap', RECAP_RECIPIENT, subject, 'recap_draft_posted',
+      'written by aedile/recap/redige.mjs on mandark'
+    );
+
+    Logger.log(`✅ Recap drafted for ${RECAP_RECIPIENT}. NOTHING WAS SENT — a director must open the draft and send it.`);
+    return { drafted: true, recipient: RECAP_RECIPIENT, subject };
+  }
+
+  return { draftRecap, createDraft, isEnabled };
 })();
 
 /** Kill switch on for the recap tier only — independent of AEDILE_ENABLED/BUMP_ENABLED */
@@ -145,4 +218,13 @@ function disableMeetingRecap() {
  */
 function draftRecap(transcript, dryRun) {
   return MeetingRecap.draftRecap(transcript, dryRun);
+}
+
+/**
+ * Entry point for WriteApi's createDraft action. The recap arrives written,
+ * from the generator on mandark; this end assembles and files it. `draft` is a
+ * JSON string: {"subject", "body_html", "open_questions"}.
+ */
+function createDraft(draft, dryRun) {
+  return MeetingRecap.createDraft(draft, dryRun);
 }

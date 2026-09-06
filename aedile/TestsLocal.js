@@ -262,5 +262,105 @@ console.log('\nMeetingRecap — the two guards that keep a draft from becoming a
   );
 }
 
+console.log('\nMeetingRecap.createDraft — the sink takes a finished recap and can still refuse it');
+{
+  // Inline copies from MeetingRecap.js (see that file). Change one, change both.
+  const RECAP_RECIPIENT = 'kreweofvaporwave@googlegroups.com';
+  const RECAP_ENABLED_PROPERTY = 'RECAP_ENABLED';
+
+  function appendOpenQuestions(bodyHtml, openQuestions) {
+    if (!openQuestions || !openQuestions.length) return bodyHtml;
+    const items = openQuestions.map(q => `<li>${q}</li>`).join('\n');
+    return `${bodyHtml}\n<p><strong>Still open:</strong></p>\n<ul>\n${items}\n</ul>`;
+  }
+
+  // Stands in for Apps Script's services. `drafts` IS the assertion: this
+  // suite's whole question is whether a given input reaches the mailbox.
+  let drafts = [];
+  let enabled = true;
+  const Logger = { log: () => {} };
+  const Config = { logEvent: () => {} };
+  const GmailApp = { createDraft: (to, subject, plain, opts) => drafts.push({ to, subject, opts }) };
+  const isEnabled = () => enabled;
+
+  function createDraft(draftJson, dryRun) {
+    if (!isEnabled()) {
+      Logger.log(`⏸️ Meeting recap is disabled (Script Property ${RECAP_ENABLED_PROPERTY} is not "true"). Skipping.`);
+      return { skipped: 'disabled' };
+    }
+    let draft;
+    try {
+      draft = JSON.parse(draftJson);
+    } catch (err) {
+      const why = `draft is not JSON: ${err.message}`;
+      Logger.log(`[createDraft] ${why} — nothing drafted.`);
+      return { error: why };
+    }
+    const subject = String(draft.subject || '').trim();
+    const bodyHtml = String(draft.body_html || '').trim();
+    if (!subject || !bodyHtml) {
+      const why = 'draft needs both a subject and a body_html';
+      Logger.log(`[createDraft] ${why} — nothing drafted.`);
+      return { error: why };
+    }
+    const html = appendOpenQuestions(bodyHtml, draft.open_questions);
+    if (dryRun) {
+      Logger.log(`[createDraft] DRY RUN — would GmailApp.createDraft(${RECAP_RECIPIENT}) and nothing else`);
+      return { dryRun: true, wouldSendTo: RECAP_RECIPIENT, subject };
+    }
+    GmailApp.createDraft(RECAP_RECIPIENT, subject, '', { htmlBody: html });
+    Config.logEvent(
+      '', 'recap', RECAP_RECIPIENT, subject, 'recap_draft_posted',
+      'written by aedile/recap/redige.mjs on mandark'
+    );
+    Logger.log(`✅ Recap drafted for ${RECAP_RECIPIENT}. NOTHING WAS SENT — a director must open the draft and send it.`);
+    return { drafted: true, recipient: RECAP_RECIPIENT, subject };
+  }
+
+  const good = JSON.stringify({
+    subject: '1. LASER HARP: a playable machine by next month',
+    body_html: '<p>1. LASER HARP. Working group is Tyler, Zach and Adam.</p>',
+    open_questions: ['Relays or not — slated for the next monthly meeting.'],
+  });
+
+  // The kill switch has to cover BOTH ways a recap can be written. A sink that
+  // honoured no switch would be a hole in RECAP_ENABLED reachable by anyone
+  // holding the write token.
+  const reset = () => { drafts = []; enabled = true; };
+  reset(); enabled = false;
+  assertEqual(createDraft(good, false), { skipped: 'disabled' }, 'RECAP_ENABLED off refuses a perfectly good draft');
+  assertEqual(drafts.length, 0, 'and nothing reached the mailbox');
+
+  // A body that arrived truncated must fail whole rather than half-drafted.
+  reset();
+  assertTrue(createDraft('{"subject": "half a p', false).error, 'a truncated body is refused');
+  assertTrue(createDraft('', false).error, 'an empty payload is refused');
+  assertTrue(createDraft('{"subject": "x", "body_html": ""}', false).error, 'a subject with no body is refused');
+  assertTrue(createDraft('{"body_html": "<p>x</p>"}', false).error, 'a body with no subject is refused');
+  assertTrue(createDraft('{"subject": "   ", "body_html": "  "}', false).error, 'whitespace is not content');
+  assertEqual(drafts.length, 0, 'no refusal drafted anything');
+
+  // dryRun means the round trip happens and the mailbox does not change.
+  reset();
+  const dry = createDraft(good, true);
+  assertEqual(dry.dryRun, true, 'dryRun reports itself as a dry run');
+  assertEqual(dry.wouldSendTo, RECAP_RECIPIENT, 'dryRun names the recipient it would have used');
+  assertEqual(drafts.length, 0, 'dryRun writes no draft');
+
+  // The real path: one draft, to the list, with the open questions in it.
+  reset();
+  const real = createDraft(good, false);
+  assertEqual(real.drafted, true, 'a valid draft is filed');
+  assertEqual(drafts.length, 1, 'exactly one draft, not one per anything');
+  assertEqual(drafts[0].to, RECAP_RECIPIENT, 'addressed to the Google Group, not to a caller-supplied address');
+  assertTrue(drafts[0].opts.htmlBody.includes('Still open:'), 'open questions are appended by the sink, not by the generator');
+  assertTrue(drafts[0].opts.htmlBody.includes('Relays or not'), 'the open question itself reaches the draft');
+
+  // A recap with nothing left open must not grow an empty section.
+  reset();
+  createDraft(JSON.stringify({ subject: 's', body_html: '<p>b</p>' }), false);
+  assertEqual(drafts[0].opts.htmlBody, '<p>b</p>', 'no open questions adds no section');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

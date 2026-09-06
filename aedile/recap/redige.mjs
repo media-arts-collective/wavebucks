@@ -7,7 +7,7 @@
  * has none of those, which is why the generator lives here and aedile stays an
  * inbox watcher.
  *
- *   ./redige.mjs <notes.md|meeting.m4a> [--out FILE] [--post] [--json]
+ *   ./redige.mjs <notes.md|meeting.m4a> [--out FILE] [--post [--dry-run]] [--json]
  *
  * Intake is agnostic on purpose. Given text it uses it; given audio it sends it
  * to whisper first. Nothing in this file knows or cares which happened.
@@ -15,12 +15,17 @@
  * It writes a draft to a file. With --post it also hands that draft to aedile's
  * createDraft sink, which is the only step that needs Google at all -- aedile
  * runs AS the krewe account, so no Google credential ever has to exist here.
+ * --post --dry-run makes the round trip and files nothing.
+ *
+ * WRITE_API_TOKEN gates the sink and is read from the environment. It is NOT
+ * read from /srv/vaporwave-reports: that tree is being retired, and a path in
+ * source is how a retired location outlives the decision to retire it.
  *
  * Excluded from `clasp push` by aedile/.claspignore. Pushing this would break
  * the live project: Apps Script has no `import`, no `fs`, no `process`.
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -31,6 +36,12 @@ const AEDILE = join(HERE, '..');
 const VAULT = process.env.KREWE_VAULT
   || '/srv/vaporwave-reports/obsidian-vault/mailing-list-archive';
 const WHISPER = process.env.WHISPER_URL || 'http://100.107.253.56:8090/inference';
+
+// aedile's Web App, the `@10` deployment the anonymous URL serves. A version
+// cut updates THIS deployment rather than making a new one, so the URL is
+// stable and belongs in the source.
+const EXEC = process.env.AEDILE_EXEC_URL
+  || 'https://script.google.com/macros/s/AKfycbyyx1N_0hMP2-GG3z1gM_EgNL0RXFB83yvrY57JOKPQ026a2y2hOARKjGc-lKF-qj7s5w/exec';
 
 const AUDIO_EXT = /\.(m4a|mp3|wav|ogg|opus|aac|flac|mp4|mov|webm|amr)$/i;
 
@@ -177,12 +188,80 @@ function buildSystemPrompt(vault) {
   ].join('\n\n');
 }
 
+// --- the sink ----------------------------------------------------------------
+
+/** Hand the finished draft to aedile's createDraft action.
+ *
+ *  This is the only step that touches Google, and it is deliberately the only
+ *  one: aedile already runs AS the krewe account, so the capability lives
+ *  where the credential already is and no Google credential has to exist on
+ *  mandark at all. What crosses the wire is the decision's own fields, not
+ *  rendered HTML -- the sink assembles those with the same appendOpenQuestions
+ *  the in-script path uses, so both paths file the same artifact.
+ */
+function post(decision, dryRun) {
+  const token = process.env.WRITE_API_TOKEN;
+  if (!token) {
+    die('WRITE_API_TOKEN is not set -- it gates the sink, and this end has no other way in', 5);
+  }
+
+  const draft = JSON.stringify({
+    subject: decision.subject,
+    body_html: decision.body_html,
+    open_questions: decision.open_questions || [],
+  });
+
+  // The whole form body goes through a 0600 file rather than argv: a token on
+  // a command line is readable out of /proc by any local account for as long
+  // as curl runs.
+  const form = [
+    `token=${encodeURIComponent(token)}`,
+    'action=createDraft',
+    dryRun ? 'dryRun=true' : null,
+    `draft=${encodeURIComponent(draft)}`,
+  ].filter(Boolean).join('&');
+
+  const bodyFile = `/tmp/redige-post-${process.pid}.form`;
+  writeFileSync(bodyFile, form, { mode: 0o600 });
+
+  let raw;
+  try {
+    // -L because /exec answers a POST with a 302 to googleusercontent.com and
+    // the result is served from there.
+    raw = execFileSync('curl', ['-sfL', '--max-time', '120', '-X', 'POST', EXEC,
+      '-H', 'Content-Type: application/x-www-form-urlencoded',
+      '--data-binary', `@${bodyFile}`],
+      { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+  } catch (err) {
+    die(`the sink did not answer: ${err.message}`, 7);
+  } finally {
+    rmSync(bodyFile, { force: true });
+  }
+
+  let res;
+  try {
+    res = JSON.parse(raw);
+  } catch {
+    // An HTML page here is the endpoint 404ing or asking for a login, which is
+    // what a missing version cut looks like from this side.
+    die(`the sink answered with something that is not JSON:\n${raw.slice(0, 300)}`, 7);
+  }
+  if (!res.ok) die(`the sink refused: ${res.error || raw}`, 7);
+
+  // ok:true only means the endpoint ran the action. The action reports its own
+  // refusals in the result, and a refusal that reads as success is the failure
+  // this whole pipeline is built to avoid.
+  const r = res.result || {};
+  if (r.error || r.skipped) die(`the sink did nothing: ${r.error || r.skipped}`, 7);
+  return r;
+}
+
 // --- main --------------------------------------------------------------------
 
 function main(argv) {
   const args = argv.slice(2);
   if (!args.length || args[0] === '--help') {
-    console.error('usage: redige.mjs <notes.md|meeting.m4a> [--out FILE] [--post] [--json]');
+    console.error('usage: redige.mjs <notes.md|meeting.m4a> [--out FILE] [--post [--dry-run]] [--json]');
     process.exit(2);
   }
 
@@ -212,8 +291,11 @@ function main(argv) {
   const blocking = findings.filter(f => f.level === 'fail');
   if (args.includes('--post')) {
     if (blocking.length) die(`${blocking.length} blocking finding(s) -- not posting`, 6);
-    console.error('-- --post is not wired yet; the sink needs its one deployment version cut');
-    process.exit(7);
+    const dryRun = args.includes('--dry-run');
+    const r = post(decision, dryRun);
+    console.error(dryRun
+      ? `-- DRY RUN: the sink would have drafted to ${r.wouldSendTo}. Nothing was written.`
+      : `-- drafted to ${r.recipient}. NOTHING WAS SENT -- a director opens the draft and sends it.`);
   }
   process.exit(blocking.length ? 6 : 0);
 }

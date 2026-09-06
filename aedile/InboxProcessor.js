@@ -353,43 +353,59 @@ const InboxProcessor = (function () {
       return { skipped: 'disabled' };
     }
 
-    _autosendCountThisRun = 0;
-    const reviewedLabel = dryRun ? null : getReviewedLabel();
-    const threads = _GmailApp.search(SCAN_QUERY);
-    let processed = 0;
-    const results = [];
-
-    for (const thread of threads) {
-      if (processed >= MAX_MESSAGES_PER_RUN) break;
-
-      let sawEveryUnreadMessage = true;
-
-      for (const msg of thread.getMessages()) {
-        if (!msg.isUnread()) continue;
-
-        if (processed >= MAX_MESSAGES_PER_RUN) {
-          sawEveryUnreadMessage = false;
-          break;
-        }
-
-        const messageId = msg.getId();
-        if (Config.isMessageProcessed(messageId)) continue;
-
-        results.push(reviewMessage(msg, dryRun));
-        processed++;
-      }
-
-      if (sawEveryUnreadMessage) {
-        if (dryRun) {
-          Logger.log(`[scanUnread] DRY RUN — would thread.addLabel(aedile-reviewed) on thread ${thread.getId()}`);
-        } else {
-          thread.addLabel(reviewedLabel);
-        }
-      }
+    // Without this, two overlapping runs — a slow one still in flight when
+    // the next trigger fires, or WriteApi's doPost firing mid-trigger —
+    // would each start from a fresh _autosendCountThisRun of 0, silently
+    // exceeding MAX_AUTOSEND_PER_RUN. The lock is script-wide, so scanInbox
+    // and checkBumps also can't overlap each other; that's deliberate,
+    // since both append to the same Log/OpenLoops/Messages tabs.
+    const lock = LockService.getScriptLock();
+    if (!lock.tryLock(10000)) {
+      Logger.log('⏸️ scanUnread skipped — could not acquire the script lock (another run is still in progress).');
+      return { skipped: 'locked' };
     }
 
-    Logger.log(`✅${dryRun ? ' [DRY RUN]' : ''} Aedile scan complete. Reviewed ${processed} new message(s), ${_autosendCountThisRun} auto-sent. No message was marked read.`);
-    return { dryRun: !!dryRun, processed, autosent: _autosendCountThisRun, results };
+    try {
+      _autosendCountThisRun = 0;
+      const reviewedLabel = dryRun ? null : getReviewedLabel();
+      const threads = _GmailApp.search(SCAN_QUERY);
+      let processed = 0;
+      const results = [];
+
+      for (const thread of threads) {
+        if (processed >= MAX_MESSAGES_PER_RUN) break;
+
+        let sawEveryUnreadMessage = true;
+
+        for (const msg of thread.getMessages()) {
+          if (!msg.isUnread()) continue;
+
+          if (processed >= MAX_MESSAGES_PER_RUN) {
+            sawEveryUnreadMessage = false;
+            break;
+          }
+
+          const messageId = msg.getId();
+          if (Config.isMessageProcessed(messageId)) continue;
+
+          results.push(reviewMessage(msg, dryRun));
+          processed++;
+        }
+
+        if (sawEveryUnreadMessage) {
+          if (dryRun) {
+            Logger.log(`[scanUnread] DRY RUN — would thread.addLabel(aedile-reviewed) on thread ${thread.getId()}`);
+          } else {
+            thread.addLabel(reviewedLabel);
+          }
+        }
+      }
+
+      Logger.log(`✅${dryRun ? ' [DRY RUN]' : ''} Aedile scan complete. Reviewed ${processed} new message(s), ${_autosendCountThisRun} auto-sent. No message was marked read.`);
+      return { dryRun: !!dryRun, processed, autosent: _autosendCountThisRun, results };
+    } finally {
+      lock.releaseLock();
+    }
   }
 
   return {

@@ -227,8 +227,11 @@ function post(decision, dryRun) {
   let raw;
   try {
     // -L because /exec answers a POST with a 302 to googleusercontent.com and
-    // the result is served from there.
-    raw = execFileSync('curl', ['-sfL', '--max-time', '120', '-X', 'POST', EXEC,
+    // the result is served from there. NO -X POST: it pins the method across
+    // that redirect, so curl re-POSTs with no body and Google answers with a
+    // sign-in page instead of JSON -- which reads exactly like a missing
+    // version cut and is not one. --data-binary alone already means POST.
+    raw = execFileSync('curl', ['-sfL', '--max-time', '120', EXEC,
       '-H', 'Content-Type: application/x-www-form-urlencoded',
       '--data-binary', `@${bodyFile}`],
       { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });

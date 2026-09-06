@@ -17,11 +17,12 @@
  *     `checkBumps()` entry points a time trigger or manual run would use.
  *     It adds no bypass of any kind.
  *   - POST only (not doGet) so a bare link/prefetch can't trigger a run.
- *   - Neither worker uses LockService (a known, separately-tracked gap —
- *     see aedile/CLAUDE.md "Known bugs"), so overlapping invocations (e.g.
- *     this endpoint firing while the hourly trigger is also mid-run) carry
- *     the same already-documented risk as two overlapping time triggers.
- *     This endpoint doesn't add that risk, but doesn't fix it either.
+ *   - Both workers now take a script-wide LockService lock, so an invocation
+ *     here that overlaps a running trigger is refused with
+ *     { skipped: 'locked' } rather than starting a second run with its own
+ *     fresh auto-send counter. This endpoint was the reason that stopped
+ *     being theoretical: a time trigger overlapping itself is unlikely, but
+ *     doPost firing mid-trigger is a thing a person does on purpose.
  *
  * DEPLOY:
  *   1. clasp push

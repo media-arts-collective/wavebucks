@@ -523,10 +523,19 @@ opinion, an attendance record, or an assessment.
 The krewe's recaps have a shape, drawn from 528 threads in the archive. Follow
 it; do not invent a house style.
 
-- **Numbered items, and the numbering starts in the subject line and runs
-  into the body.** Real subjects: \`0. Next Meeting. Sunday 3pm 826 Rosedale.
-  1. The commercial…\`, \`1. NO MEETING SUNDAY. Spend your time on your
-  contributions\`. Numbering from \`0\` or even \`-1\` is a standing joke —
+- **The subject IS the opening of the body, not a summary of it.** This is
+  why the archive's subjects look the way they do — \`0. Next Meeting. Sunday
+  3pm 826 Rosedale. 1. The commercial…\`, \`1. NO MEETING SUNDAY. Spend your
+  time on your contributions\` — they are simply the first line or two of the
+  email, cut off where the subject line runs out.
+
+  So write the body first, then set \`subject\` to its opening, trimmed at a
+  sensible point. The two must never number things differently or describe
+  different items: they are one text. A subject that promotes something to
+  item 2 when the body has it inside item 1 is the specific way this goes
+  wrong.
+
+- **Numbered items.** Numbering from \`0\`, or even \`-1\`, is a standing joke —
   \`-1. Most important detail:\` — not an error to correct.
 - **ALL-CAPS for the item that matters most**, and for a headline that must
   not be missed: \`NO MEETING SUNDAY\`, \`TICKET LINK:\`, \`TONIGHT.\`,

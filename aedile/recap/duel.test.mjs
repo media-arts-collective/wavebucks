@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url';
 
 import { normalize, isRagged } from './normalize.mjs';
 import { leaks, carriedByNotes } from './duel.mjs';
+import { dealDevices, devicesBlock, DEVICES } from './devices.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const AEDILE = join(HERE, '..');
@@ -115,6 +116,36 @@ ok('articles restored around a preserved fact is not a leak',
   carriedByNotes('clip lights in the rafters of the brake tag station', NOTES_LINE));
 check('phrasing the notes never carried is not excused',
   carriedByNotes('i thought we would never in our lives top that', NOTES_LINE), false);
+
+console.log('\nthe device deal reproduces the archive, which no single email can');
+// Measured over a full burst, every optional device the prompt named came back
+// at or near 100% -- 62% and 46% are not instructions a single independent
+// generation can follow. The caller rolls instead. These assert the roll lands
+// on the archive's real rates, INCLUDING the two that are gated on a parent.
+{
+  const N = 6000, tally = {};
+  for (let i = 0; i < N; i++) {
+    const h = dealDevices('specimen' + i);
+    for (const k of Object.keys(h)) tally[k] = (tally[k] || 0) + (h[k] ? 1 : 0);
+  }
+  const want = { numberedList: 82, zeroIndex: 14, parenthetical: 62,
+                 question: 46, allCaps: 62, allCapsLine: 12, semicolon: 22 };
+  for (const [key, target] of Object.entries(want)) {
+    const got = 100 * tally[key] / N;
+    ok(`${key} lands near ${target}% (got ${got.toFixed(1)}%)`, Math.abs(got - target) < 3);
+  }
+  ok('a gated device never fires without its parent',
+    Array.from({ length: 400 }, (_, i) => dealDevices('g' + i))
+      .every(h => (!h.zeroIndex || h.numberedList) && (!h.allCapsLine || h.allCaps)));
+}
+check('the same seed deals the same hand',
+  JSON.stringify(dealDevices('abc')), JSON.stringify(dealDevices('abc')));
+ok('different seeds deal different hands',
+  JSON.stringify(dealDevices('abc')) !== JSON.stringify(dealDevices('xyz')));
+ok('the block names every device it was dealt',
+  devicesBlock(Object.fromEntries(DEVICES.map(d => [d.key, true]))).includes('Number the items.'));
+ok('the block tells a no-list email not to number',
+  devicesBlock(Object.fromEntries(DEVICES.map(d => [d.key, false]))).includes('Do NOT number anything'));
 
 console.log('\nthe two copies of each prompt agree');
 // redige.mjs reads the .md files; Apps Script reads the constants in

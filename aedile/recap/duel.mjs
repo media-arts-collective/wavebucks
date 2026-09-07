@@ -38,6 +38,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { readVault, buildSystemPrompt, callModel, parseDecision } from './redige.mjs';
 import { normalize, isRagged } from './normalize.mjs';
+import { dealDevices, devicesBlock } from './devices.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const VAULT = process.env.KREWE_VAULT
@@ -172,14 +173,21 @@ export const carriedByNotes = (run, notes) =>
 
 // --- a pair ------------------------------------------------------------------
 
-function buildPair(specimen, systemPrompt) {
+function buildPair(specimen, systemPrompt, seed) {
   const notes = callModel(DEVOICE_PROMPT, specimen.body).trim();
 
   // The shipping prompt, plus one addendum: the target length. A systematic
   // length gap is a tell with nothing to do with voice, and the generator has
   // no other way to know how long this one should be. Nothing else is added --
   // the point is to test the prompt the product actually uses.
-  const sized = `${systemPrompt}\n\n## Length for this one\n\nThe finished \`body\` should be roughly ${specimen.body.length} characters. Match that; do not pad and do not truncate.`;
+  // Seeded on the specimen so a burst reproduces its hands exactly from --seed.
+  const hand = dealDevices(`${seed}:${specimen.id}`);
+
+  const sized = [
+    systemPrompt,
+    devicesBlock(hand),
+    `## Length for this one\n\nThe finished \`body\` should be roughly ${specimen.body.length} characters. Match that; do not pad and do not truncate.`,
+  ].filter(Boolean).join('\n\n');
 
   const decision = parseDecision(callModel(sized, notes));
   const shared = leaks(specimen.body, decision.body || '');
@@ -189,6 +197,7 @@ function buildPair(specimen, systemPrompt) {
     id: specimen.id,
     date: specimen.date,
     url: specimen.url,
+    hand,
     real: normalize(specimen.body),
     ai: normalize(decision.body || ''),
     notes,
@@ -266,7 +275,7 @@ function main(argv) {
   const pairs = [];
   for (const [i, specimen] of take.entries()) {
     console.error(`-- [${i + 1}/${take.length}] ${specimen.id}  ${specimen.date}  ${specimen.body.length} chars`);
-    const pair = buildPair(specimen, systemPrompt);
+    const pair = buildPair(specimen, systemPrompt, seed);
     pairs.push(pair);
     // Written after every pair: a model failure mid-burst costs one pair, not
     // the twenty minutes that came before it.

@@ -30,6 +30,7 @@ import { execFileSync } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runChecks, report } from './checks.mjs';
+import { dealDevices, devicesBlock } from './devices.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const AEDILE = join(HERE, '..');
@@ -296,7 +297,15 @@ function main(argv) {
   const vault = readVault();
   console.error(`-- vault: ${Object.keys(vault.motifs).length} motifs, ${vault.examples.length} example recaps`);
 
-  const decision = parseDecision(callModel(buildSystemPrompt(vault), notes));
+  // Which optional devices this recap gets. Presentation only -- it never
+  // touches what the recap SAYS. A single generation cannot reproduce a
+  // corpus frequency on its own, so the caller rolls and tells it.
+  const hand = dealDevices();
+  const dealt = Object.entries(hand).filter(([, v]) => v).map(([k]) => k);
+  console.error(`-- devices: ${dealt.join(', ') || 'none'}`);
+
+  const prompt = [buildSystemPrompt(vault), devicesBlock(hand)].filter(Boolean).join('\n\n');
+  const decision = parseDecision(callModel(prompt, notes));
 
   const findings = runChecks(decision, notes, vault);
 

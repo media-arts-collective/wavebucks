@@ -34,6 +34,8 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { normalize } from './normalize.mjs';
+
 const VAULT = process.env.KREWE_VAULT
   || '/srv/vaporwave-reports/obsidian-vault/mailing-list-archive';
 const MS_ACCOUNT = 'kreweofvaporwave@gmail.com';
@@ -46,7 +48,13 @@ function corpus() {
     .filter(m => m.email === MS_ACCOUNT && typeof m.body === 'string')
     .filter(m => m.body.length >= 400 && m.body.length <= 4000)
     .filter(m => /<3[\s\S]{0,4}MS\s*$/.test(m.body))
-    .map(m => m.body);
+    // Through the SAME normalizer the duel puts both sides through. Without
+    // this the tool compares raw archive against normalized output and invents
+    // findings: curly apostrophes read as -100% and straight quotes as -82%,
+    // purely because normalize.mjs had already flattened them on one side and
+    // not the other. A measurement that does not compare like with like is
+    // worse than no measurement, because it is quoted with a number on it.
+    .map(m => normalize(m.body));
 }
 
 // --- helpers -----------------------------------------------------------------

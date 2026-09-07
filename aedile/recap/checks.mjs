@@ -15,6 +15,8 @@
  * level 'fail' blocks posting. level 'warn' is reported and does not.
  */
 
+import { isRagged, modalGap } from './normalize.mjs';
+
 // Capitalised words that are not people. Sentence-initial words mostly appear
 // in both texts and cancel out; these are the ones that would not.
 const NOT_A_NAME = new Set([
@@ -137,6 +139,23 @@ export function runChecks(d, notes, vault) {
     add('fail', 'signed-as-ms', 'signed or referred to as MS -- aedile is SM, and must not borrow the other figure');
   }
 
+  // The em-dash is the strongest single tell measured. Two exist in the 164
+  // archived messages of this length; the generator put them in 3 of 12 and a
+  // human reading the duel named it unprompted as "the AI trademark". Also the
+  // spaced `--`, which the archive never uses at all.
+  if (/[—–]/.test(whole) || /(?:^|\s)--(?:\s|$)/.test(whole)) {
+    add('fail', 'em-dash',
+      'contains an em-dash or a spaced `--`; the archive has two in 164 messages, and it reads as machine-written on sight');
+  }
+
+  // 92% of comparable archived messages carry at least one, averaging 3.5. The
+  // generator averaged 0.7 and only two thirds had any. Warn: a short, sober
+  // logistics note can legitimately have none.
+  if (!/!/.test(body)) {
+    add('warn', 'no-exclamation',
+      'no exclamation mark; 92% of the archive has at least one, averaging 3.5 per message');
+  }
+
   const bodyItems = itemNumbers(body);
   const subjectItems = itemNumbers(subject);
   if (!bodyItems.length) {
@@ -151,9 +170,32 @@ export function runChecks(d, notes, vault) {
   // 5. Motifs the corpus says are near-universal. Warn only: a short recap
   //    legitimately might not shout, and the counts are of THREADS not of
   //    obligations.
+  // The vault's own count for this motif is 622 of 628 threads, which is a
+  // broken detector -- its three example snippets ("Hi   throws: 8640 Nelson
+  // Street...", "Good job, everyone!...") contain no ALL-CAPS at all. Measured
+  // over messages.jsonl the real rate is 40%. The check is still worth firing;
+  // quoting the vault's number at the operator was repeating a fabrication, so
+  // it now cites the measured figure instead.
   if (vault?.motifs?.['all-caps-emphasis'] && !/\b[A-Z]{4,}\b/.test(body)) {
     add('warn', 'no-caps',
-      `no ALL-CAPS emphasis; the corpus carries it in ${vault.motifs['all-caps-emphasis']} threads`);
+      'no ALL-CAPS emphasis; 40% of the archive\'s messages carry it');
+  }
+
+  // Ragged paragraph spacing -- two to four blank lines between items, not one.
+  // 93% of comparable archived messages have it (152 of the 164 that are
+  // 400-4000 chars and signed). Uniform single spacing is the most reliable
+  // way for a generated recap to look generated. Warn, not fail: a three-item
+  // recap can legitimately be too short to show the pattern.
+  if (!isRagged(body)) {
+    add('warn', 'uniform-spacing',
+      'single blank lines throughout; 93% of the archive is ragged (2-4 blank lines between items)');
+  } else if (modalGap(body) < 2) {
+    // Ragged SOMEWHERE is not the trait. The archive's usual gap is three blank
+    // lines (54% of gaps) and one blank line is only 11%; a draft whose default
+    // is a single blank line reads wrong on every paragraph even though it has
+    // one wide gap somewhere to satisfy the check above.
+    add('warn', 'tight-default-spacing',
+      `usual gap is ${modalGap(body)} blank line(s); the archive's usual gap is 3`);
   }
 
   // 6. Confidence must be honest about a reconstructed input.

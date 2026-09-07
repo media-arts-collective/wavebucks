@@ -26,10 +26,11 @@
  */
 
 import { readFileSync, writeFileSync, rmSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runChecks, report } from './checks.mjs';
+import { dealDevices, dealFlourish, dealTypo, dealHeartVariant, devicesBlock } from './devices.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const AEDILE = join(HERE, '..');
@@ -86,7 +87,7 @@ function intake(path) {
  *  things a machine can use. The motif counts become the check's expectations,
  *  and real archived recaps become few-shot examples -- far stronger grounding
  *  than describing the form in prose and hoping. */
-function readVault() {
+export function readVault() {
   const motifs = {};
   for (const line of readFileSync(join(VAULT, 'voice/Index.md'), 'utf8').split('\n')) {
     const m = line.match(/\[\[([a-z0-9-]+)\|[^\]]*\]\]\s*\((\d+) threads\)/i);
@@ -100,9 +101,19 @@ function readVault() {
     'thank-you-to-everyone-for-a-good-meeting-i-think-that-our-c-IO3RQJWWafk.md',
   ].map(f => {
     const raw = readFileSync(join(VAULT, 'threads', f), 'utf8');
-    // Drop the YAML frontmatter and the link header; keep the message body.
-    const body = raw.split(/^---$/m).slice(2).join('---');
-    return body.replace(/^\s*#.*$/gm, '').replace(/^\s*-\s+\*\*.*$/gm, '').trim();
+    // A thread file is frontmatter, a link header, then one section per message
+    // headed `## <date> -- [[people/...]]`. Take the FIRST message only.
+    //
+    // This used to be `split(/^---$/m).slice(2).join('---')`, which kept every
+    // LATER message too -- so REAL RECAP 1 was being shown to the model with a
+    // reply pasted onto the end of it reading `Brandon Bales / WBBALES.COM`,
+    // plus the horizontal rules between messages. An exemplary recap that ends
+    // in someone else's signature block teaches exactly that.
+    const first = (raw.split(/^## /m)[1] || '').split('\n').slice(1).join('\n');
+    return first
+      .replace(/^\s*-\s+\*\*.*$/gm, '')  // `- **Thread URL:** ...` bullets
+      .replace(/^\s*---\s*$/gm, '')       // the rule that closed the section
+      .trim();
   });
 
   const people = readFileSync(join(VAULT, 'Index.md'), 'utf8');
@@ -114,7 +125,7 @@ function readVault() {
 /** Pluggable, per the plan: whichever backing is available. The generator does
  *  not know which ran. Apps Script would supply a third
  *  (AnthropicClient.getJsonDecision) without this file changing shape. */
-function callModel(systemPrompt, userContent) {
+export function callModel(systemPrompt, userContent) {
   const backing = process.env.ANTHROPIC_API_KEY ? callApi : callCli;
   // A long generation over a slow link drops sometimes -- the first real run
   // died on "Connection lost mid-response". That is worth retrying and not
@@ -132,10 +143,71 @@ function callModel(systemPrompt, userContent) {
   }
 }
 
+/** Same two backings, without blocking the event loop.
+ *
+ *  callModel above is execFileSync, so a twelve-pair burst was twenty-four
+ *  calls of forty to sixty seconds each, strictly one after another: about
+ *  twenty-five minutes to produce something a reader gets through in ten. The
+ *  pairs are independent and always were; only the two steps WITHIN a pair are
+ *  ordered. This is what lets a caller run several at once.
+ *
+ *  Kept beside the sync version rather than replacing it: redige.mjs proper
+ *  makes exactly one call and gains nothing from being asynchronous. */
+function run(cmd, args, input) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    let out = '', err = '';
+    child.stdout.on('data', d => { out += d; });
+    child.stderr.on('data', d => { err += d; });
+    child.on('error', reject);
+    child.on('close', code => code === 0
+      ? resolve(out)
+      : reject(new Error(err.trim().split('\n')[0] || `${cmd} exited ${code}`)));
+    if (input !== undefined) child.stdin.write(input);
+    child.stdin.end();
+  });
+}
+
+export async function callModelAsync(systemPrompt, userContent) {
+  const attempts = Number(process.env.REDIGE_ATTEMPTS || 3);
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      if (process.env.ANTHROPIC_API_KEY) {
+        const payload = JSON.stringify({
+          model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
+          max_tokens: 4000,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userContent }],
+        });
+        const raw = await run('curl', ['-sf', 'https://api.anthropic.com/v1/messages',
+          '-H', `x-api-key: ${process.env.ANTHROPIC_API_KEY}`,
+          '-H', 'anthropic-version: 2023-06-01',
+          '-H', 'content-type: application/json',
+          '--data-binary', '@-'], payload);
+        return JSON.parse(raw).content[0].text;
+      }
+      // Notes on stdin, for the same reason callCli does it: an argv positional
+      // beginning with `-` is parsed as an option.
+      return await run('claude', ['-p', '--append-system-prompt', systemPrompt], userContent);
+    } catch (err) {
+      const why = String(err.message || err).trim().split('\n')[0];
+      if (i === attempts) throw new Error(`model call failed ${attempts}x -- ${why}`);
+      console.error(`-- attempt ${i} failed (${why}); retrying`);
+      await new Promise(r => setTimeout(r, i * 5000));
+    }
+  }
+}
+
 function callCli(systemPrompt, userContent) {
   console.error('-- model: claude -p');
-  return execFileSync('claude', ['-p', '--append-system-prompt', systemPrompt, userContent],
-    { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+  // The notes go in on STDIN, not as an argv positional. As a positional, any
+  // input whose first character is `-` is parsed by the CLI as an option and
+  // the run dies with `error: unknown option '- rental sweeper broken...'`.
+  // Notes that open with a bullet are not exotic -- that is what notes look
+  // like -- and the failure is total, three retries deep, with the whole file
+  // quoted back as the option name.
+  return execFileSync('claude', ['-p', '--append-system-prompt', systemPrompt],
+    { input: userContent, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
 }
 
 function callApi(systemPrompt, userContent) {
@@ -156,15 +228,30 @@ function callApi(systemPrompt, userContent) {
 
 /** The model is asked for JSON and told not to fence it; it fences it anyway
  *  often enough that AnthropicClient.js strips fences too. Same treatment here. */
-function parseDecision(text) {
-  const cleaned = text.trim()
+export function parseDecision(text) {
+  let cleaned = text.trim()
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```$/, '')
     .trim();
+
+  // The model sometimes prefaces the JSON with a line about the JSON -- one
+  // real response opened `3366 chars, no semicolons, no em-dashes.` before the
+  // fence, apparently reporting back against the per-email device list. Take
+  // the outermost braces rather than assuming the answer starts at character
+  // zero.
+  if (!cleaned.startsWith('{')) {
+    const from = cleaned.indexOf('{'), to = cleaned.lastIndexOf('}');
+    if (from > -1 && to > from) cleaned = cleaned.slice(from, to + 1);
+  }
+
   try {
     return JSON.parse(cleaned);
   } catch (err) {
-    die(`model response was not valid JSON.\n--- raw ---\n${text.slice(0, 2000)}`, 5);
+    // THROWS, never exits. This used to call die(), which is process.exit(),
+    // which no caller can catch -- so one unparseable response killed a whole
+    // burst mid-flight and took every pair built before it. The pool catches
+    // this and loses one specimen; main() below turns it back into exit 5.
+    throw new Error(`model response was not valid JSON.\n--- raw ---\n${text.slice(0, 800)}`);
   }
 }
 
@@ -176,7 +263,7 @@ function contextBody(name) {
   return s.slice(s.indexOf('\n## ')).trim();
 }
 
-function buildSystemPrompt(vault) {
+export function buildSystemPrompt(vault) {
   const examples = vault.examples
     .map((e, i) => `--- REAL RECAP ${i + 1}, written by the krewe's own voice ---\n${e}`)
     .join('\n\n');
@@ -280,7 +367,23 @@ function main(argv) {
   const vault = readVault();
   console.error(`-- vault: ${Object.keys(vault.motifs).length} motifs, ${vault.examples.length} example recaps`);
 
-  const decision = parseDecision(callModel(buildSystemPrompt(vault), notes));
+  // Which optional devices this recap gets. Presentation only -- it never
+  // touches what the recap SAYS. A single generation cannot reproduce a
+  // corpus frequency on its own, so the caller rolls and tells it.
+  const hand = dealDevices();
+  const flourish = dealFlourish();
+  const typo = dealTypo();
+  const heart = dealHeartVariant();
+  const dealt = Object.entries(hand).filter(([, v]) => v).map(([k]) => k);
+  console.error(`-- devices: ${dealt.join(', ') || 'none'}`);
+
+  const prompt = [buildSystemPrompt(vault), devicesBlock(hand, [flourish, heart].filter(Boolean).join('\n- '), typo)].filter(Boolean).join('\n\n');
+  let decision;
+  try {
+    decision = parseDecision(callModel(prompt, notes));
+  } catch (err) {
+    die(String(err.message || err), 5);
+  }
 
   const findings = runChecks(decision, notes, vault);
 
@@ -328,4 +431,10 @@ function render(d) {
   ].join('\n');
 }
 
-main(process.argv);
+// Only when run directly. duel.mjs imports readVault/buildSystemPrompt/
+// callModel/parseDecision from here so the game exercises the SAME prompt the
+// product uses -- a second copy would drift, which is precisely how Context.js
+// came to request a field MeetingRecap had stopped reading.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main(process.argv);
+}

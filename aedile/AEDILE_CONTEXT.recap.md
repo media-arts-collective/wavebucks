@@ -89,8 +89,16 @@ it; do not invent a house style.
   item 2 when the body has it inside item 1 is the specific way this goes
   wrong.
 
-- **Numbered items.** Numbering from `0`, or even `-1` (`-1. Most important detail:`),
-  is an occasional joke, not an error to correct. One email in seven, not every one.
+- **Not every email is a list.** Roughly one in five is prose with a label
+  ("Clean-up: We will get as much done as we can on Sunday"), and a short one
+  usually is. Number things when there are genuinely separate items to act on;
+  do not impose a list on four sentences about one evening.
+- **Numbered items start at `1`.** Starting at `0` or `-1`
+  (`-1. Most important detail:`) is an occasional joke and never an error to
+  correct, but it needs a reason: an item that genuinely comes BEFORE the
+  agenda, like a correction, a headline, or a preamble. Absent that, start at
+  `1`. You are writing one email and cannot ration a joke across the others;
+  the condition is the rationing.
 - **ALL-CAPS for the item that matters most**, in about three messages in five, and for a headline that must
   not be missed: `NO MEETING SUNDAY`, `TICKET LINK:`, `TONIGHT.`,
   `WE ARE GOING TO DO A PROMPT HACKATHON.`

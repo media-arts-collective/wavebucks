@@ -116,28 +116,43 @@ ok('articles restored around a preserved fact is not a leak',
 check('phrasing the notes never carried is not excused',
   carriedByNotes('i thought we would never in our lives top that', NOTES_LINE), false);
 
-console.log('\nthe two copies of the recap prompt agree');
-// redige.mjs reads the .md; Apps Script reads the constant in Context.js. They
-// are maintained by hand and nothing else enforces this.
-const md = (() => {
-  const s = readFileSync(join(AEDILE, 'AEDILE_CONTEXT.recap.md'), 'utf8');
-  return s.slice(s.indexOf('\n## ')).trim();
-})();
-const js = (() => {
+console.log('\nthe two copies of each prompt agree');
+// redige.mjs reads the .md files; Apps Script reads the constants in
+// Context.js. They are maintained by hand and nothing else enforces this.
+// Context.js once went on asking for `body_html` after MeetingRecap stopped
+// reading it, and nothing failed until a draft did.
+function constantOf(name) {
   const s = readFileSync(join(AEDILE, 'Context.js'), 'utf8');
-  const m = s.match(/const AEDILE_CONTEXT_RECAP = `([\s\S]*?)`;\s*$/m);
+  const m = s.match(new RegExp('const ' + name + ' = `([\\s\\S]*?)`;\\s*$', 'm'));
   return m ? m[1].replace(/\\`/g, '`').replace(/\\\$/g, '$').trim() : null;
-})();
-ok('the Context.js constant was found', js !== null);
-if (js !== null && js !== md) {
-  // Name the first differing line, or the diff is a 7,500-character staring contest.
-  const a = md.split('\n'), b = js.split('\n');
-  const at = a.findIndex((l, i) => l !== b[i]);
-  console.log(`       first difference at line ${at + 1}:`);
-  console.log(`       recap.md  : ${JSON.stringify(a[at])}`);
-  console.log(`       Context.js: ${JSON.stringify(b[at])}`);
 }
-check('AEDILE_CONTEXT.recap.md and Context.js are byte-identical', js === md, true);
+function bodyOf(file) {
+  const s = readFileSync(join(AEDILE, file), 'utf8');
+  return s.slice(s.indexOf('\n## ')).trim();
+}
+for (const [name, file] of [['AEDILE_CONTEXT_CORE', 'AEDILE_CONTEXT.core.md'],
+                            ['AEDILE_CONTEXT_RECAP', 'AEDILE_CONTEXT.recap.md']]) {
+  const js = constantOf(name), md = bodyOf(file);
+  ok(`${name} was found in Context.js`, js !== null);
+  if (js !== null && js !== md) {
+    // Name the first differing line, or the diff is a staring contest.
+    const a = md.split('\n'), b = js.split('\n');
+    const at = a.findIndex((l, k) => l !== b[k]);
+    console.log(`       first difference at line ${at + 1}:`);
+    console.log(`       ${file}: ${JSON.stringify(a[at])}`);
+    console.log(`       Context.js: ${JSON.stringify(b[at])}`);
+  }
+  check(`${file} and ${name} are byte-identical`, js === md, true);
+}
+
+// The prompt may not itself do the thing it forbids. It carried 24 em-dashes
+// while telling the generator never to write one, and the examples it holds up
+// as exemplary contain none at all.
+for (const file of ['AEDILE_CONTEXT.core.md', 'AEDILE_CONTEXT.recap.md']) {
+  const t = bodyOf(file);
+  check(`${file} contains no em-dash`, /[\u2014\u2013]/.test(t), false);
+  check(`${file} contains no spaced --`, /(?:^|\s)--(?:\s|$)/.test(t), false);
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

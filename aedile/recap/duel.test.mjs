@@ -22,7 +22,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { normalize, isRagged } from './normalize.mjs';
-import { leaks } from './duel.mjs';
+import { leaks, carriedByNotes } from './duel.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const AEDILE = join(HERE, '..');
@@ -93,6 +93,17 @@ check('a plain paraphrase leaks nothing',
   leaks(SOURCE, 'Share the discount codes with people you know. The deadline is Wednesday.'), []);
 check('an incidental short overlap is not flagged',
   leaks(SOURCE, 'Bring a pushbroom on Wednesday.'), []);
+
+console.log('\na preserved fact is not a lifted sentence');
+// The generator only ever sees the notes, so it cannot take anything from the
+// real email except through them. Restoring the articles the de-voicing dropped
+// lands on the original wording because there is no other way to write it --
+// every one of the sixteen runs flagged in the first full burst was this.
+const NOTES_LINE = '- hang clip lights in rafters of Brake Tag Station, set up DMX over stage';
+ok('articles restored around a preserved fact is not a leak',
+  carriedByNotes('clip lights in the rafters of the brake tag station', NOTES_LINE));
+check('phrasing the notes never carried is not excused',
+  carriedByNotes('i thought we would never in our lives top that', NOTES_LINE), false);
 
 console.log('\nthe two copies of the recap prompt agree');
 // redige.mjs reads the .md; Apps Script reads the constant in Context.js. They

@@ -147,6 +147,29 @@ export function leaks(source, text, n = 10) {
   return [...grams(text)].filter(g => src.has(g));
 }
 
+/** Words that carry no content. A run matching the notes once these are
+ *  dropped is a fact the notes preserved, not phrasing the generator lifted. */
+const STOP = new Set(['a', 'an', 'the', 'of', 'in', 'on', 'at', 'to', 'and', 'or',
+  'for', 'with', 'is', 'are', 'be', 'will', 'we', 'our', 'it', 'this', 'that',
+  'from', 'by', 'as', 'up', 'out', 'over', 'into', 'there', 'their', 'some']);
+
+const content = s => (String(s).toLowerCase().match(/[a-z0-9']+/g) || [])
+  .filter(w => !STOP.has(w));
+
+/** Did the notes already carry this run's CONTENT?
+ *
+ *  The generator only ever sees the notes, so it cannot lift anything from the
+ *  real email except through them. When the notes say `hang clip lights in
+ *  rafters of Brake Tag Station` and the generator writes `hang clip lights in
+ *  the rafters of the Brake Tag Station`, it has restored the articles and
+ *  landed on Abe's exact sentence -- because there is no other way to write
+ *  it. Comparing with stopwords in, that reads as a ten-word lift; comparing
+ *  content words only, it is plainly a preserved fact.
+ *
+ *  Only a run the notes did NOT carry is worth a human's attention. */
+export const carriedByNotes = (run, notes) =>
+  content(notes).join(' ').includes(content(run).join(' '));
+
 // --- a pair ------------------------------------------------------------------
 
 function buildPair(specimen, systemPrompt) {
@@ -162,6 +185,7 @@ function buildPair(specimen, systemPrompt) {
   const shared = leaks(specimen.body, decision.body || '');
 
   return {
+    unexplained: shared.filter(g => !carriedByNotes(g, notes)),
     id: specimen.id,
     date: specimen.date,
     url: specimen.url,
@@ -263,7 +287,8 @@ function main(argv) {
     const r = p.ai.length / p.real.length;
     return r > 1.5 || r < 0.67;
   });
-  const leaky = pairs.filter(p => p.leaks.length);
+  const leaky = pairs.filter(p => p.unexplained?.length);
+  const carried = pairs.reduce((n, p) => n + (p.leaks.length - (p.unexplained?.length || 0)), 0);
 
   console.error(`\n-- burst: ${pairs.length} pairs -> ${out}`);
   console.error(`-- ragged spacing: real ${raggedReal}/${pairs.length}, generated ${raggedAi}/${pairs.length}`);
@@ -274,11 +299,14 @@ function main(argv) {
   if (skewed.length) {
     console.error(`-- length skew >1.5x or <0.67x on ${skewed.length} pair(s): ${skewed.map(p => p.id).join(', ')}`);
   }
-  if (leaky.length) {
-    console.error(`-- PHRASING LEAK on ${leaky.length} pair(s) -- the generated email lifted a sentence:`);
-    for (const p of leaky) console.error(`   ${p.id}: ${p.leaks.slice(0, 3).map(g => `"${g}"`).join(', ')}`);
+  if (carried) {
+    console.error(`-- ${carried} shared run(s) the notes already carried -- preserved facts, not lifted phrasing`);
   }
-  if (!skewed.length && !leaky.length) console.error('-- no length skew, no phrasing leak');
+  if (leaky.length) {
+    console.error(`-- UNEXPLAINED phrasing on ${leaky.length} pair(s) -- read these before playing:`);
+    for (const p of leaky) console.error(`   ${p.id}: ${p.unexplained.slice(0, 3).map(g => `"${g}"`).join(', ')}`);
+  }
+  if (!skewed.length && !leaky.length) console.error('-- no length skew, no unexplained phrasing');
 
   const page = arg(args, '--page', null);
   if (page) writePage(pairs, seed, page);

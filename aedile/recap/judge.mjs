@@ -111,6 +111,12 @@ async function run(path, votes, jobs) {
     if (rs.filter(r => r.pickedReal).length * 2 > rs.length) caught++;
   }
   const fooled = byPair.size - caught;
+  // A pair whose every vote errored leaves the rate quietly measured on a
+  // smaller denominator. Burst 11 reported 0/10 from a 12-pair file and
+  // nothing in the output said which two were missing.
+  if (byPair.size < pairs.length) {
+    console.error(`   ${pairs.length - byPair.size} of ${pairs.length} pair(s) got no verdict; rate below is on the rest`);
+  }
   return { path, pairs: byPair.size, votes: ok.length, caught, fooled,
            rate: byPair.size ? Math.round(100 * fooled / byPair.size) : 0, results: ok };
 }

@@ -22,7 +22,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { normalize, isRagged } from './normalize.mjs';
-import { leaks, carriedByNotes } from './duel.mjs';
+import { leaks, carriedByNotes, units, DEVOICE_PROMPT } from './duel.mjs';
 import { dealDevices, dealFlourish, dealTypo, devicesBlock, DEVICES, FLOURISHES } from './devices.mjs';
 import { parseDecision } from './redige.mjs';
 
@@ -220,6 +220,31 @@ for (const file of ['AEDILE_CONTEXT.core.md', 'AEDILE_CONTEXT.recap.md']) {
   check(`${file} contains no em-dash`, /[\u2014\u2013]/.test(t), false);
   check(`${file} contains no spaced --`, /(?:^|\s)--(?:\s|$)/.test(t), false);
 }
+
+// Step A has to preserve the source's lumping. It used to sort facts into a
+// taxonomy -- "what is happening, when, where, who" -- which handed the
+// generator a tidy plan, and no device dealt afterwards can un-tidy a plan.
+// The blind judge named exactly this: "reconstructed from facts".
+check('units counts a lumpy paragraph as one unit',
+  units('a b c, and also d, and e tonight'), 1);
+check('units counts each list item',
+  units('1. one\n2. two\n3. three'), 3);
+check('units counts blank-line blocks',
+  units('first para\n\nsecond para\n\nthird'), 3);
+check('units sees the P.S. as its own unit',
+  units('body here\n\nP.S. one more thing'), 2);
+
+// The prompt must ask for order and lumping, and must not ask for a taxonomy.
+check('DEVOICE_PROMPT asks for one bullet per source unit',
+  /one bullet per unit of the original, in the order it was written/i.test(DEVOICE_PROMPT), true);
+check('DEVOICE_PROMPT forbids grouping by topic',
+  /never group facts by topic/i.test(DEVOICE_PROMPT), true);
+check('DEVOICE_PROMPT no longer dictates a fact taxonomy',
+  /what is happening, when, where, who is doing what/i.test(DEVOICE_PROMPT), false);
+// It still may not hand phrasing back -- the structure fix must not cost the
+// leak guard, which is the whole reason step A exists.
+check('DEVOICE_PROMPT still forbids reusing distinctive phrasing',
+  /NEVER reuse a distinctive phrase/.test(DEVOICE_PROMPT), true);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

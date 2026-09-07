@@ -100,13 +100,21 @@ function shuffled(items, seed) {
 
 // --- step A: de-voice --------------------------------------------------------
 
-const DEVOICE_PROMPT = `You reduce a piece of writing to its facts, discarding the writing.
+export const DEVOICE_PROMPT = `You reduce a piece of writing to its facts, discarding the writing.
 
-Given an email, return ONLY a bulleted list of what it factually contains:
-what is happening, when, where, who is doing what, what is being asked for,
-what was decided, and what is left unresolved.
+Given an email, return ONLY a bulleted list of the facts it contains.
 
-Rules, all of them strict:
+STRUCTURE -- follow the original, do not improve it:
+- One bullet per unit of the original, in the order it was written. A unit is a
+  paragraph, a numbered or bulleted item, or a trailing afterthought.
+- If a unit jams three unrelated facts together, that is ONE bullet carrying
+  three facts. Do not split it, and never group facts by topic.
+- If the original says something twice, say it twice, where it happened.
+- If the original ends in a P.S. or a late addition, keep it last.
+- Do not reorder into a taxonomy. What was put together, and in what order, is
+  a fact about the message and must survive.
+
+CONTENT, all of them strict:
 - Fragments, never sentences. "- storage run tonight, 7pm, bring hands"
 - Keep every date, time, address, dollar figure, URL and proper name EXACTLY
   as written. Those are facts and they must survive.
@@ -117,8 +125,10 @@ Rules, all of them strict:
   fact in the plainest, most ordinary words available to you.
 - No adjectives of judgement or attitude. No editorialising. No tone.
 
-The output is scratch notes someone typed during a meeting. It must be
-impossible to tell from them who wrote the original or how they write.
+The output is what someone jotted while reading the message once, top to
+bottom, tidying nothing. It must be impossible to tell from the notes who wrote
+the original or how they write -- but the shape of what they wrote, what they
+put together and what order they put it in, must still be there.
 
 Output the bullets and nothing else.`;
 
@@ -178,6 +188,19 @@ const content = s => (String(s).toLowerCase().match(/[a-z0-9']+/g) || [])
 export const carriedByNotes = (run, notes) =>
   content(notes).join(' ').includes(content(run).join(' '));
 
+/** Structural units: a blank-line block, or each list item inside one.
+ *
+ *  The witness for step A keeping the original's shape. De-voicing used to sort
+ *  facts into a taxonomy, so eleven lumpy paragraphs arrived as six tidy topics
+ *  and the generator wrote a tidy email because it was handed a tidy plan. If
+ *  the notes track the source's unit count, the lumping survived. */
+export const units = s => String(s).split(/\n\s*\n/)
+  .flatMap(b => {
+    const items = b.split('\n').filter(l => /^\s*(?:[-*\u2022]|\d+[.)])\s+/.test(l));
+    return items.length ? items : [b];
+  })
+  .filter(u => u.trim()).length;
+
 // --- a pair ------------------------------------------------------------------
 
 async function buildPair(specimen, systemPrompt, seed) {
@@ -212,6 +235,7 @@ async function buildPair(specimen, systemPrompt, seed) {
     typo: Boolean(typo),
     real: normalize(specimen.body),
     ai: normalize(decision.body || ''),
+    units: { real: units(specimen.body), notes: units(notes), ai: units(decision.body || '') },
     notes,
     leaks: shared,
     confidence: decision.confidence,
@@ -307,6 +331,7 @@ async function main(argv) {
         console.error(`-- [${++finished}/${take.length}] ${specimen.id}  ${specimen.date}  `
           + `real ${pair.real.length} / ai ${pair.ai.length} (${ratio.toFixed(2)}x)`
           + `  ragged real:${isRagged(pair.real)} ai:${isRagged(pair.ai)}`
+          + `  units ${pair.units.real}/${pair.units.notes}/${pair.units.ai}`
           + (pair.unexplained.length ? `  UNEXPLAINED:${pair.unexplained.length}` : ''));
       } catch (err) {
         // One specimen dying should cost one specimen. It used to end the burst.
@@ -341,6 +366,16 @@ async function main(argv) {
 
   console.error(`\n-- burst: ${pairs.length} pairs -> ${out}`);
   console.error(`-- ragged spacing: real ${raggedReal}/${pairs.length}, generated ${raggedAi}/${pairs.length}`);
+  // Step A's fidelity, reported before anyone plays: if the notes flatten the
+  // source's lumping the generated email cannot get it back, and no device
+  // dealt afterwards reaches the structure.
+  const withUnits = pairs.filter(p => p.units);
+  if (withUnits.length) {
+    const mean = f => (withUnits.reduce((a, p) => a + f(p), 0) / withUnits.length).toFixed(1);
+    console.error(`-- units per message: real ${mean(p => p.units.real)}`
+      + `  notes ${mean(p => p.units.notes)}  generated ${mean(p => p.units.ai)}`
+      + `  (notes skew ${mean(p => p.units.notes - p.units.real)})`);
+  }
   if (raggedAi < pairs.length * 0.6) {
     console.error('   ^ the generated side is NOT matching the archive\'s spacing.');
     console.error('     Rounds will be won on whitespace. Fix the prompt before playing.');

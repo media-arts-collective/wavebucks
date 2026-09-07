@@ -36,7 +36,7 @@ import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { readVault, buildSystemPrompt, callModel, parseDecision } from './redige.mjs';
+import { readVault, buildSystemPrompt, callModelAsync, parseDecision } from './redige.mjs';
 import { normalize, isRagged } from './normalize.mjs';
 import { dealDevices, devicesBlock } from './devices.mjs';
 
@@ -173,8 +173,8 @@ export const carriedByNotes = (run, notes) =>
 
 // --- a pair ------------------------------------------------------------------
 
-function buildPair(specimen, systemPrompt, seed) {
-  const notes = callModel(DEVOICE_PROMPT, specimen.body).trim();
+async function buildPair(specimen, systemPrompt, seed) {
+  const notes = (await callModelAsync(DEVOICE_PROMPT, specimen.body)).trim();
 
   // The shipping prompt, plus one addendum: the target length. A systematic
   // length gap is a tell with nothing to do with voice, and the generator has
@@ -189,7 +189,7 @@ function buildPair(specimen, systemPrompt, seed) {
     `## Length for this one\n\nThe finished \`body\` should be roughly ${specimen.body.length} characters. Match that; do not pad and do not truncate.`,
   ].filter(Boolean).join('\n\n');
 
-  const decision = parseDecision(callModel(sized, notes));
+  const decision = parseDecision(await callModelAsync(sized, notes));
   const shared = leaks(specimen.body, decision.body || '');
 
   return {
@@ -236,10 +236,10 @@ function arg(args, name, fallback) {
   return v;
 }
 
-function main(argv) {
+async function main(argv) {
   const args = argv.slice(2);
   if (args.includes('--help')) {
-    console.error('usage: duel.mjs [--n 12] [--out pairs.json] [--page FILE] [--used FILE] [--seed N]\n       duel.mjs --from pairs.json --page FILE');
+    console.error('usage: duel.mjs [--n 12] [--out pairs.json] [--page FILE] [--used FILE] [--seed N] [--jobs 4]\n       duel.mjs --from pairs.json --page FILE');
     process.exit(2);
   }
 
@@ -258,6 +258,7 @@ function main(argv) {
   const out = arg(args, '--out', join(HERE, 'pairs.json'));
   const usedPath = arg(args, '--used', join(HERE, '.duel-used.json'));
   const seed = Number(arg(args, '--seed', String(Date.now() % 100000)));
+  const jobs = Math.max(1, Number(arg(args, '--jobs', 4)));
 
   const used = new Set(existsSync(usedPath) ? JSON.parse(readFileSync(usedPath, 'utf8')) : []);
   const all = pool();
@@ -270,23 +271,50 @@ function main(argv) {
   const take = fresh.slice(0, Math.min(n, fresh.length));
   const vault = readVault();
   const systemPrompt = buildSystemPrompt(vault);
-  console.error(`-- vault: ${Object.keys(vault.motifs).length} motifs, ${vault.examples.length} examples, seed ${seed}`);
+  console.error(`-- vault: ${Object.keys(vault.motifs).length} motifs, ${vault.examples.length} examples, seed ${seed}, ${jobs} at a time`);
 
-  const pairs = [];
-  for (const [i, specimen] of take.entries()) {
-    console.error(`-- [${i + 1}/${take.length}] ${specimen.id}  ${specimen.date}  ${specimen.body.length} chars`);
-    const pair = buildPair(specimen, systemPrompt, seed);
-    pairs.push(pair);
-    // Written after every pair: a model failure mid-burst costs one pair, not
-    // the twenty minutes that came before it.
-    writeFileSync(out, JSON.stringify({ seed, built: take.length, pairs }, null, 2));
-    const ratio = pair.real.length ? (pair.ai.length / pair.real.length) : 0;
-    console.error(`   real ${pair.real.length} / ai ${pair.ai.length} (${ratio.toFixed(2)}x)`
-      + `  ragged real:${isRagged(pair.real)} ai:${isRagged(pair.ai)}`
-      + (pair.leaks.length ? `  LEAKS:${pair.leaks.length}` : ''));
+  // A bounded pool, not a serial loop. Each pair is two calls of forty to
+  // sixty seconds and the pairs do not depend on each other, so running them
+  // one at a time cost about twenty-five minutes a burst for no reason. Only
+  // the two steps INSIDE a pair are ordered.
+  const done = new Array(take.length).fill(null);
+  let next = 0, finished = 0;
+
+  const flush = () => writeFileSync(out, JSON.stringify(
+    { seed, built: take.length, pairs: done.filter(Boolean) }, null, 2));
+
+  async function worker() {
+    while (true) {
+      const i = next++;
+      if (i >= take.length) return;
+      const specimen = take[i];
+      try {
+        const pair = await buildPair(specimen, systemPrompt, seed);
+        done[i] = pair;
+        const ratio = pair.real.length ? (pair.ai.length / pair.real.length) : 0;
+        console.error(`-- [${++finished}/${take.length}] ${specimen.id}  ${specimen.date}  `
+          + `real ${pair.real.length} / ai ${pair.ai.length} (${ratio.toFixed(2)}x)`
+          + `  ragged real:${isRagged(pair.real)} ai:${isRagged(pair.ai)}`
+          + (pair.unexplained.length ? `  UNEXPLAINED:${pair.unexplained.length}` : ''));
+      } catch (err) {
+        // One specimen dying should cost one specimen. It used to end the burst.
+        finished++;
+        console.error(`-- [${finished}/${take.length}] ${specimen.id} FAILED: ${String(err.message || err).split('\n')[0]}`);
+      }
+      // Written as each lands, so a crash costs the pair in flight and nothing
+      // that came before it.
+      flush();
+    }
   }
 
-  writeFileSync(usedPath, JSON.stringify([...used, ...take.map(s => s.id)], null, 2));
+  await Promise.all(Array.from({ length: Math.min(jobs, take.length) }, worker));
+  const pairs = done.filter(Boolean);
+  if (pairs.length < take.length) {
+    console.error(`-- ${take.length - pairs.length} specimen(s) failed and are not in this burst`);
+  }
+
+  // Only what actually produced a pair; a failed specimen returns to the pool.
+  writeFileSync(usedPath, JSON.stringify([...used, ...pairs.map(p => p.id)], null, 2));
 
   // The burst report. Every one of these is a way the game can be decided by
   // the harness instead of the writing, so it is printed before anyone plays.
@@ -324,5 +352,5 @@ function main(argv) {
 // Only when run directly, so duel.test.mjs can import `leaks` without
 // building a burst.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main(process.argv);
+  await main(process.argv);
 }

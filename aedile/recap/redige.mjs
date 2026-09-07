@@ -26,7 +26,7 @@
  */
 
 import { readFileSync, writeFileSync, rmSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runChecks, report } from './checks.mjs';
@@ -139,6 +139,61 @@ export function callModel(systemPrompt, userContent) {
       if (i === attempts) die(`model call failed ${attempts}x -- ${why}`, 5);
       console.error(`-- attempt ${i} failed (${why}); retrying`);
       execFileSync('sleep', [String(i * 5)]);
+    }
+  }
+}
+
+/** Same two backings, without blocking the event loop.
+ *
+ *  callModel above is execFileSync, so a twelve-pair burst was twenty-four
+ *  calls of forty to sixty seconds each, strictly one after another: about
+ *  twenty-five minutes to produce something a reader gets through in ten. The
+ *  pairs are independent and always were; only the two steps WITHIN a pair are
+ *  ordered. This is what lets a caller run several at once.
+ *
+ *  Kept beside the sync version rather than replacing it: redige.mjs proper
+ *  makes exactly one call and gains nothing from being asynchronous. */
+function run(cmd, args, input) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    let out = '', err = '';
+    child.stdout.on('data', d => { out += d; });
+    child.stderr.on('data', d => { err += d; });
+    child.on('error', reject);
+    child.on('close', code => code === 0
+      ? resolve(out)
+      : reject(new Error(err.trim().split('\n')[0] || `${cmd} exited ${code}`)));
+    if (input !== undefined) child.stdin.write(input);
+    child.stdin.end();
+  });
+}
+
+export async function callModelAsync(systemPrompt, userContent) {
+  const attempts = Number(process.env.REDIGE_ATTEMPTS || 3);
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      if (process.env.ANTHROPIC_API_KEY) {
+        const payload = JSON.stringify({
+          model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
+          max_tokens: 4000,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userContent }],
+        });
+        const raw = await run('curl', ['-sf', 'https://api.anthropic.com/v1/messages',
+          '-H', `x-api-key: ${process.env.ANTHROPIC_API_KEY}`,
+          '-H', 'anthropic-version: 2023-06-01',
+          '-H', 'content-type: application/json',
+          '--data-binary', '@-'], payload);
+        return JSON.parse(raw).content[0].text;
+      }
+      // Notes on stdin, for the same reason callCli does it: an argv positional
+      // beginning with `-` is parsed as an option.
+      return await run('claude', ['-p', '--append-system-prompt', systemPrompt], userContent);
+    } catch (err) {
+      const why = String(err.message || err).trim().split('\n')[0];
+      if (i === attempts) throw new Error(`model call failed ${attempts}x -- ${why}`);
+      console.error(`-- attempt ${i} failed (${why}); retrying`);
+      await new Promise(r => setTimeout(r, i * 5000));
     }
   }
 }

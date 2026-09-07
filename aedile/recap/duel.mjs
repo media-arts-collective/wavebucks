@@ -121,25 +121,36 @@ impossible to tell from them who wrote the original or how they write.
 
 Output the bullets and nothing else.`;
 
-/** Distinctive 6-word runs shared between the notes and the source. A URL or a
- *  street address legitimately survives de-voicing, so this looks only at
- *  words -- what we are hunting is Abe's PHRASING coming through. */
-export function leaks(source, notes) {
+/** Verbatim word-runs the generated email shares with the real one.
+ *
+ *  Measured on the GENERATED BODY, not on the intermediate notes: what matters
+ *  is whether Abe's phrasing reaches the reader, and one of the first three
+ *  pairs had zero overlap in its notes and eight in its email. The notes are
+ *  not the channel.
+ *
+ *  Ten words, not six, and that is measured rather than chosen. A
+ *  content-matched pair GUARANTEES some overlap -- both texts describe the
+ *  same facts in ordinary English, so `set up the led array on the canal` and
+ *  `92,000 lumen gobo projectors to integrate into` show up on both sides
+ *  because there is no other way to say them. Across the first burst the
+ *  longest shared run was nine words and every one of them was fact-carrying;
+ *  at ten the overlap was zero on every pair. So ten catches a lifted sentence
+ *  and stops flagging the design working correctly. */
+export function leaks(source, text, n = 10) {
   const grams = s => {
-    const w = String(s).toLowerCase().match(/[a-z']+/g) || [];
+    const w = String(s).toLowerCase().match(/[a-z0-9']+/g) || [];
     const out = new Set();
-    for (let i = 0; i + 6 <= w.length; i++) out.add(w.slice(i, i + 6).join(' '));
+    for (let i = 0; i + n <= w.length; i++) out.add(w.slice(i, i + n).join(' '));
     return out;
   };
   const src = grams(source);
-  return [...grams(notes)].filter(g => src.has(g));
+  return [...grams(text)].filter(g => src.has(g));
 }
 
 // --- a pair ------------------------------------------------------------------
 
 function buildPair(specimen, systemPrompt) {
   const notes = callModel(DEVOICE_PROMPT, specimen.body).trim();
-  const shared = leaks(specimen.body, notes);
 
   // The shipping prompt, plus one addendum: the target length. A systematic
   // length gap is a tell with nothing to do with voice, and the generator has
@@ -148,6 +159,7 @@ function buildPair(specimen, systemPrompt) {
   const sized = `${systemPrompt}\n\n## Length for this one\n\nThe finished \`body\` should be roughly ${specimen.body.length} characters. Match that; do not pad and do not truncate.`;
 
   const decision = parseDecision(callModel(sized, notes));
+  const shared = leaks(specimen.body, decision.body || '');
 
   return {
     id: specimen.id,
@@ -232,7 +244,7 @@ function main(argv) {
     console.error(`-- length skew >1.5x or <0.67x on ${skewed.length} pair(s): ${skewed.map(p => p.id).join(', ')}`);
   }
   if (leaky.length) {
-    console.error(`-- PHRASING LEAK on ${leaky.length} pair(s) -- the de-voicing kept Abe's words:`);
+    console.error(`-- PHRASING LEAK on ${leaky.length} pair(s) -- the generated email lifted a sentence:`);
     for (const p of leaky) console.error(`   ${p.id}: ${p.leaks.slice(0, 3).map(g => `"${g}"`).join(', ')}`);
   }
   if (!skewed.length && !leaky.length) console.error('-- no length skew, no phrasing leak');

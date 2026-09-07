@@ -83,11 +83,16 @@ check('bare MS with no <3', /\bMS\b/.test(normalize('Some body text.\n\nMS')), f
 check('bare SM with no <3', /\bSM\b/.test(normalize('Some body text.\n\nSM')), false);
 
 console.log('\nthe de-voicing step must not hand back Abe\'s phrasing');
-const SOURCE = 'Please extend the promo codes to your cynical, joyless, spendthrift friends before Wednesday.';
-ok('a copied run is caught',
-  leaks(SOURCE, '- extend promo codes to your cynical, joyless, spendthrift friends').length > 0);
+// Ten words, not six: a content-matched pair guarantees short overlaps because
+// both sides state the same facts in ordinary English. Measured across the
+// first burst, the longest shared run was nine words and all were fact-carrying.
+const SOURCE = 'Please extend the promo codes to your cynical, joyless, spendthrift friends before Wednesday, and bring a pushbroom.';
+ok('a lifted sentence is caught',
+  leaks(SOURCE, 'Please extend the promo codes to your cynical, joyless, spendthrift friends before Wednesday.').length > 0);
 check('a plain paraphrase leaks nothing',
-  leaks(SOURCE, '- share the discount codes with people you know\n- deadline Wednesday'), []);
+  leaks(SOURCE, 'Share the discount codes with people you know. The deadline is Wednesday.'), []);
+check('an incidental short overlap is not flagged',
+  leaks(SOURCE, 'Bring a pushbroom on Wednesday.'), []);
 
 console.log('\nthe two copies of the recap prompt agree');
 // redige.mjs reads the .md; Apps Script reads the constant in Context.js. They

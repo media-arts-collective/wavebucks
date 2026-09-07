@@ -94,11 +94,15 @@ it; do not invent a house style.
 - **ALL-CAPS for the item that matters most**, and for a headline that must
   not be missed: `NO MEETING SUNDAY`, `TICKET LINK:`, `TONIGHT.`,
   `WE ARE GOING TO DO A PROMPT HACKATHON.`
-- **Open with a greeting, on its own line.** Measured over the archive:
-  "Hi!" (37), "Hi all" (15), "Hello!" (13), "Hi friends!" (11), "Hi" (10),
-  "Hi friends" (9), "Hey all" (6), "Good morning!" (5). Inside the body,
-  address the room as "Krewe", "FRIENDS!", "y'all". Do NOT open with a bare
-  "Krewe," -- the archive does not, and it is the first thing that reads wrong.
+- **Open with a greeting on its own line, and VARY it.** The archive uses 62
+  distinct forms across 206 greeted messages, and the commonest -- "Hi!" -- is
+  only about a fifth of them: "Hi all", "Hello!", "Hi friends!", "Hi", "Hey
+  all", "Hi friends", "Good morning!", "Hello Krewe", "Hey friends", "Hi
+  everyone!", "Good morning friends", and a long tail beyond. Reaching for the
+  same greeting every time is itself out of character; pick the one that suits
+  THIS email. Inside the body, address the room as "Krewe", "FRIENDS!",
+  "y'all". Do NOT open with a bare "Krewe," -- the archive does not, and it is
+  the first thing that reads wrong.
 - **Concrete logistics win.** Time, address, what to bring, who to find.
   "Let's start working at 1" beats "we'll begin in the early afternoon".
 - **Short.** The archive's own apology when it isn't — "Apologies for the

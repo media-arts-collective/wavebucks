@@ -67,6 +67,16 @@ export const DEVICES = [
     no: '',
   },
   {
+    // 29% of the archive, and 0 of 24 generated emails. The largest single gap
+    // the duel has turned up. Two rounds were decided on it outright -- "AI
+    // censored the bondage word", "vulgarity which AI will not voluntarily do".
+    // This is not coarseness added for its own sake; it is the register the
+    // list has actually read for a decade, from the account that runs it.
+    key: 'crude', p: 0.29,
+    yes: 'Be blunt where the archive is blunt. It calls things bullshit, tells people who put a child\'s head in the cabinet that they are a fucking idiot, and writes "Butt juices." as a whole sentence. Do not sand this off, and do not reach for a politer word than the one that fits.',
+    no: '',
+  },
+  {
     key: 'semicolon', p: 0.22,
     yes: '',
     no: 'No semicolons in this one.',
@@ -151,6 +161,9 @@ export const FLOURISHES = [
   'Drop a one-word parenthetical in as an aside: "(yay)", "(ha)", "(sorry)", "(probably)".',
   'Use the spoken contraction rather than the written one: "yall", "gonna", "kinda".',
   'Answer your own sentence with a two-word one. "Butt juices." "Not certain." "Standby."',
+  'Restate a sentence mid-flight rather than writing the clean version: "This build will be paced differently than the last two, which is to say: faster."',
+  'Use the shorthand you would type in a hurry: "thru", "P sure", "530" for half past five.',
+  'Mark a list with something other than plain numbers -- "1)" or "ITEM 3" -- as though you picked the format on the spot.',
 ];
 
 /** How often the archive carries at least one, measured over the pool. */

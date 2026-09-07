@@ -139,6 +139,23 @@ export function runChecks(d, notes, vault) {
     add('fail', 'signed-as-ms', 'signed or referred to as MS -- aedile is SM, and must not borrow the other figure');
   }
 
+  // The em-dash is the strongest single tell measured. Two exist in the 164
+  // archived messages of this length; the generator put them in 3 of 12 and a
+  // human reading the duel named it unprompted as "the AI trademark". Also the
+  // spaced `--`, which the archive never uses at all.
+  if (/[—–]/.test(whole) || /(?:^|\s)--(?:\s|$)/.test(whole)) {
+    add('fail', 'em-dash',
+      'contains an em-dash or a spaced `--`; the archive has two in 164 messages, and it reads as machine-written on sight');
+  }
+
+  // 92% of comparable archived messages carry at least one, averaging 3.5. The
+  // generator averaged 0.7 and only two thirds had any. Warn: a short, sober
+  // logistics note can legitimately have none.
+  if (!/!/.test(body)) {
+    add('warn', 'no-exclamation',
+      'no exclamation mark; 92% of the archive has at least one, averaging 3.5 per message');
+  }
+
   const bodyItems = itemNumbers(body);
   const subjectItems = itemNumbers(subject);
   if (!bodyItems.length) {

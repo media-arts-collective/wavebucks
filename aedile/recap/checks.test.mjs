@@ -29,9 +29,13 @@ Attendees: Me, Tyler, Zach, Adam, Alex.
 - Tyler knows someone with a gutted house. Cost unknown.
 `;
 
+// The fixture is archive-shaped on purpose. It used to open `Krewe —` and carry
+// two em-dashes, which is to say it was written the way the generator writes
+// rather than the way the list does; adding the em-dash check failed it, which
+// is the check doing its job on the first draft it ever saw.
 const CLEAN = {
-  subject: '0. THIS RECAP IS RECONSTRUCTED — the recording failed. 1. LASER HARP by next month.',
-  body: 'Krewe —\n\n' +
+  subject: '0. THIS RECAP IS RECONSTRUCTED. The recording failed. 1. LASER HARP by next month.',
+  body: 'Hi friends!\n\n' +
     '0. THIS RECAP IS RECONSTRUCTED FROM MEMORY. The recording failed. Correct it on-list.\n\n' +
     '1. LASER HARP. Working group is Tyler, Zach and Adam, meeting monthly. The relays and their 100ms delay get settled then.\n\n' +
     '2. Weekly social. Bar takeovers with video games, on Wednesdays.\n\n' +
@@ -141,6 +145,24 @@ expectClean('a list ordinal followed by a capitalised word', (() => {
   return d;
 })());
 
+
+console.log('\nthe machine-written tells');
+expectFinding('an em-dash in the body', d => {
+  d.body = d.body.replace('Cost unknown.', 'Cost unknown \u2014 nobody priced it.');
+}, 'em-dash');
+expectFinding('an em-dash in the subject', d => {
+  d.subject += ' \u2014 more to come';
+}, 'em-dash');
+expectFinding('a spaced double dash', d => {
+  d.body = d.body.replace('Cost unknown.', 'Cost unknown -- nobody priced it.');
+}, 'em-dash');
+expectWarn('a body with no exclamation mark', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace(/!/g, '.');
+  return d;
+})(), 'no-exclamation');
+expectWarn('the fixture, which greets with one, is not flagged',
+  structuredClone(CLEAN), 'no-exclamation', false);
 
 console.log('\nragged paragraph spacing');
 // 93% of comparable archived messages leave 2-4 blank lines between items. The

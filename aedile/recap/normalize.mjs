@@ -60,8 +60,23 @@ function dropFooter(s) {
   return before.replace(/\n[ \t]*-{2,}[ \t]*\n?[\s\S]*$/, '\n');
 }
 
+/** Curly quotes, and the non-breaking spaces Gmail leaves behind.
+ *
+ *  Abe never typed a curly apostrophe; his mail client made it. Measured, they
+ *  are 0.36 per 1,000 characters of the archive and 0.00 of the generated text,
+ *  so left alone they are a per-round giveaway that says nothing about who
+ *  wrote anything. Unlike the ragged spacing, which he really does type, this
+ *  is the client's hand and not his -- so it is flattened on both sides rather
+ *  than taught to the generator. */
+const TYPOGRAPHY = [
+  [/[\u2018\u2019]/g, "'"],
+  [/[\u201C\u201D]/g, '"'],
+  [/\u00a0/g, ' '],
+];
+
 export function normalize(body) {
   let s = String(body ?? '').replace(/\r\n/g, '\n');
+  for (const [re, to] of TYPOGRAPHY) s = s.replace(re, to);
   s = dropFooter(s);
   s = s.replace(QUOTED_TAIL, '');
   s = s.trimEnd();

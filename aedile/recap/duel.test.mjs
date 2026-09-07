@@ -78,6 +78,17 @@ const FOOTED = REAL + '\n\n-- \nYou received this message because you are subscr
 ok('the Groups footer is cut', !normalize(FOOTED).includes('You received this message'));
 ok('the message above the footer survives', normalize(FOOTED).includes('2. Storage tonight'));
 
+console.log('\nthe mail client\'s hand is flattened, not the author\'s');
+// Curly quotes are Gmail's doing, not Abe's: 0.36 per 1k chars of archive
+// against 0.00 generated, which is a per-round giveaway about nothing.
+check('curly apostrophes are straightened',
+  normalize('We\u2019re on. Don\u2019t be late.'), "We're on. Don't be late.");
+check('curly double quotes are straightened',
+  normalize('He called it \u201Cthe Livestream\u201D.'), 'He called it "the Livestream".');
+check('a non-breaking space becomes a space',
+  normalize('noon\u00a0tomorrow'), 'noon tomorrow');
+ok('ragged spacing is still untouched by it', normalize(REAL).includes('\n\n\n\n'));
+
 console.log('\nan initials-only sign-off is still caught');
 check('bare MS with no <3', /\bMS\b/.test(normalize('Some body text.\n\nMS')), false);
 check('bare SM with no <3', /\bSM\b/.test(normalize('Some body text.\n\nSM')), false);

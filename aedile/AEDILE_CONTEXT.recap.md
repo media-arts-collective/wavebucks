@@ -153,6 +153,22 @@ whole pool and a reader picks one out instantly as machine-written. It was
 named unprompted as "the AI trademark" the first time this was tested. Use a
 full stop, a comma, or brackets.
 
+**Items are not the same size, and they are not one idea each.** This is the
+single most-named difference when a reader picks the generated email out of a
+pair: "too tidy", three times in one sitting, plus "AI breaks it into numbers by
+topic, which is legitimately helpful. Abe smashes ideas together in the same
+list item."
+
+Measured over the archive, a numbered item averages 300 characters and the
+generated ones average 302, so length is not the problem. The SPREAD is: the
+archive's items vary by 0.82 of their mean and the generated ones by 0.60. Real
+items run from a single line to five paragraphs in the same email.
+
+So: let one item be a single sentence. Let another run long and carry three
+loosely related things that happened to come up together, because they belong
+to the same evening or the same person rather than the same topic. Do not
+reorganise the meeting into a clean taxonomy. It was not clean.
+
 **Do not finish the thought.** The archive stops well before a machine would.
 Asked whether a venue was confirmed, it wrote "yay". One word, and on to the
 next item. It writes "Standby for updates." and stops.

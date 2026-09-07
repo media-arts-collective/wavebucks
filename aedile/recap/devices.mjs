@@ -33,6 +33,16 @@
  *  `style.mjs` if the pool changes; these are not guesses. */
 export const DEVICES = [
   {
+    // 16% of archived messages open straight into the substance with no
+    // greeting at all -- "GMORNING, you wonderful, decent, kind, creative,
+    // perfect people, you" is a greeting; "Some quick art guidelines for
+    // digital throws." is not. A reader named the missing greeting twice in one
+    // sitting while picking the real email out of a pair.
+    key: 'greeting', p: 0.84,
+    yes: '',
+    no: 'Open straight into the substance. No greeting line at all.',
+  },
+  {
     key: 'numberedList', p: 0.82,
     yes: 'Number the items.',
     no: 'Do NOT number anything. Write it as prose, with a plain label if it needs one ("Clean-up: we will get as much done as we can on Sunday"). About one archived email in five is written this way, and a short one usually is.',
@@ -152,7 +162,6 @@ export function devicesBlock(hand, flourish, typo) {
 export const FLOURISHES = [
   'Stretch a word out for emphasis, the way someone says it aloud ("we juuuuuust found out", "sooooo close").',
   'Repeat a word for stress rather than reaching for a stronger one ("we really really very much really need people").',
-  'Sign off with more than one heart -- `<3 <3 <3` -- instead of the usual single one.',
   'Let a laugh onto the page in capitals: HAHAHA, or HA, as its own reaction.',
   'Hang an asterisk footnote off a line, and answer it at the bottom. It may answer itself again.',
   'Number something oddly on purpose: a `0.5` between two items, or a `2b`, as though the list was written in the order it was thought of.',
@@ -168,6 +177,20 @@ export const FLOURISHES = [
 
 /** How often the archive carries at least one, measured over the pool. */
 export const FLOURISH_RATE = 0.40;
+
+/** Rarer than the rest and dealt separately, because at 1 of 14 flourishes it
+ *  came out at ~2.9% of emails against the archive's 1%. A reader clocked it as
+ *  "faked me out with the special signature" and immediately asked what rate
+ *  would be too obvious -- which is the right question, and the answer is that
+ *  a signature variant is the most memorable thing in the email. */
+export const HEART_VARIANT_RATE = 0.01;
+
+export function dealHeartVariant(seed) {
+  const rand = seed === undefined ? Math.random : rng(String(seed) + ':heart');
+  return rand() < HEART_VARIANT_RATE
+    ? 'Sign off with more than one heart -- `<3 <3 <3` -- instead of the usual single one.'
+    : null;
+}
 
 /** Deal at most one flourish. Same seeding contract as dealDevices. */
 export function dealFlourish(seed) {

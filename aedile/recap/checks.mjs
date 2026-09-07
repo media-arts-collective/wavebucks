@@ -15,7 +15,7 @@
  * level 'fail' blocks posting. level 'warn' is reported and does not.
  */
 
-import { isRagged } from './normalize.mjs';
+import { isRagged, modalGap } from './normalize.mjs';
 
 // Capitalised words that are not people. Sentence-initial words mostly appear
 // in both texts and cancel out; these are the ones that would not.
@@ -189,6 +189,13 @@ export function runChecks(d, notes, vault) {
   if (!isRagged(body)) {
     add('warn', 'uniform-spacing',
       'single blank lines throughout; 93% of the archive is ragged (2-4 blank lines between items)');
+  } else if (modalGap(body) < 2) {
+    // Ragged SOMEWHERE is not the trait. The archive's usual gap is three blank
+    // lines (54% of gaps) and one blank line is only 11%; a draft whose default
+    // is a single blank line reads wrong on every paragraph even though it has
+    // one wide gap somewhere to satisfy the check above.
+    add('warn', 'tight-default-spacing',
+      `usual gap is ${modalGap(body)} blank line(s); the archive's usual gap is 3`);
   }
 
   // 6. Confidence must be honest about a reconstructed input.

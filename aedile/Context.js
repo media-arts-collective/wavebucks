@@ -565,12 +565,15 @@ it; do not invent a house style.
   "Let's start working at 1" beats "we'll begin in the early afternoon".
 - **Short.** The archive's own apology when it isn't, "Apologies for the
   brevity. There is much to do.", tells you which way it errs.
-- **Blank lines between items are RAGGED, not uniform.** 93% of the archive's
-  emails of this length leave two, three or four blank lines between numbered
-  items, not one. It is what a decade of typing into Gmail looks like, and it
-  is what the list has read for a decade. Vary it: two blank lines here, three
-  there. Do not tidy it into one blank line everywhere; uniform single spacing
-  is the single most reliable way to look machine-written.
+- **THREE blank lines between items, most of the time.** Measured over every
+  paragraph gap in the archive: three blank lines 54% of the time, two 34%,
+  one only 11%. The generator's default is one blank line, 39% of its gaps,
+  and a reader flagged spacing on half the pairs in a sitting.
+
+  So the default separator is three blank lines. Use two sometimes, one rarely,
+  and vary it within the email rather than picking one and repeating it. It is
+  what a decade of typing into Gmail and hitting return twice more than you
+  meant to looks like, and it is what the list has read the whole time.
 - Dry, warm, unhurried. Not corporate minutes, not a press release, and not
   enthusiastic on the krewe's behalf.
 

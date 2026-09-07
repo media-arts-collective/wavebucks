@@ -97,3 +97,19 @@ export function normalize(body) {
  *  Reported per burst: if the generated side is far off the pool's 93%, the
  *  prompt change did not take and the burst will be won on whitespace. */
 export const isRagged = body => /\n\s*\n\s*\n/.test(String(body ?? ''));
+
+/** The MODAL paragraph gap, in blank lines.
+ *
+ *  isRagged above asks only whether a three-line gap appears anywhere, and it
+ *  answered yes for 12 of 12 generated emails while they were still visibly
+ *  wrong. Measured properly: 54% of the archive's gaps are three blank lines
+ *  and 11% are one; the generator's were 17% and 39%. Presence was never the
+ *  question -- the DEFAULT is. Same error as measuring an item's length when
+ *  the tell was its spread. */
+export function modalGap(body) {
+  const gaps = (String(body ?? '').match(/\n{2,}/g) || []).map(g => g.length - 1);
+  if (!gaps.length) return 0;
+  const counts = {};
+  for (const g of gaps) counts[g] = (counts[g] || 0) + 1;
+  return Number(Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]);
+}

@@ -15,6 +15,8 @@
  * level 'fail' blocks posting. level 'warn' is reported and does not.
  */
 
+import { isRagged } from './normalize.mjs';
+
 // Capitalised words that are not people. Sentence-initial words mostly appear
 // in both texts and cancel out; these are the ones that would not.
 const NOT_A_NAME = new Set([
@@ -151,9 +153,25 @@ export function runChecks(d, notes, vault) {
   // 5. Motifs the corpus says are near-universal. Warn only: a short recap
   //    legitimately might not shout, and the counts are of THREADS not of
   //    obligations.
+  // The vault's own count for this motif is 622 of 628 threads, which is a
+  // broken detector -- its three example snippets ("Hi   throws: 8640 Nelson
+  // Street...", "Good job, everyone!...") contain no ALL-CAPS at all. Measured
+  // over messages.jsonl the real rate is 40%. The check is still worth firing;
+  // quoting the vault's number at the operator was repeating a fabrication, so
+  // it now cites the measured figure instead.
   if (vault?.motifs?.['all-caps-emphasis'] && !/\b[A-Z]{4,}\b/.test(body)) {
     add('warn', 'no-caps',
-      `no ALL-CAPS emphasis; the corpus carries it in ${vault.motifs['all-caps-emphasis']} threads`);
+      'no ALL-CAPS emphasis; 40% of the archive\'s messages carry it');
+  }
+
+  // Ragged paragraph spacing -- two to four blank lines between items, not one.
+  // 93% of comparable archived messages have it (152 of the 164 that are
+  // 400-4000 chars and signed). Uniform single spacing is the most reliable
+  // way for a generated recap to look generated. Warn, not fail: a three-item
+  // recap can legitimately be too short to show the pattern.
+  if (!isRagged(body)) {
+    add('warn', 'uniform-spacing',
+      'single blank lines throughout; 93% of the archive is ragged (2-4 blank lines between items)');
   }
 
   // 6. Confidence must be honest about a reconstructed input.

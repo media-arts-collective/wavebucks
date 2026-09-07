@@ -8,3 +8,10 @@ Thumbs.db
 
 # Claude Code local state (per-developer, not shared)
 .claude/
+
+# Voice-duel burst data. wavebucks is a PUBLIC repo and these carry verbatim
+# private mailing-list messages by named krewe members. duel.mjs writes them;
+# aedile/recap/duel.html stays an empty template and the filled page is
+# generated outside the tree. Never commit either.
+aedile/recap/pairs.json
+aedile/recap/*.page.html

@@ -28,7 +28,7 @@
 import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runChecks, report } from './checks.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -86,7 +86,7 @@ function intake(path) {
  *  things a machine can use. The motif counts become the check's expectations,
  *  and real archived recaps become few-shot examples -- far stronger grounding
  *  than describing the form in prose and hoping. */
-function readVault() {
+export function readVault() {
   const motifs = {};
   for (const line of readFileSync(join(VAULT, 'voice/Index.md'), 'utf8').split('\n')) {
     const m = line.match(/\[\[([a-z0-9-]+)\|[^\]]*\]\]\s*\((\d+) threads\)/i);
@@ -100,9 +100,19 @@ function readVault() {
     'thank-you-to-everyone-for-a-good-meeting-i-think-that-our-c-IO3RQJWWafk.md',
   ].map(f => {
     const raw = readFileSync(join(VAULT, 'threads', f), 'utf8');
-    // Drop the YAML frontmatter and the link header; keep the message body.
-    const body = raw.split(/^---$/m).slice(2).join('---');
-    return body.replace(/^\s*#.*$/gm, '').replace(/^\s*-\s+\*\*.*$/gm, '').trim();
+    // A thread file is frontmatter, a link header, then one section per message
+    // headed `## <date> -- [[people/...]]`. Take the FIRST message only.
+    //
+    // This used to be `split(/^---$/m).slice(2).join('---')`, which kept every
+    // LATER message too -- so REAL RECAP 1 was being shown to the model with a
+    // reply pasted onto the end of it reading `Brandon Bales / WBBALES.COM`,
+    // plus the horizontal rules between messages. An exemplary recap that ends
+    // in someone else's signature block teaches exactly that.
+    const first = (raw.split(/^## /m)[1] || '').split('\n').slice(1).join('\n');
+    return first
+      .replace(/^\s*-\s+\*\*.*$/gm, '')  // `- **Thread URL:** ...` bullets
+      .replace(/^\s*---\s*$/gm, '')       // the rule that closed the section
+      .trim();
   });
 
   const people = readFileSync(join(VAULT, 'Index.md'), 'utf8');
@@ -114,7 +124,7 @@ function readVault() {
 /** Pluggable, per the plan: whichever backing is available. The generator does
  *  not know which ran. Apps Script would supply a third
  *  (AnthropicClient.getJsonDecision) without this file changing shape. */
-function callModel(systemPrompt, userContent) {
+export function callModel(systemPrompt, userContent) {
   const backing = process.env.ANTHROPIC_API_KEY ? callApi : callCli;
   // A long generation over a slow link drops sometimes -- the first real run
   // died on "Connection lost mid-response". That is worth retrying and not
@@ -134,8 +144,14 @@ function callModel(systemPrompt, userContent) {
 
 function callCli(systemPrompt, userContent) {
   console.error('-- model: claude -p');
-  return execFileSync('claude', ['-p', '--append-system-prompt', systemPrompt, userContent],
-    { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+  // The notes go in on STDIN, not as an argv positional. As a positional, any
+  // input whose first character is `-` is parsed by the CLI as an option and
+  // the run dies with `error: unknown option '- rental sweeper broken...'`.
+  // Notes that open with a bullet are not exotic -- that is what notes look
+  // like -- and the failure is total, three retries deep, with the whole file
+  // quoted back as the option name.
+  return execFileSync('claude', ['-p', '--append-system-prompt', systemPrompt],
+    { input: userContent, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
 }
 
 function callApi(systemPrompt, userContent) {
@@ -156,7 +172,7 @@ function callApi(systemPrompt, userContent) {
 
 /** The model is asked for JSON and told not to fence it; it fences it anyway
  *  often enough that AnthropicClient.js strips fences too. Same treatment here. */
-function parseDecision(text) {
+export function parseDecision(text) {
   const cleaned = text.trim()
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```$/, '')
@@ -176,7 +192,7 @@ function contextBody(name) {
   return s.slice(s.indexOf('\n## ')).trim();
 }
 
-function buildSystemPrompt(vault) {
+export function buildSystemPrompt(vault) {
   const examples = vault.examples
     .map((e, i) => `--- REAL RECAP ${i + 1}, written by the krewe's own voice ---\n${e}`)
     .join('\n\n');
@@ -328,4 +344,10 @@ function render(d) {
   ].join('\n');
 }
 
-main(process.argv);
+// Only when run directly. duel.mjs imports readVault/buildSystemPrompt/
+// callModel/parseDecision from here so the game exercises the SAME prompt the
+// product uses -- a second copy would drift, which is precisely how Context.js
+// came to request a field MeetingRecap had stopped reading.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main(process.argv);
+}

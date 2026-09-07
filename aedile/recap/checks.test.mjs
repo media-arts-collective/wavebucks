@@ -69,6 +69,23 @@ function expectClean(label, d) {
   }
 }
 
+
+/** Warn-level findings. The spacing and caps checks are advisory -- they do not
+ *  block a post -- so `ids()` above, which filters to level 'fail', cannot see
+ *  them. */
+const warns = d => runChecks(d, NOTES, VAULT).filter(f => f.level === 'warn').map(f => f.id);
+
+function expectWarn(label, d, wanted, present = true) {
+  const got = warns(d);
+  const ok = got.includes(wanted) === present;
+  if (ok) { passed++; console.log(`  ok   ${label}`); }
+  else {
+    failed++;
+    console.log(`  FAIL ${label}`);
+    console.log(`       expected "${wanted}" ${present ? 'present' : 'absent'}, got [${got.join(', ') || 'none'}]`);
+  }
+}
+
 console.log('recap checks — negative cases\n');
 
 console.log('a clean draft passes');
@@ -123,6 +140,17 @@ expectClean('a list ordinal followed by a capitalised word', (() => {
   d.body += '\n\n4. Someone should follow up.';
   return d;
 })());
+
+
+console.log('\nragged paragraph spacing');
+// 93% of comparable archived messages leave 2-4 blank lines between items. The
+// clean fixture uses one throughout, which is what a generated recap looks like.
+expectWarn('uniform single blank lines are flagged', structuredClone(CLEAN), 'uniform-spacing');
+expectWarn('ragged spacing is not flagged', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace(/\n\n/g, '\n\n\n');
+  return d;
+})(), 'uniform-spacing', false);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

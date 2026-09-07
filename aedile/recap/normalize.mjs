@@ -42,6 +42,11 @@ const QUOTED_TAIL = /\n[ \t]*(?:On\b[^\n]{0,160}\bwrote:[ \t]*$|>)[\s\S]*$/m;
 
 const EMAIL = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
 
+/** Phone numbers, for the same reason as addresses: they only ever appear on
+ *  the real side, so they are a free tell, and they are somebody's actual
+ *  number. A burst turned up `Call me at 603-520-4579`. */
+const PHONE = /\b(?:\+?1[-. ]?)?\(?\d{3}\)?[-. ]?\d{3}[-. ]?\d{4}\b/g;
+
 /** `<3` then the initials, whether they sit on the same line or the next one.
  *  Both real (`<3\nMS`) and generated (`<3 SM`) forms, one pattern. */
 const SIGNOFF_INITIALS = /(<3)(?:[ \t]*\r?\n[ \t]*|[ \t]+)(?:MS|SM)\b[ \t]*$/;
@@ -84,6 +89,7 @@ export function normalize(body) {
   s = s.trimEnd();
   s = s.replace(BARE_INITIALS, '');
   s = s.replace(EMAIL, 'someone@example.com');
+  s = s.replace(PHONE, '555-0100');
   return s.trim();
 }
 

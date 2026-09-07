@@ -105,11 +105,13 @@ export function dealDevices(seed) {
  *  say are dropped: "no whole line in capitals" is noise, and a prompt that
  *  lists every device every time is teaching the model that every device is
  *  always in play, which is the habit being corrected. */
-export function devicesBlock(hand) {
+export function devicesBlock(hand, flourish, typo) {
   const lines = DEVICES
     .map(d => (hand[d.key] ? d.yes : d.no))
     .filter(Boolean)
     .map(s => `- ${s}`);
+  if (flourish) lines.push(`- ${flourish}`);
+  if (typo) lines.push(`- ${typo.replace(/\n/g, '\n  ')}`);
   if (!lines.length) return '';
   return [
     '## For this email',
@@ -120,4 +122,77 @@ export function devicesBlock(hand) {
     '',
     ...lines,
   ].join('\n');
+}
+
+/** A flourish is not a device.
+ *
+ *  Devices are things the archive does OFTEN, and the fix was to deal each at
+ *  its rate. Flourishes are things it does RARELY and never the same way twice:
+ *  `juuuuuuust`, `<3 <3 <3`, numbering that goes `-1, 0, 0.5`, a nested
+ *  asterisk footnote answering its own joke, `really really very much really`.
+ *
+ *  Measured, 40% of archived messages carry at least one and the generator
+ *  managed 17%. But the rate is not the interesting part: no single flourish is
+ *  above 11%, so instructing any one of them would fire every time and become a
+ *  tell of its own. The variety IS the trait. So one is drawn from the menu,
+ *  in roughly two messages in five, and it is a different one each time.
+ *
+ *  Nothing here is an error. Every entry is something a person chose to write.
+ *  Typos are a separate question and deliberately not in this list. */
+export const FLOURISHES = [
+  'Stretch a word out for emphasis, the way someone says it aloud ("we juuuuuust found out", "sooooo close").',
+  'Repeat a word for stress rather than reaching for a stronger one ("we really really very much really need people").',
+  'Sign off with more than one heart -- `<3 <3 <3` -- instead of the usual single one.',
+  'Let a laugh onto the page in capitals: HAHAHA, or HA, as its own reaction.',
+  'Hang an asterisk footnote off a line, and answer it at the bottom. It may answer itself again.',
+  'Number something oddly on purpose: a `0.5` between two items, or a `2b`, as though the list was written in the order it was thought of.',
+  'Give one item a bare header line ("Clean-up:", "Tomorrow:") instead of a number.',
+  'Let punctuation run for emphasis somewhere: "!!!" or "?!".',
+  'Drop a one-word parenthetical in as an aside: "(yay)", "(ha)", "(sorry)", "(probably)".',
+  'Use the spoken contraction rather than the written one: "yall", "gonna", "kinda".',
+  'Answer your own sentence with a two-word one. "Butt juices." "Not certain." "Standby."',
+];
+
+/** How often the archive carries at least one, measured over the pool. */
+export const FLOURISH_RATE = 0.40;
+
+/** Deal at most one flourish. Same seeding contract as dealDevices. */
+export function dealFlourish(seed) {
+  const rand = seed === undefined ? Math.random : rng(String(seed) + ':flourish');
+  if (rand() >= FLOURISH_RATE) return null;
+  return FLOURISHES[Math.floor(rand() * FLOURISHES.length)] || FLOURISHES[0];
+}
+
+/** An uncorrected slip, at the rate the archive has them.
+ *
+ *  Ruled in by Zach 2026-09-07, having picked the generated email out of a pair
+ *  three times in twelve on literal errors: `GRACIUOS`, `t's beautiful`,
+ *  `I'd ilke us`. He types fast, does not reread, and never goes back.
+ *
+ *  This is the one dealt thing that is not simply a style, so it is fenced. A
+ *  slip in a date, a time, an address, a dollar figure, a URL or a person's
+ *  name is not a typo, it is a factual error in mail a director forwards to
+ *  about forty people -- and getting those exactly right is the whole reason
+ *  the recap tier is trusted at all. The fence is in the instruction, and
+ *  checks.mjs independently fails any figure or name that is not in the input,
+ *  so a slip that lands on one is caught rather than sent. */
+export const TYPO_RATE = 0.10;
+
+export const TYPO_INSTRUCTION = [
+  'Leave exactly one uncorrected typo somewhere in an ordinary word: two letters',
+  'transposed, a dropped letter, or a word accidentally written twice. The kind',
+  'someone makes typing fast and never rereading. Do not flag it, apologise for',
+  'it, or draw attention to it.',
+  '',
+  'NOT in a date, a time, an address, a dollar figure, a URL, or anybody\'s name.',
+  'A slip in any of those is not a typo, it is a wrong fact going out to the',
+  'whole list.',
+].join('\n');
+
+/** Deal a typo, or not. Seeded separately so it varies independently of the
+ *  flourish -- an email can have both, either, or neither, which is what the
+ *  archive looks like. */
+export function dealTypo(seed) {
+  const rand = seed === undefined ? Math.random : rng(String(seed) + ':typo');
+  return rand() < TYPO_RATE ? TYPO_INSTRUCTION : null;
 }

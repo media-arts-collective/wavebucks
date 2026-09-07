@@ -30,7 +30,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runChecks, report } from './checks.mjs';
-import { dealDevices, devicesBlock } from './devices.mjs';
+import { dealDevices, dealFlourish, dealTypo, devicesBlock } from './devices.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const AEDILE = join(HERE, '..');
@@ -229,14 +229,29 @@ function callApi(systemPrompt, userContent) {
 /** The model is asked for JSON and told not to fence it; it fences it anyway
  *  often enough that AnthropicClient.js strips fences too. Same treatment here. */
 export function parseDecision(text) {
-  const cleaned = text.trim()
+  let cleaned = text.trim()
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```$/, '')
     .trim();
+
+  // The model sometimes prefaces the JSON with a line about the JSON -- one
+  // real response opened `3366 chars, no semicolons, no em-dashes.` before the
+  // fence, apparently reporting back against the per-email device list. Take
+  // the outermost braces rather than assuming the answer starts at character
+  // zero.
+  if (!cleaned.startsWith('{')) {
+    const from = cleaned.indexOf('{'), to = cleaned.lastIndexOf('}');
+    if (from > -1 && to > from) cleaned = cleaned.slice(from, to + 1);
+  }
+
   try {
     return JSON.parse(cleaned);
   } catch (err) {
-    die(`model response was not valid JSON.\n--- raw ---\n${text.slice(0, 2000)}`, 5);
+    // THROWS, never exits. This used to call die(), which is process.exit(),
+    // which no caller can catch -- so one unparseable response killed a whole
+    // burst mid-flight and took every pair built before it. The pool catches
+    // this and loses one specimen; main() below turns it back into exit 5.
+    throw new Error(`model response was not valid JSON.\n--- raw ---\n${text.slice(0, 800)}`);
   }
 }
 
@@ -356,11 +371,18 @@ function main(argv) {
   // touches what the recap SAYS. A single generation cannot reproduce a
   // corpus frequency on its own, so the caller rolls and tells it.
   const hand = dealDevices();
+  const flourish = dealFlourish();
+  const typo = dealTypo();
   const dealt = Object.entries(hand).filter(([, v]) => v).map(([k]) => k);
   console.error(`-- devices: ${dealt.join(', ') || 'none'}`);
 
-  const prompt = [buildSystemPrompt(vault), devicesBlock(hand)].filter(Boolean).join('\n\n');
-  const decision = parseDecision(callModel(prompt, notes));
+  const prompt = [buildSystemPrompt(vault), devicesBlock(hand, flourish, typo)].filter(Boolean).join('\n\n');
+  let decision;
+  try {
+    decision = parseDecision(callModel(prompt, notes));
+  } catch (err) {
+    die(String(err.message || err), 5);
+  }
 
   const findings = runChecks(decision, notes, vault);
 

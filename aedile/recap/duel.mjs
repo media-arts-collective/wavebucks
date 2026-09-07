@@ -38,7 +38,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { readVault, buildSystemPrompt, callModelAsync, parseDecision } from './redige.mjs';
 import { normalize, isRagged } from './normalize.mjs';
-import { dealDevices, devicesBlock } from './devices.mjs';
+import { dealDevices, dealFlourish, dealTypo, devicesBlock } from './devices.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const VAULT = process.env.KREWE_VAULT
@@ -189,10 +189,12 @@ async function buildPair(specimen, systemPrompt, seed) {
   // the point is to test the prompt the product actually uses.
   // Seeded on the specimen so a burst reproduces its hands exactly from --seed.
   const hand = dealDevices(`${seed}:${specimen.id}`);
+  const flourish = dealFlourish(`${seed}:${specimen.id}`);
+  const typo = dealTypo(`${seed}:${specimen.id}`);
 
   const sized = [
     systemPrompt,
-    devicesBlock(hand),
+    devicesBlock(hand, flourish, typo),
     `## Length for this one\n\nThe finished \`body\` should be roughly ${specimen.body.length} characters. Match that; do not pad and do not truncate.`,
   ].filter(Boolean).join('\n\n');
 
@@ -205,6 +207,8 @@ async function buildPair(specimen, systemPrompt, seed) {
     date: specimen.date,
     url: specimen.url,
     hand,
+    flourish,
+    typo: Boolean(typo),
     real: normalize(specimen.body),
     ai: normalize(decision.body || ''),
     notes,

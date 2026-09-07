@@ -153,6 +153,14 @@ whole pool and a reader picks one out instantly as machine-written. It was
 named unprompted as "the AI trademark" the first time this was tested. Use a
 full stop, a comma, or brackets.
 
+**Do not finish the thought.** The archive stops well before a machine would.
+Asked whether a venue was confirmed, it wrote "yay", not "it isn't confirmed
+yet, so I'll report back when it is". It writes "Standby for updates." and
+stops. The instinct to add the clause that explains the obvious, or to reassure
+the reader that you will follow up, is the clearest remaining machine habit: a
+reader named it "overexplains" while picking the generated email out of a pair.
+When an item is settled, say it and move on.
+
 **Use parentheses.** The archive's asides are where its humour lives, and they
 sit in the middle of the message, not tacked on at the end: "(It was probably
 Wednesday. Not certain.)", "(Brandon and/or Joseph, feel free to grab the

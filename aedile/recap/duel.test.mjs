@@ -23,7 +23,8 @@ import { fileURLToPath } from 'node:url';
 
 import { normalize, isRagged } from './normalize.mjs';
 import { leaks, carriedByNotes } from './duel.mjs';
-import { dealDevices, devicesBlock, DEVICES } from './devices.mjs';
+import { dealDevices, dealFlourish, dealTypo, devicesBlock, DEVICES, FLOURISHES } from './devices.mjs';
+import { parseDecision } from './redige.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const AEDILE = join(HERE, '..');
@@ -68,6 +69,7 @@ check('the generated side reads as uniform', isRagged(normalize(AI)), false);
 console.log('\nwhat only ever appears on the real side is removed');
 ok('addresses are redacted', normalize(REAL).includes('someone@example.com'));
 check('no real address survives', /kreweofvaporwave@gmail/.test(normalize(REAL)), false);
+check('phone numbers are redacted too', normalize('Call me at 603-520-4579.'), 'Call me at 555-0100.');
 
 // Invented, not lifted from the archive: wavebucks is public and a fixture is
 // not a reason to reprint a member's private mail in it.
@@ -146,6 +148,40 @@ ok('the block names every device it was dealt',
   devicesBlock(Object.fromEntries(DEVICES.map(d => [d.key, true]))).includes('Number the items.'));
 ok('the block tells a no-list email not to number',
   devicesBlock(Object.fromEntries(DEVICES.map(d => [d.key, false]))).includes('Do NOT number anything'));
+
+console.log('\nthe rare things are dealt too, and vary');
+{
+  const N = 5000;
+  let f = 0, t = 0; const kinds = new Set();
+  for (let i = 0; i < N; i++) {
+    const fl = dealFlourish('s' + i); if (fl) { f++; kinds.add(fl); }
+    if (dealTypo('s' + i)) t++;
+  }
+  ok(`a flourish lands near 40% (got ${(100 * f / N).toFixed(1)}%)`, Math.abs(100 * f / N - 40) < 3);
+  ok(`a typo lands near 10% (got ${(100 * t / N).toFixed(1)}%)`, Math.abs(100 * t / N - 10) < 2);
+  // The variety IS the trait: one flourish used every time would be its own tell.
+  check('every flourish gets used', kinds.size, FLOURISHES.length);
+}
+ok('the typo instruction fences off facts',
+  dealTypo('force') === null || /NOT in a date, a time, an address/.test(dealTypo('force') || ''));
+{
+  // Find a seed that deals a typo, and assert the fence is in what gets sent.
+  let withTypo = null;
+  for (let i = 0; i < 200 && !withTypo; i++) withTypo = dealTypo('t' + i);
+  ok('a dealt typo carries its fence', /anybody's name/.test(withTypo || ''));
+}
+
+console.log('\nan unparseable answer costs one specimen, not the burst');
+// parseDecision used to call die(), which is process.exit(), which no pool can
+// catch: one bad response killed a burst and every pair built before it.
+check('JSON behind a prose preamble is recovered',
+  parseDecision('3366 chars, no semicolons.\n\n```json\n{"subject":"s","body":"b"}\n```'),
+  { subject: 's', body: 'b' });
+{
+  let threw = false;
+  try { parseDecision('not json at all'); } catch (_) { threw = true; }
+  ok('garbage throws rather than exiting the process', threw);
+}
 
 console.log('\nthe two copies of each prompt agree');
 // redige.mjs reads the .md files; Apps Script reads the constants in

@@ -173,6 +173,26 @@ function buildPair(specimen, systemPrompt) {
   };
 }
 
+
+/** Fill the committed template with a burst and write a playable page.
+ *
+ *  The page is generated, never committed: it carries verbatim private
+ *  messages by named krewe members and wavebucks is a public repo. duel.html
+ *  in the tree stays an empty template. */
+function writePage(pairs, seed, out) {
+  const tpl = readFileSync(join(HERE, 'duel.html'), 'utf8');
+  if (!tpl.includes(PAGE_SLOT)) die('duel.html has no injection point', 4);
+  // `<` is escaped because the payload is spliced INSIDE a <script> block: one
+  // `</script>` anywhere in a fifteen-year archive would end the script early
+  // and render the bench blank with the rest of the email as loose text.
+  // `\u003c` is valid in a JS string and decodes back to `<`, so `<3` survives.
+  const payload = JSON.stringify({ seed, pairs: pairs.map(p => ({
+    id: p.id, date: p.date, real: p.real, ai: p.ai,
+  })) }).replace(/</g, '\\u003c');
+  writeFileSync(out, tpl.replace(PAGE_SLOT, payload));
+  console.error(`-- page: ${out} (${pairs.length} pairs)`);
+}
+
 // --- main --------------------------------------------------------------------
 
 function arg(args, name, fallback) {
@@ -186,8 +206,19 @@ function arg(args, name, fallback) {
 function main(argv) {
   const args = argv.slice(2);
   if (args.includes('--help')) {
-    console.error('usage: duel.mjs [--n 12] [--out pairs.json] [--page FILE] [--used FILE] [--seed N]');
+    console.error('usage: duel.mjs [--n 12] [--out pairs.json] [--page FILE] [--used FILE] [--seed N]\n       duel.mjs --from pairs.json --page FILE');
     process.exit(2);
+  }
+
+  // Rebuild a page from a burst already on disk -- after a template edit, or
+  // when the burst was built by an older copy of this file. No model calls.
+  const from = arg(args, '--from', null);
+  if (from) {
+    const burst = JSON.parse(readFileSync(from, 'utf8'));
+    const page = arg(args, '--page', null);
+    if (!page) die('--from needs --page', 2);
+    writePage(burst.pairs || [], burst.seed || 0, page);
+    return;
   }
 
   const n = Number(arg(args, '--n', 12));
@@ -249,18 +280,8 @@ function main(argv) {
   }
   if (!skewed.length && !leaky.length) console.error('-- no length skew, no phrasing leak');
 
-  // The page is generated, never committed: it carries real messages by real
-  // krewe members, and duel.html in the repo stays an empty template.
   const page = arg(args, '--page', null);
-  if (page) {
-    const tpl = readFileSync(join(HERE, 'duel.html'), 'utf8');
-    const payload = JSON.stringify({ seed, pairs: pairs.map(p => ({
-      id: p.id, date: p.date, real: p.real, ai: p.ai,
-    })) });
-    if (!tpl.includes(PAGE_SLOT)) die('duel.html has no injection point', 4);
-    writeFileSync(page, tpl.replace(PAGE_SLOT, payload));
-    console.error(`-- page: ${page}`);
-  }
+  if (page) writePage(pairs, seed, page);
 }
 
 // Only when run directly, so duel.test.mjs can import `leaks` without

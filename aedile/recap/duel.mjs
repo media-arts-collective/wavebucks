@@ -152,7 +152,14 @@ export function leaks(source, text, n = 10) {
  *  dropped is a fact the notes preserved, not phrasing the generator lifted. */
 const STOP = new Set(['a', 'an', 'the', 'of', 'in', 'on', 'at', 'to', 'and', 'or',
   'for', 'with', 'is', 'are', 'be', 'will', 'we', 'our', 'it', 'this', 'that',
-  'from', 'by', 'as', 'up', 'out', 'over', 'into', 'there', 'their', 'some']);
+  'from', 'by', 'as', 'up', 'out', 'over', 'into', 'there', 'their', 'some',
+  // Connectives the de-voicing strips and grammar puts straight back. `both`
+  // cost a false positive on its own: the notes said "emails on Mailchimp and
+  // Google Groups until end of month" and the generated line said "on both
+  // Mailchimp and Google Groups until the end of the month", which is the only
+  // way to write it once you have the fact.
+  'both', 'until', 'then', 'after', 'before', 'all', 'any', 'each', 'so',
+  'but', 'if', 'when', 'while', 'have', 'has', 'had', 'been', 'was', 'were']);
 
 const content = s => (String(s).toLowerCase().match(/[a-z0-9']+/g) || [])
   .filter(w => !STOP.has(w));

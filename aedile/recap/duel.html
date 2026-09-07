@@ -26,7 +26,7 @@
       --bench:      #14181B;
       --bench-deep: #0E1114;
       --paper:      #F4F2EC;
-      --paper-edge: #000000;
+      --paper-edge: #0B0D0F;
       --ink:        #1A1D1F;
       --ink-soft:   #5C6165;
       --chrome:     #DCD8D0;
@@ -42,7 +42,7 @@
     --bench:      #14181B;
     --bench-deep: #0E1114;
     --paper:      #F4F2EC;
-    --paper-edge: #000000;
+    --paper-edge: #0B0D0F;
     --ink:        #1A1D1F;
     --ink-soft:   #5C6165;
     --chrome:     #DCD8D0;
@@ -408,12 +408,29 @@
     };
     results.push(rec);
     stats();
-    if (db) {
-      try { await db.collection("rounds").add(rec); }
-      catch (e) { $("save-note").textContent = "not saved (" + (e && e.code || "error") + ")"; }
-    }
+    await flush();
     i++;
     renderRound();
+  }
+
+  /* db resolves on its own schedule -- later than the first render, and up to
+     ten seconds out. A fast first round would otherwise be answered before it
+     arrived and never written anywhere. Verdicts queue in `results` and every
+     unwritten one goes out on the next flush, including the ones from before
+     db existed. */
+  async function flush() {
+    if (!db) return;
+    for (const r of results) {
+      if (r._saved) continue;
+      try {
+        const { _saved, ...row } = r;
+        await db.collection("rounds").add(row);
+        r._saved = true;
+      } catch (e) {
+        $("save-note").textContent = "not saved (" + ((e && e.code) || "error") + ")";
+        return;
+      }
+    }
   }
 
   function finish() {
@@ -459,6 +476,7 @@
     try { db = await window.claude?.use?.("db"); } catch (_) { db = null; }
     const el = $("rec");
     if (!db) { el.classList.add("off"); el.textContent = "Not recording — verdicts shown at the end"; }
+    else await flush();
   })();
 })();
 </script>

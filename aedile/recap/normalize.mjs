@@ -22,12 +22,25 @@
  *
  * What it deliberately does NOT touch:
  *
- *   - WHITESPACE. 152 of the 164 pool specimens have ragged 3+-newline
- *     paragraph spacing. The decision (Zach, 2026-09-06) was to leave it raw
- *     and teach the generator to match it, rather than collapse it on both
- *     sides -- same fairness outcome, but the generator ends up having learned
- *     a real trait instead of us having hidden one. Only the very ends are
- *     trimmed, where nothing is visible either way.
+ *   - PARAGRAPH SPACING. 152 of the 164 pool specimens have ragged 3+-newline
+ *     spacing. The decision (Zach, 2026-09-06) was to leave it raw and teach
+ *     the generator to match it, rather than collapse it on both sides -- same
+ *     fairness outcome, but the generator ends up having learned a real trait
+ *     instead of us having hidden one.
+ *
+ * What it DOES touch, and did not until 2026-09-07:
+ *
+ *   - END-OF-LINE whitespace, on both sides. This is not a change of heart
+ *     about the ruling above: blank-line RUNS are untouched and still ragged.
+ *     The NBSP flattening two entries up was creating the tell it was meant to
+ *     remove. Gmail leaves a non-breaking space at end of line constantly;
+ *     turning it into a plain space leaves a trailing space that the generated
+ *     side, which never went through Gmail, can never have. Measured: 2% of
+ *     raw archive specimens carry end-of-line whitespace, 48% carry it after
+ *     normalize(), and the duel's real side ran at 42% against the generated
+ *     side's 0%. Every burst through 11 was played on that. It is invisible
+ *     rendered and unmissable to a model reading the raw text, and the blind
+ *     judge cited "trailing double-spaces" and "stray double spaces" by name.
  *   - Greetings. "Hi friends!" against "Krewe," is exactly the kind of thing
  *     the generator should be losing rounds over.
  *   - URLs. They are facts, they survive de-voicing, and both sides may carry
@@ -90,6 +103,10 @@ export function normalize(body) {
   s = s.replace(BARE_INITIALS, '');
   s = s.replace(EMAIL, 'someone@example.com');
   s = s.replace(PHONE, '555-0100');
+  // Per LINE, so blank-line runs keep their count and stay ragged. This also
+  // repairs modalGap, whose /\n{2,}/ could not see a gap whose blank line
+  // held a space.
+  s = s.replace(/[ \t]+$/gm, '');
   return s.trim();
 }
 

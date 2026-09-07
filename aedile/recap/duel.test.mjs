@@ -21,7 +21,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { normalize, isRagged } from './normalize.mjs';
+import { normalize, isRagged, modalGap } from './normalize.mjs';
 import { leaks, carriedByNotes, units, DEVOICE_PROMPT } from './duel.mjs';
 import { dealDevices, dealFlourish, dealTypo, devicesBlock, DEVICES, FLOURISHES } from './devices.mjs';
 import { parseDecision } from './redige.mjs';
@@ -245,6 +245,26 @@ check('DEVOICE_PROMPT no longer dictates a fact taxonomy',
 // leak guard, which is the whole reason step A exists.
 check('DEVOICE_PROMPT still forbids reusing distinctive phrasing',
   /NEVER reuse a distinctive phrase/.test(DEVOICE_PROMPT), true);
+
+// The NBSP flattening was creating the tell it existed to remove. Gmail leaves
+// a non-breaking space at end of line; turning it into a plain space leaves
+// trailing whitespace the generated side can never have. It ran at 42% on the
+// real side and 0% on the generated one for eleven bursts, and the blind judge
+// named "stray double spaces" as its reason more than once.
+check('an NBSP at end of line does not become trailing whitespace',
+  /[ \t]+$/m.test(normalize('one\u00a0\ntwo')), false);
+check('trailing spaces are stripped on the generated side too',
+  normalize('a line   \n\n\nnext'), 'a line\n\n\nnext');
+// ...but the ruling stands: blank-line RUNS are still ragged on both sides.
+check('a three-newline paragraph gap survives normalize',
+  isRagged(normalize('one   \n\n\ntwo')), true);
+check('stripping does not change the gap count',
+  (normalize('one\n\n\n\ntwo').match(/\n/g) || []).length, 4);
+// A blank line holding a space used to hide the gap from modalGap entirely.
+check('modalGap sees a gap whose blank line held a space',
+  modalGap(normalize('one\n \ntwo\n \nthree')), 1);
+check('normalize is idempotent',
+  normalize(normalize('x\u00a0\n\n\ny  ')), normalize('x\u00a0\n\n\ny  '));
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

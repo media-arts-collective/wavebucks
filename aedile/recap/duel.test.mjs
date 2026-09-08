@@ -23,7 +23,8 @@ import { fileURLToPath } from 'node:url';
 
 import { normalize, isRagged, modalGap } from './normalize.mjs';
 import { leaks, carriedByNotes, units, DEVOICE_PROMPT } from './duel.mjs';
-import { dealDevices, dealFlourish, dealTypo, devicesBlock, DEVICES, FLOURISHES } from './devices.mjs';
+import { dealDevices, dealFlourish, dealTypo, dealSignoff, devicesBlock,
+         DEVICES, FLOURISHES, SIGNOFF_LEAD_INS } from './devices.mjs';
 import { parseDecision } from './redige.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -170,6 +171,36 @@ ok('the typo instruction fences off facts',
   for (let i = 0; i < 200 && !withTypo; i++) withTypo = dealTypo('t' + i);
   ok('a dealt typo carries its fence', /anybody's name/.test(withTypo || ''));
 }
+
+console.log('\nthe sign-off is dealt, not fixed');
+// The generator signed `<3 SM` at ~99% against an archive that writes `<3`
+// above the initials in 74% of MS-signed messages and something else -- or
+// nothing -- in the other 26%. Rates are measured over messages.jsonl direct,
+// NOT the duel pool: that pool is filtered to `<3 MS`, so it reads 100% `<3`
+// by construction and can teach nothing about this line.
+check('the lead-in rates are a distribution',
+  SIGNOFF_LEAD_INS.reduce((a, x) => a + x.p, 0).toFixed(6), '1.000000');
+{
+  const N = 20000, tally = {};
+  for (let i = 0; i < N; i++) {
+    const say = dealSignoff('s' + i);
+    const key = (SIGNOFF_LEAD_INS.find(x => x.say === say) || {}).key || 'heart';
+    tally[key] = (tally[key] || 0) + 1;
+  }
+  for (const { key, p } of SIGNOFF_LEAD_INS) {
+    const got = 100 * (tally[key] || 0) / N;
+    ok(`${key} lands near ${(100 * p).toFixed(1)}% (got ${got.toFixed(1)}%)`,
+      Math.abs(got - 100 * p) < 1.5);
+  }
+}
+check('the same seed deals the same sign-off', dealSignoff('abc'), dealSignoff('abc'));
+// ONE roll. The multi-heart used to be its own function rolled alongside this
+// one, so a hand could carry `<3 <3 <3` and `Best` at once and hand the model
+// two sign-offs for one email.
+ok('a hand never carries two closing lines', Array.from({ length: 2000 }, (_, i) =>
+  dealSignoff('x' + i)).every(v => v === null || SIGNOFF_LEAD_INS.some(x => x.say === v)));
+ok('the common case says nothing, leaving the prompt\'s own `<3 SM`',
+  SIGNOFF_LEAD_INS.find(x => x.key === 'heart').say === null);
 
 console.log('\nan unparseable answer costs one specimen, not the burst');
 // parseDecision used to call die(), which is process.exit(), which no pool can

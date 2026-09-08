@@ -38,7 +38,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { readVault, buildSystemPrompt, callModelAsync, parseDecision } from './redige.mjs';
 import { normalize, isRagged } from './normalize.mjs';
-import { dealDevices, dealFlourish, dealTypo, dealHeartVariant, devicesBlock } from './devices.mjs';
+import { dealDevices, dealFlourish, dealTypo, dealSignoff, devicesBlock } from './devices.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const VAULT = process.env.KREWE_VAULT
@@ -214,11 +214,11 @@ async function buildPair(specimen, systemPrompt, seed) {
   const hand = dealDevices(`${seed}:${specimen.id}`);
   const flourish = dealFlourish(`${seed}:${specimen.id}`);
   const typo = dealTypo(`${seed}:${specimen.id}`);
-  const heart = dealHeartVariant(`${seed}:${specimen.id}`);
+  const signoff = dealSignoff(`${seed}:${specimen.id}`);
 
   const sized = [
     systemPrompt,
-    devicesBlock(hand, [flourish, heart].filter(Boolean).join('\n- '), typo),
+    devicesBlock(hand, [flourish, signoff].filter(Boolean).join('\n- '), typo),
     `## Length for this one\n\nThe finished \`body\` should be roughly ${specimen.body.length} characters. Match that; do not pad and do not truncate.`,
   ].filter(Boolean).join('\n\n');
 

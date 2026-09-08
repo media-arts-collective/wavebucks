@@ -132,8 +132,15 @@ export function runChecks(d, notes, vault) {
 
   // 4. Form, from the archive. Sign-off, numbering, and the subject being the
   //    body's opening rather than a separate summary of it.
-  if (!/<3\s*SM\b/.test(body)) {
-    add('fail', 'sign-off', 'missing the `<3 SM` sign-off');
+  // The `<3` is DEALT now (devices.mjs `dealSignoff`), not mandatory: the
+  // archive writes it above the initials in 74% of MS-signed messages and
+  // writes `Best`, `xoxo`, a short line of its own, or nothing at all in the
+  // rest. Requiring it here pinned the generator to one of six shapes. What is
+  // not optional is the initials, and that they are SM.
+  const lastLine = body.trimEnd().split('\n').pop().trim();
+  if (!/^(?:<3[ \t]*)*SM$/.test(lastLine)) {
+    add('fail', 'sign-off',
+      `the last line must be the initials \`SM\`, alone or after \`<3\`; got ${JSON.stringify(lastLine)}`);
   }
   if (/\bMS\b/.test(body.replace(/<3\s*SM/g, ''))) {
     add('fail', 'signed-as-ms', 'signed or referred to as MS -- aedile is SM, and must not borrow the other figure');

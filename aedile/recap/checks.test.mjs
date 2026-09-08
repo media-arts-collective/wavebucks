@@ -175,6 +175,20 @@ expectFinding('a draft that just stops, with no initials', d => {
   d.body = d.body.replace('\n\n<3 SM', '');
 }, 'sign-off');
 
+// A heart alone, no initials. 2 of 468 archived messages close this way, and
+// it is what a human signs by hand when neither figure is theirs to claim:
+// `MS` is the archive's, `SM` is aedile's. Not malformed.
+expectClean('a bare `<3` with no initials', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('<3 SM', '<3');
+  return d;
+})());
+expectClean('several hearts and no initials', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('<3 SM', '<3 <3 <3');
+  return d;
+})());
+
 
 console.log('\nthe machine-written tells');
 expectFinding('an em-dash in the body', d => {

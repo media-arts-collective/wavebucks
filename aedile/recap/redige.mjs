@@ -30,7 +30,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runChecks, report } from './checks.mjs';
-import { dealDevices, dealFlourish, dealTypo, dealHeartVariant, devicesBlock } from './devices.mjs';
+import { dealDevices, dealFlourish, dealTypo, dealSignoff, devicesBlock } from './devices.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const AEDILE = join(HERE, '..');
@@ -373,11 +373,11 @@ function main(argv) {
   const hand = dealDevices();
   const flourish = dealFlourish();
   const typo = dealTypo();
-  const heart = dealHeartVariant();
+  const signoff = dealSignoff();
   const dealt = Object.entries(hand).filter(([, v]) => v).map(([k]) => k);
   console.error(`-- devices: ${dealt.join(', ') || 'none'}`);
 
-  const prompt = [buildSystemPrompt(vault), devicesBlock(hand, [flourish, heart].filter(Boolean).join('\n- '), typo)].filter(Boolean).join('\n\n');
+  const prompt = [buildSystemPrompt(vault), devicesBlock(hand, [flourish, signoff].filter(Boolean).join('\n- '), typo)].filter(Boolean).join('\n\n');
   let decision;
   try {
     decision = parseDecision(callModel(prompt, notes));

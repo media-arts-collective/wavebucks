@@ -178,18 +178,51 @@ export const FLOURISHES = [
 /** How often the archive carries at least one, measured over the pool. */
 export const FLOURISH_RATE = 0.40;
 
-/** Rarer than the rest and dealt separately, because at 1 of 14 flourishes it
- *  came out at ~2.9% of emails against the archive's 1%. A reader clocked it as
- *  "faked me out with the special signature" and immediately asked what rate
- *  would be too obvious -- which is the right question, and the answer is that
- *  a signature variant is the most memorable thing in the email. */
-export const HEART_VARIANT_RATE = 0.01;
+/** The line above the initials. The archive does not always write `<3`.
+ *
+ *  Census of every MS-signed message in the 400-4000 character window (n=219),
+ *  by what sits directly above the initials:
+ *
+ *      `<3` alone                                   74.0%
+ *      a short valence line ("Okay", "More soon!")  10.5%
+ *      nothing -- last content line, then MS         7.3%
+ *      xo / xoxo / XOXO                              3.7%
+ *      Best                                          2.7%
+ *      `<3` with words ("<3 you all,", "<3 all of u")1.8%
+ *
+ *  These rates are NOT from the duel pool. That pool is filtered to `<3 MS`
+ *  (`duel.mjs`), so measured there the lead-in is 100% `<3` by construction and
+ *  there is nothing to learn. Re-derive from `messages.jsonl` directly.
+ *
+ *  ONE roll, not two. The multi-heart used to be dealt by its own function
+ *  alongside this, which meant a hand could say `<3 <3 <3` and `Best` at once
+ *  and hand the model two sign-offs. These are mutually exclusive shapes of a
+ *  single line, so they are one weighted draw.
+ *
+ *  The 1% ceiling on the multi-heart is kept from that earlier measurement: a
+ *  reader clocked it as "faked me out with the special signature", and a
+ *  signature variant is the most memorable thing in the email. */
+export const SIGNOFF_LEAD_INS = [
+  // The base prompt already says `<3 SM`, so the common case says nothing.
+  { key: 'heart', p: 0.740, say: null },
+  { key: 'valence', p: 0.105, say: 'Put a short line of your own above the sign-off instead of the `<3` -- "Okay", "More soon!", "Let\'s go!", "Good night friends". Then the initials.' },
+  { key: 'none', p: 0.073, say: 'No `<3` and no closing line at all. The last item ends, and the initials are on the next line.' },
+  { key: 'xo', p: 0.037, say: 'Close with `xo` or `xoxo` instead of the `<3`, then the initials.' },
+  { key: 'best', p: 0.027, say: 'Close with a plain `Best` instead of the `<3`, then the initials.' },
+  { key: 'multiHeart', p: 0.010, say: 'Sign off with more than one heart -- `<3 <3 <3` -- instead of the usual single one.' },
+  { key: 'heartWords', p: 0.008, say: 'Put words after the heart on the closing line -- `<3 you all,` or `<3 all of u` -- then the initials.' },
+];
 
-export function dealHeartVariant(seed) {
-  const rand = seed === undefined ? Math.random : rng(String(seed) + ':heart');
-  return rand() < HEART_VARIANT_RATE
-    ? 'Sign off with more than one heart -- `<3 <3 <3` -- instead of the usual single one.'
-    : null;
+/** Draw one lead-in. Returns the instruction, or null for the ordinary `<3`
+ *  the base prompt already asks for. Seeded like the rest. */
+export function dealSignoff(seed) {
+  const rand = seed === undefined ? Math.random : rng(String(seed) + ':signoff');
+  let r = rand();
+  for (const s of SIGNOFF_LEAD_INS) {
+    if (r < s.p) return s.say;
+    r -= s.p;
+  }
+  return null;  // float slack at the tail lands on the common case
 }
 
 /** Deal at most one flourish. Same seeding contract as dealDevices. */

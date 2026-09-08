@@ -141,9 +141,39 @@ expectClean('a word capitalised after a colon', (() => {
 })());
 expectClean('a list ordinal followed by a capitalised word', (() => {
   const d = structuredClone(CLEAN);
-  d.body += '\n\n4. Someone should follow up.';
+  // BEFORE the sign-off. This used to append after it, which passed only while
+  // the sign-off check searched the whole body; it now reads the last line, so
+  // an item pasted below the initials is a draft that does not end in a
+  // sign-off -- which is the thing being checked, not what this case is about.
+  d.body = d.body.replace('\n\n<3 SM', '\n\n4. Someone should follow up.\n\n<3 SM');
   return d;
 })());
+
+// The archive does not always write `<3`. Measured over the 219 MS-signed
+// messages in the generator's length window, the line above the initials is
+// `<3` in 74%, a short line of its own in 10.5%, absent in 7.3%, `xo`/`xoxo`
+// in 3.7% and `Best` in 2.7%. devices.mjs deals these; the check has to accept
+// every one of them or the deal cannot reach a sent email.
+for (const [name, close] of [
+  ['a plain Best above the initials', 'Best'],
+  ['xoxo above the initials', 'xoxo'],
+  ['a short valence line above the initials', 'More soon!'],
+  ['the multi-heart variant', '<3 <3 <3'],
+]) {
+  expectClean(name, (() => {
+    const d = structuredClone(CLEAN);
+    d.body = d.body.replace('<3 SM', `${close}\nSM`);
+    return d;
+  })());
+}
+expectClean('no closing line at all -- the initials follow the last item', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('\n\n<3 SM', '\n\nSM');
+  return d;
+})());
+expectFinding('a draft that just stops, with no initials', d => {
+  d.body = d.body.replace('\n\n<3 SM', '');
+}, 'sign-off');
 
 
 console.log('\nthe machine-written tells');

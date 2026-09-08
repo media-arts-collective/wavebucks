@@ -105,7 +105,7 @@ generally.
   is institutional memory, the raw transcript is not, and anything in
   `Messages` is re-injected into every triage call for a year.
 - `AEDILE_CONTEXT.recap.md` — the recap judgment model and the krewe's own
-  recap form, drawn from the archive. Signs `<3 SM`.
+  recap form, drawn from the archive. Signs `SM`, under a closing line dealt at the archive's rates (`<3` 74%, `Best`, `xoxo`, or none).
 - No trigger. Meetings are not a cadence; a transcript arrives via
   `WriteApi`'s `draftRecap` action.
 - `recap/redige.mjs` — **the generator, and it does not run here.** It runs on

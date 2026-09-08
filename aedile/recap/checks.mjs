@@ -137,10 +137,16 @@ export function runChecks(d, notes, vault) {
   // writes `Best`, `xoxo`, a short line of its own, or nothing at all in the
   // rest. Requiring it here pinned the generator to one of six shapes. What is
   // not optional is the initials, and that they are SM.
+  // A bare `<3` with no initials closes 0.4% of archived messages, and it is
+  // what Zach signed by hand on 2026-09-07: `MS` borrows the other figure and
+  // `SM` claims aedile's, so a heart alone keeps the register and claims
+  // neither. The generator still signs `SM` -- devices.mjs deals only the line
+  // ABOVE it -- but a draft a human closed with a heart is not malformed, and
+  // the previous version of this check rejected exactly that.
   const lastLine = body.trimEnd().split('\n').pop().trim();
-  if (!/^(?:<3[ \t]*)*SM$/.test(lastLine)) {
+  if (!/^(?:(?:<3[ \t]*)+|(?:<3[ \t]*)*SM)$/.test(lastLine)) {
     add('fail', 'sign-off',
-      `the last line must be the initials \`SM\`, alone or after \`<3\`; got ${JSON.stringify(lastLine)}`);
+      `the last line must be \`<3\`, the initials \`SM\`, or both; got ${JSON.stringify(lastLine)}`);
   }
   if (/\bMS\b/.test(body.replace(/<3\s*SM/g, ''))) {
     add('fail', 'signed-as-ms', 'signed or referred to as MS -- aedile is SM, and must not borrow the other figure');

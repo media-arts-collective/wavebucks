@@ -61,10 +61,10 @@ const MeetingRecap = (function () {
    * recap context tells the model to report these rather than resolve them;
    * dropping them here would undo that.
    */
-  function appendOpenQuestions(bodyHtml, openQuestions) {
-    if (!openQuestions || !openQuestions.length) return bodyHtml;
-    const items = openQuestions.map(q => `<li>${q}</li>`).join('\n');
-    return `${bodyHtml}\n<p><strong>Still open:</strong></p>\n<ul>\n${items}\n</ul>`;
+  function appendOpenQuestions(body, openQuestions) {
+    if (!openQuestions || !openQuestions.length) return body;
+    const items = openQuestions.map(q => `  - ${q}`).join('\n');
+    return `${body}\n\nStill open:\n${items}`;
   }
 
   /**
@@ -96,14 +96,14 @@ const MeetingRecap = (function () {
       return { error: String(err) };
     }
 
-    if (!decision.subject || !decision.body_html) {
-      const why = 'model returned no subject or no body_html';
+    if (!decision.subject || !decision.body) {
+      const why = 'model returned no subject or no body';
       Logger.log(`[MeetingRecap] ${why} — nothing drafted.`);
       if (!dryRun) Config.logEvent('', 'recap', RECAP_RECIPIENT, String(decision.subject || ''), 'recap_error', why);
       return { error: why, decision };
     }
 
-    const body = appendOpenQuestions(decision.body_html, decision.open_questions);
+    const body = appendOpenQuestions(decision.body, decision.open_questions);
 
     if (dryRun) {
       Logger.log(`[MeetingRecap] DRY RUN — would GmailApp.createDraft(${RECAP_RECIPIENT}) and nothing else`);
@@ -111,7 +111,10 @@ const MeetingRecap = (function () {
     }
 
     // The ONLY Gmail mutation in this file. Never .send(), never replyAll().
-    GmailApp.createDraft(RECAP_RECIPIENT, decision.subject, '', { htmlBody: body });
+    // Plain body, no htmlBody: the archive is plain text (628 threads, one
+    // carries markup and it is a forwarded message from outside), and HTML
+    // actively costs us -- `<3` has to be escaped to survive a tag stripper.
+    GmailApp.createDraft(RECAP_RECIPIENT, decision.subject, body);
 
     Config.logEvent(
       '', 'recap', RECAP_RECIPIENT, decision.subject,
@@ -123,8 +126,132 @@ const MeetingRecap = (function () {
     return { drafted: true, decision, recipient: RECAP_RECIPIENT };
   }
 
-  return { draftRecap, isEnabled };
+  /**
+   * The sink: put an already-written recap in the drafts folder, and nothing
+   * else.
+   *
+   * draftRecap above writes the recap here, inside Apps Script. This one does
+   * not write anything -- the recap arrives finished, from the generator on
+   * mandark (aedile/recap/redige.mjs), which is where the Obsidian vault, the
+   * voice corpus and the checks are. Apps Script has no filesystem and can
+   * read none of that, which is the whole reason the generator is not in this
+   * file. So this function decides nothing, reads no context and calls no
+   * model: everything it might have judged was judged before the POST.
+   *
+   * It is bounded by the same two things draftRecap is, and deliberately so:
+   * RECAP_ENABLED, so one switch stops every recap however it was written --
+   * a sink that ignored the kill switch would be a hole in it -- and a
+   * hard-coded RECAP_RECIPIENT, so a caller holding the token cannot turn the
+   * endpoint into a general mailer.
+   *
+   * `draftJson` carries the decision's own fields, not a finished body:
+   * {"subject": "...", "body": "...", "open_questions": ["..."]}.
+   */
+  function createDraft(draftJson, dryRun) {
+    if (!isEnabled()) {
+      Logger.log(`⏸️ Meeting recap is disabled (Script Property ${RECAP_ENABLED_PROPERTY} is not "true"). Skipping.`);
+      return { skipped: 'disabled' };
+    }
+
+    let draft;
+    try {
+      draft = JSON.parse(draftJson);
+    } catch (err) {
+      // A truncated or mangled POST body fails HERE, whole, rather than
+      // reaching the drafts folder as half a recap.
+      const why = `draft is not JSON: ${err.message}`;
+      Logger.log(`[createDraft] ${why} — nothing drafted.`);
+      return { error: why };
+    }
+
+    const subject = String(draft.subject || '').trim();
+    const body = String(draft.body || '').trim();
+    if (!subject || !body) {
+      const why = 'draft needs both a subject and a body';
+      Logger.log(`[createDraft] ${why} — nothing drafted.`);
+      return { error: why };
+    }
+
+    // Assembled HERE, by the same function draftRecap uses, rather than
+    // arriving pre-rendered. The generator posts the decision's own fields, so
+    // what reaches the drafts folder is byte-identical whichever path wrote
+    // the recap, and "Still open:" has one definition rather than a copy on
+    // each side of the POST.
+    const full = appendOpenQuestions(body, draft.open_questions);
+
+    if (dryRun) {
+      Logger.log(`[createDraft] DRY RUN — would GmailApp.createDraft(${RECAP_RECIPIENT}) and nothing else`);
+      return { dryRun: true, wouldSendTo: RECAP_RECIPIENT, subject };
+    }
+
+    // The second and last Gmail mutation in this file. Never .send().
+    GmailApp.createDraft(RECAP_RECIPIENT, subject, full);
+
+    // Logged as its own action so the two paths are told apart in the Log tab:
+    // recap_draft_<confidence> was written up there, recap_draft_posted came
+    // in from mandark already written.
+    Config.logEvent(
+      '', 'recap', RECAP_RECIPIENT, subject, 'recap_draft_posted',
+      'written by aedile/recap/redige.mjs on mandark'
+    );
+
+    Logger.log(`✅ Recap drafted for ${RECAP_RECIPIENT}. NOTHING WAS SENT — a director must open the draft and send it.`);
+    return { drafted: true, recipient: RECAP_RECIPIENT, subject };
+  }
+
+  return { draftRecap, createDraft, isEnabled };
 })();
+
+/**
+ * Entry point for WriteApi's setRecapEnabled action: flip RECAP_ENABLED from
+ * outside the editor, both directions.
+ *
+ * WHY THIS ONE PROPERTY AND NOT A GENERAL SETTER. The objection to a
+ * remotely-flippable kill switch is real but it is not uniform, and the
+ * difference is what can happen while the switch is on:
+ *
+ *   AEDILE_ENABLED gates scanInbox, which can auto-send mail via replyAll()
+ *   to anyone clearing AUTOSEND_ALLOWLIST. A remote flip there puts mail in
+ *   other people's inboxes and no human sees it first. It stays editor-only.
+ *
+ *   RECAP_ENABLED gates a tier whose only Gmail mutation is createDraft().
+ *   The worst a wrongly-flipped switch does here is put an unwanted draft in
+ *   the krewe's own drafts folder, where a director sees it and deletes it.
+ *   Nothing leaves. That is a mess, not an incident.
+ *
+ * So: one named property, not `action=setProperty&key=...`. A general setter
+ * would reach AEDILE_ENABLED and AUTOSEND_ENABLED, and the argument above
+ * would no longer hold. (Zach, 2026-09-06, overriding an earlier refusal of
+ * mine that had not made this distinction.)
+ *
+ * Being able to turn it OFF from here is the half that improves safety: the
+ * tier can now be stopped without a browser.
+ */
+function setRecapEnabled(enabled, dryRun) {
+  let want;
+  try {
+    // Same strict parse as dryRun/ignoreDue: "true"/"false" and nothing else.
+    // `enabled=1` or `enabled=ture` is refused rather than read as "off".
+    want = WRITE_API.strictBool(enabled, 'enabled');
+  } catch (err) {
+    Logger.log(`[setRecapEnabled] ${err.message} — switch not touched.`);
+    return { error: String(err.message) };
+  }
+
+  const was = MeetingRecap.isEnabled();
+
+  if (dryRun) {
+    Logger.log(`[setRecapEnabled] DRY RUN — would set ${RECAP_ENABLED_PROPERTY} ${was} -> ${want}`);
+    return { dryRun: true, was, wouldBe: want };
+  }
+
+  // Through the existing switches rather than setProperty directly, so the
+  // editor route and this one cannot drift apart.
+  if (want) enableMeetingRecap();
+  else disableMeetingRecap();
+
+  return { was, now: MeetingRecap.isEnabled() };
+}
 
 /** Kill switch on for the recap tier only — independent of AEDILE_ENABLED/BUMP_ENABLED */
 function enableMeetingRecap() {
@@ -145,4 +272,13 @@ function disableMeetingRecap() {
  */
 function draftRecap(transcript, dryRun) {
   return MeetingRecap.draftRecap(transcript, dryRun);
+}
+
+/**
+ * Entry point for WriteApi's createDraft action. The recap arrives written,
+ * from the generator on mandark; this end assembles and files it. `draft` is a
+ * JSON string: {"subject", "body", "open_questions"}.
+ */
+function createDraft(draft, dryRun) {
+  return MeetingRecap.createDraft(draft, dryRun);
 }

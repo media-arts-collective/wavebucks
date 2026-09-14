@@ -8,3 +8,7 @@ Thumbs.db
 
 # Claude Code local state (per-developer, not shared)
 .claude/
+
+# Node dependencies (aedile/brain, #40). package.json + package-lock.json are
+# committed; the installed tree is per-box and never committed.
+node_modules/

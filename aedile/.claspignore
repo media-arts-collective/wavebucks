@@ -27,3 +27,12 @@ holon_fold.py
 # script. Same reason holon_fold.py is excluded -- pushing it would break the
 # project (Apps Script has no import/fs/process).
 analysis/**
+
+# Brain client (#40): node-only ESM + its node_modules/manifest, driving Claude
+# via the subscription-authenticated `claude` CLI (Agent SDK). Same reason as
+# analysis/** above -- Apps Script has no import/fs/process/node_modules, so a
+# push carrying any of this would break the project.
+brain/**
+node_modules/**
+package.json
+package-lock.json

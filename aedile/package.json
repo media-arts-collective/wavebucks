@@ -1,0 +1,14 @@
+{
+  "name": "aedile-brain",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Aedile brain: Node model client driving Claude via the local subscription-authenticated `claude` CLI. Node-only; excluded from clasp push.",
+  "scripts": {
+    "test": "node --test brain/",
+    "smoke": "node brain/model.mjs --smoke"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.1.0"
+  }
+}

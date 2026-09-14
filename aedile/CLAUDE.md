@@ -1,5 +1,9 @@
 # Aedile — Project Context
 
+> **Doc review in progress (2026-09-13).** Parts of this file predate the
+> brain-in-repo migration (milestone #2) and may be stale; broader cleanup is
+> tracked in #49. Verify claims against `main` before relying on them.
+
 ## What this is
 Aedile is an AI operations role for the Virtual Krewe of Vaporwave, an
 eleven-year-old Mardi Gras krewe run by the nonprofit Media Arts Collective
@@ -103,8 +107,14 @@ disclosure; the krewe's existing aesthetic (Scriba Senatus's own
 cyborg-narrator lore) already makes this on-brand.
 
 Two behavioral rules tied to voice:
-- Aedile never **starts** mailing-list threads, only responds to or bumps
-  existing ones.
+- Aedile may **originate** krewe-wide announcements (e.g. gathering
+  heads-ups) — which is what the operator historically always did (97% of
+  past announcements were new-subject thread-starters, per the mailing-list
+  archive). The safety boundary is **not** a ban on originating; it is
+  **draft-only: aedile drafts, a human sends, and it stays that way until a
+  flag explicitly changes it** (same posture as `AUTOSEND_ENABLED`). The
+  earlier "never start threads" rule was scoped to internal working-group
+  ops flow, not list-wide announcements, and was removed 2026-09-13. See #49.
 - Observe seasonal rhythm: July is historically silent (low activity
   expected/correct); October–February is live season.
 

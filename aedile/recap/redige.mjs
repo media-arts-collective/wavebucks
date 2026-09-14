@@ -197,6 +197,10 @@ function post(decision, dryRun) {
   // The whole form body goes through a 0600 file rather than argv: a token on
   // a command line is readable out of /proc by any local account for as long
   // as curl runs.
+  // logLabel/logNote name the genre + provenance for the Log tab (#53). The
+  // primitive is genre-blind; the caller supplies these, so a recap reads as a
+  // recap in the audit trail (restoring what the removed MeetingRecap.createDraft
+  // sink used to write) rather than every draft being hardcoded as one.
   const form = [
     `token=${encodeURIComponent(token)}`,
     'action=createDraft',
@@ -204,6 +208,8 @@ function post(decision, dryRun) {
     `to=${encodeURIComponent(RECAP_RECIPIENT)}`,
     `subject=${encodeURIComponent(decision.subject)}`,
     `body=${encodeURIComponent(body)}`,
+    'logLabel=recap_draft_posted',
+    `logNote=${encodeURIComponent('written by aedile/recap/redige.mjs on mandark')}`,
   ].filter(Boolean).join('&');
 
   const bodyFile = `/tmp/redige-post-${process.pid}.form`;

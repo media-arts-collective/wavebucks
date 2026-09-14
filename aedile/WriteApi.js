@@ -63,6 +63,11 @@
  *           A brand-new-thread draft — the recap sink (redige.mjs posts here
  *           with to=<the list>). A human opens the draft and sends; Aedile
  *           never originates a live send.
+ *       Optional `logLabel` (+ `logNote`) writes one audit row to the Log tab
+ *           via Config.logEvent (action='createDraft', the caller's label +
+ *           note) — #53: the CALLER names the genre, e.g. redige posts
+ *           logLabel=recap_draft_posted. Omit it and the draft is filed
+ *           without a Log row.
  *   ?action=sendReplyAll  -d threadId=<id> --data-urlencode htmlBody@body.html
  *           The ONLY primitive that can send. Fail-closed: refuses (ok:false +
  *           a `refused` reason, nothing sent) unless the guardrail last line
@@ -248,6 +253,25 @@ const WRITE_API = (() => {
     return thread;
   }
 
+  /**
+   * Optional audit row for a draft (#53). The primitive is genre-blind by
+   * design, so the CALLER (the brain) supplies the Log action + provenance it
+   * wants recorded: a recap posts logLabel='recap_draft_posted', a future
+   * heads-up would post its own — instead of every draft being hardcoded as a
+   * recap the way the removed MeetingRecap.createDraft sink was. No logLabel
+   * means the caller opted out of a row. Wrapped like InboxProcessor.logResult:
+   * a bad Log write must not undo a draft that already happened. Real runs
+   * only — a dry run creates nothing to log.
+   */
+  function logDraft(ctx, params) {
+    if (!params.logLabel) return;
+    try {
+      Config.logEvent(ctx.threadId || '', 'createDraft', ctx.from || '', ctx.subject || '', params.logLabel, params.logNote || '');
+    } catch (err) {
+      Logger.log(`[createDraft] Config.logEvent(${params.logLabel}) FAILED — ${err.stack || err}`);
+    }
+  }
+
   // --- Execute-only primitives (#36; createDraft generalized to plain/HTML in #41) ---
 
   /**
@@ -273,7 +297,8 @@ const WRITE_API = (() => {
       }
       if (bodyChoice.html !== undefined) lastMsg.createDraftReply('', { htmlBody: bodyChoice.html, cc });
       else lastMsg.createDraftReply(bodyChoice.plain, { cc });
-      return respondOk('createDraft', dryRun, { form: 'reply', threadId: params.threadId, cc, drafted: true });
+      logDraft({ threadId: params.threadId, subject: lastMsg.getSubject() }, params);
+      return respondOk('createDraft', dryRun, { form: 'reply', threadId: params.threadId, cc, drafted: true, logged: !!params.logLabel });
     }
 
     // originate form (a brand-new thread — the recap sink)
@@ -282,7 +307,8 @@ const WRITE_API = (() => {
     }
     if (bodyChoice.html !== undefined) GmailApp.createDraft(params.to, params.subject, '', { htmlBody: bodyChoice.html });
     else GmailApp.createDraft(params.to, params.subject, bodyChoice.plain);
-    return respondOk('createDraft', dryRun, { form: 'originate', to: params.to, subject: params.subject, recipient: params.to, drafted: true });
+    logDraft({ from: params.to, subject: params.subject }, params);
+    return respondOk('createDraft', dryRun, { form: 'originate', to: params.to, subject: params.subject, recipient: params.to, drafted: true, logged: !!params.logLabel });
   }
 
   /**

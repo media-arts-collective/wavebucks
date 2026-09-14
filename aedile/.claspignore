@@ -22,3 +22,8 @@ TestsLocal.js
 
 # Not JavaScript, and not wanted in the project either way.
 holon_fold.py
+
+# Genre-research tooling: node-only (fs/import), never part of the deployed
+# script. Same reason holon_fold.py is excluded -- pushing it would break the
+# project (Apps Script has no import/fs/process).
+analysis/**

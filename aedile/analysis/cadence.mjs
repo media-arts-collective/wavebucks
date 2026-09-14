@@ -112,6 +112,20 @@ for (const v of topics) {
   });
 }
 
+// --- form by length (MS-authored announcements) ---
+// greeting/sign-off are NOT obligatory in the terse register; numbering scales
+// with length, i.e. it is a digest trait, not a heads-up trait.
+const GREET = /^\s*(hi|hello|hey|hiya|yo|good (morning|evening|afternoon)|hail|greetings|dear|beloved|friends|happy|ok |okay )/i;
+const hasGreet = b => GREET.test(b.trim().split('\n')[0].slice(0, 40));
+const hasSignoff = b => { const t = b.trim().slice(-60); return /<3/.test(t) || /(^|\n)\s*(MS|SM)\s*$/.test(t) || /,\s*(MS|SM)\s*$/.test(t); };
+const isNumbered = b => /(^|\n)\s*-?\d+[.)]\s/.test(b);
+const nLines = b => b.trim().split('\n').filter(x => x.trim()).length;
+const msAnns = anns.filter(m => m.email === KREWE_ACCOUNT);
+const lenBucket = m => m.body.length <= 300 ? 'short<=300' : (m.body.length <= 900 ? 'mid301-900' : 'long>900');
+const formB = {};
+for (const m of msAnns) (formB[lenBucket(m)] ||= []).push(m);
+const shortUnsigned = msAnns.filter(m => m.body.length <= 120 && !hasSignoff(m.body));
+
 // --- report ---
 const p = (...a) => console.log(...a);
 p(`archive: ${msgs.length} msgs, ${topics.length} topics  (VAULT=${VAULT})`);
@@ -132,6 +146,18 @@ p('');
 p(`MESSAGES PER TOPIC: single-message = ${pct(single, topics.length)}% of ${topics.length} topics`);
 p(`OPERATOR announcements: new-subject starters=${starter}  replies=${reply}  (${pct(starter, starter+reply)}% new-subject)`);
 p('');
+p('FORM by length (MS-authored announcements) -- greeting/sign-off are optional in');
+p('the terse register; numbering scales with length (a DIGEST trait, not heads-up):');
+p(`  ${'bucket'.padEnd(11)} n    greet  signoff  numbered  1-line`);
+for (const k of ['short<=300','mid301-900','long>900']) {
+  const v = formB[k] || []; if (!v.length) continue;
+  const r = f => String(pct(v.filter(f).length, v.length)).padStart(3);
+  p(`  ${k.padEnd(11)} ${String(v.length).padStart(3)}   ${r(m=>hasGreet(m.body))}%   ${r(m=>hasSignoff(m.body))}%   ${r(m=>isNumbered(m.body))}%   ${r(m=>nLines(m.body)===1)}%`);
+}
+p(`  short (<=120c) announcements that are UNSIGNED: ${shortUnsigned.length} (one-line nudges are real)`);
+p('');
 p('HEADLINE: heads-up lead time is bimodal -- a same/next-day nudge (mode 0-1d,');
 p('~60%) plus a smaller ~4-6d setup hump (usually embedded in a digest). Same-day');
-p('nudges go out in the morning. Announcements are ~always new-subject.');
+p('nudges go out in the morning. Announcements are ~always new-subject. The terse');
+p('register (short) drops greeting/sign-off ~half the time and rarely numbers;');
+p('numbering belongs to the long omnibus digest, a separate genre.');

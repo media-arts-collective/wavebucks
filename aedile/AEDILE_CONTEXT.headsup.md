@@ -48,12 +48,17 @@ RSVP mechanics (the corpus commands attendance, it doesn't collect RSVPs); any
 fact not given; any taste verdict; new recipients.
 
 ## Form (per beat)
-- **lock-in**: greeting; body often a numbered list (frequently from `0.`/`-1.`
-  for a TL;DR/aside); introduces a new venue plainly; may end on a solicited
-  question. Medium length (corpus lock-ins run ~1.5–2x a nudge).
-- **nudge**: terse; usually no list; present-tense and imperative; ALL-CAPS the
-  one operative exhortation (`COME THROUGH`, `SHOW UP`); ~half the length. May
-  drop the greeting entirely (`1pm tomorrow! 826 Rosedale`).
+Both beats live in the **terse register**. Numbering is NOT a lock-in trait: it
+scales with length (14% / 50% / 93% for short/mid/long messages) and belongs to
+the omnibus *digest*, a separate genre. Reach for a numbered list only when there
+are genuinely many items; a single-venue heads-up should not be numbered.
+- **lock-in**: carries the newly-firmed facts (place/time), a one-line intro if
+  the venue is new, and an optional solicited question. Differs from the nudge by
+  *framing and timing*, not structure — usually 1–2 lines more, not a list.
+- **nudge**: restates place + time compactly (short announcements state place 90%
+  / time 95% — the nudge does NOT omit logistics), present-tense/imperative, drops
+  the intro and questions. Optionally ALL-CAPS one exhortation (`COME THROUGH`).
+  The barest form is a single unsigned line (`1pm tomorrow! 826 Rosedale`).
 
 ## Voice invariants (borrowed — corpus-wide, NOT genre-specific)
 These are shared krewe-voice traits, already quantified empirically in
@@ -62,6 +67,11 @@ parenthetical ~0.62, etc.). They belong to *style*, not to this genre's *form*;
 the eventual clean separation is #49. Also: at least one `!`; bare lowercase-ish
 times (`5pm`, `noon`, `-ish` ranges); **no em-dashes** (an AI tell the corpus
 never uses — recap's `checks.mjs` hard-fails on `—`/`–`/spaced ` -- `).
+
+NOTE: those recap rates are measured on the 400–4000-char (digest-length) pool
+and do NOT transfer to the terse heads-up register. There, greeting ~52% and
+sign-off ~47% are **both optional**, and one-line **unsigned** nudges are common.
+Re-derive per-register form rates with `analysis/cadence.mjs`.
 
 ## Sign-off
 `<3` then `SM` on its own line. **Never `MS`** — `SM` marks the text as

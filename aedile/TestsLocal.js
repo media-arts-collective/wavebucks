@@ -262,5 +262,56 @@ console.log('\nMeetingRecap — the two guards that keep a draft from becoming a
   );
 }
 
+console.log('\nWriteApi.chooseDraftForm — the createDraft sink picks exactly one shape');
+{
+  // Inline copy of WriteApi.js's chooseDraftForm (see that file). Reply
+  // (threadId) and originate (to+subject) are mutually exclusive; anything
+  // ambiguous or half-specified returns an { error } rather than guessing at
+  // an intent — a dumb sink shouldn't invent which kind of draft to make.
+  function chooseDraftForm(params) {
+    const hasThread = !!params.threadId;
+    const hasOriginate = !!params.to || !!params.subject;
+    if (hasThread && hasOriginate) {
+      return { error: 'createDraft takes EITHER threadId (reply) OR to+subject (originate), not both.' };
+    }
+    if (hasThread) return { form: 'reply' };
+    if (params.to && params.subject) return { form: 'originate' };
+    if (hasOriginate) {
+      return { error: 'createDraft (originate form) requires BOTH to and subject alongside htmlBody.' };
+    }
+    return { error: 'createDraft requires either threadId (reply) or to+subject (originate).' };
+  }
+
+  assertEqual(chooseDraftForm({ threadId: 'abc' }).form, 'reply', 'threadId alone is the reply form');
+  assertEqual(chooseDraftForm({ to: 'a@x.org', subject: 'hi' }).form, 'originate', 'to+subject is the originate form');
+  assertTrue(chooseDraftForm({ threadId: 'abc', to: 'a@x.org' }).error, 'threadId + to is refused as ambiguous, not guessed at');
+  assertTrue(chooseDraftForm({ to: 'a@x.org' }).error, 'to without subject is refused, not a half-originate');
+  assertTrue(chooseDraftForm({ subject: 'hi' }).error, 'subject without to is refused, not a half-originate');
+  assertTrue(chooseDraftForm({}).error, 'neither shape is refused rather than drafting nothing');
+}
+
+console.log('\nWriteApi.sendGate — the send primitive fails closed, master kill first');
+{
+  // Inline copy of WriteApi.js's sendGate (see that file). Returns a refusal
+  // REASON string, or null when a send may proceed. This is the guardrail
+  // last line for sendReplyAll now that judgment no longer runs the guardrails
+  // in-process — the brain deciding to send does not bypass it.
+  function sendGate(aedileEnabled, allowlistEligible) {
+    if (!aedileEnabled) return 'AEDILE_ENABLED is not "true" — master kill switch is off.';
+    if (!allowlistEligible) {
+      return 'thread failed isAllowlistEligible — AUTOSEND_ENABLED off, empty AUTOSEND_ALLOWLIST, or a participant outside it.';
+    }
+    return null;
+  }
+
+  assertEqual(sendGate(true, true), null, 'kill switch on + allowlist-eligible → may send (null)');
+  assertTrue(sendGate(false, true), 'master kill switch off refuses even an allowlist-eligible thread');
+  assertTrue(sendGate(true, false), 'a non-allowlisted participant refuses the send');
+  assertTrue(sendGate(false, false), 'both off refuses');
+  // Master kill switch is reported before the allowlist so flipping
+  // AEDILE_ENABLED off is an unambiguous, single-cause stop.
+  assertTrue(sendGate(false, false).indexOf('AEDILE_ENABLED') === 0, 'master kill switch is the reason reported when both fail');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

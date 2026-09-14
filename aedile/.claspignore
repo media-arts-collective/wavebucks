@@ -36,3 +36,9 @@ brain/**
 node_modules/**
 package.json
 package-lock.json
+
+# The recap generator (#41). Node ESM -- `import`, `fs`, `process`,
+# `execFileSync` -- none of which exist in Apps Script. It runs on mandark,
+# where the vault is, and drives Claude through brain/** above. Pushing it would
+# break the project at load, the same way TestsLocal.js would.
+recap/**

@@ -1,0 +1,482 @@
+<title>Krewe Voice Duel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  /* Light is the un-stamped default; every token is defined here so nothing
+     depends on a media query having matched. Dark redefines the same names. */
+  :root {
+    --bench:      #E7E3DA;
+    --bench-deep: #D8D2C6;
+    --paper:      #FDFCF8;
+    --paper-edge: #C9C3B6;
+    --ink:        #1A1D1F;
+    --ink-soft:   #5C6165;
+    --chrome:     #2A2E31;
+    --chrome-soft:#6B7075;
+    --rule:       #C9C3B6;
+    --brass:      #856733;
+    --good:       #2E7256;
+    --bad:        #A63A32;
+    --shadow:     0 1px 2px rgba(26,29,31,.10), 0 8px 24px rgba(26,29,31,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bench:      #14181B;
+      --bench-deep: #0E1114;
+      --paper:      #F4F2EC;
+      --paper-edge: #0B0D0F;
+      --ink:        #1A1D1F;
+      --ink-soft:   #5C6165;
+      --chrome:     #DCD8D0;
+      --chrome-soft:#8A9095;
+      --rule:       #2A3036;
+      --brass:      #B08D57;
+      --good:       #46997A;
+      --bad:        #CE5249;
+      --shadow:     0 2px 4px rgba(0,0,0,.5), 0 18px 44px rgba(0,0,0,.45);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bench:      #14181B;
+    --bench-deep: #0E1114;
+    --paper:      #F4F2EC;
+    --paper-edge: #0B0D0F;
+    --ink:        #1A1D1F;
+    --ink-soft:   #5C6165;
+    --chrome:     #DCD8D0;
+    --chrome-soft:#8A9095;
+    --rule:       #2A3036;
+    --brass:      #B08D57;
+    --good:       #46997A;
+    --bad:        #CE5249;
+    --shadow:     0 2px 4px rgba(0,0,0,.5), 0 18px 44px rgba(0,0,0,.45);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bench);
+    color: var(--chrome);
+    font-family: Archivo, "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 28px 24px 72px; }
+
+  .eyebrow {
+    font-size: 11px; font-weight: 600; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--brass);
+  }
+
+  /* ---- header / readout ---- */
+
+  header {
+    display: flex; flex-wrap: wrap; gap: 24px 40px;
+    align-items: flex-end; justify-content: space-between;
+    padding-bottom: 20px; border-bottom: 1px solid var(--rule); margin-bottom: 28px;
+  }
+  h1 {
+    margin: 4px 0 0; font-size: clamp(24px, 3vw, 34px); font-weight: 800;
+    letter-spacing: -.02em; text-wrap: balance; color: var(--chrome);
+  }
+  .sub { margin: 6px 0 0; color: var(--chrome-soft); font-size: 14px; max-width: 54ch; }
+
+  .readout { display: flex; gap: 28px; align-items: flex-end; }
+  .stat { text-align: right; }
+  .stat .n {
+    display: block; font-size: 34px; font-weight: 800; line-height: 1;
+    font-variant-numeric: tabular-nums; letter-spacing: -.03em; color: var(--chrome);
+  }
+  .stat .n.good { color: var(--good); }
+  .stat .n.bad  { color: var(--bad); }
+  .stat .k {
+    display: block; margin-top: 6px; font-size: 10px; font-weight: 600;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--chrome-soft);
+  }
+
+  /* the gauge: 50% is the target, both directions away from it are failure */
+  .gauge { width: 100%; margin-top: 18px; }
+  .gauge-track {
+    position: relative; height: 6px; border-radius: 3px;
+    background: var(--bench-deep); border: 1px solid var(--rule);
+  }
+  .gauge-fill {
+    position: absolute; top: 0; bottom: 0; left: 0; border-radius: 3px;
+    background: var(--brass); transition: width .35s ease;
+  }
+  .gauge-target {
+    position: absolute; top: -5px; bottom: -5px; left: 50%; width: 2px;
+    background: var(--good);
+  }
+  .gauge-legend {
+    display: flex; justify-content: space-between; margin-top: 7px;
+    font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--chrome-soft);
+  }
+
+  /* ---- the bench ---- */
+
+  .roundbar {
+    display: flex; align-items: baseline; gap: 14px; margin-bottom: 14px;
+  }
+  .roundbar .q { font-size: 15px; font-weight: 500; color: var(--chrome); }
+
+  .bench {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: stretch;
+  }
+
+  /* Both panes take identical type, measure and metrics. This is a fairness
+     requirement: any difference between the panes is a tell about the harness
+     rather than the writing. */
+  .specimen {
+    display: flex; flex-direction: column;
+    background: var(--paper); border: 1px solid var(--paper-edge);
+    border-radius: 3px; box-shadow: var(--shadow); overflow: hidden;
+  }
+  .specimen-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px; border-bottom: 1px solid rgba(26,29,31,.14);
+    background: rgba(26,29,31,.03);
+  }
+  .specimen-head .tag {
+    font-size: 13px; font-weight: 800; letter-spacing: .1em; color: var(--brass);
+  }
+  .specimen-head .verdict {
+    font-size: 10px; font-weight: 700; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--ink-soft);
+  }
+  .specimen-body {
+    margin: 0; padding: 20px 22px 24px; flex: 1;
+    max-height: 56vh; overflow-y: auto;
+    font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 13.5px; line-height: 1.62; color: var(--ink);
+    white-space: pre-wrap; word-wrap: break-word;
+  }
+
+  .specimen.is-real { outline: 2px solid var(--good); outline-offset: -1px; }
+  .specimen.is-ai   { outline: 2px solid var(--bad);  outline-offset: -1px; }
+  .specimen.is-real .specimen-head .verdict { color: var(--good); }
+  .specimen.is-ai   .specimen-head .verdict { color: var(--bad); }
+
+  /* ---- controls ---- */
+
+  .picks { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 18px; }
+  button {
+    font-family: inherit; font-size: 15px; font-weight: 600; color: var(--chrome);
+    background: var(--bench-deep); border: 1px solid var(--rule);
+    border-radius: 3px; padding: 14px 18px; cursor: pointer;
+    transition: border-color .15s, color .15s, background .15s;
+  }
+  button:hover:not(:disabled) { border-color: var(--brass); color: var(--brass); }
+  button:disabled { opacity: .4; cursor: default; }
+  button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+  button .key {
+    display: inline-block; margin-left: 8px; padding: 1px 6px; border-radius: 2px;
+    border: 1px solid var(--rule); font-size: 11px; color: var(--chrome-soft);
+  }
+
+  .reveal { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--rule); }
+  .reveal[hidden] { display: none; }
+  .callout { font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
+  .callout.good { color: var(--good); }
+  .callout.bad  { color: var(--bad); }
+  .callout .why { display: block; margin-top: 4px; font-size: 13px; font-weight: 400; color: var(--chrome-soft); }
+
+  .tellbox { margin-top: 20px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .chip {
+    font-size: 12.5px; font-weight: 500; padding: 6px 11px; border-radius: 2px;
+    border: 1px solid var(--rule); background: transparent; color: var(--chrome-soft);
+  }
+  .chip[aria-pressed="true"] { border-color: var(--brass); color: var(--brass); background: var(--bench-deep); }
+  textarea {
+    width: 100%; margin-top: 12px; padding: 11px 13px; resize: vertical; min-height: 62px;
+    font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 13px;
+    color: var(--chrome); background: var(--bench-deep);
+    border: 1px solid var(--rule); border-radius: 3px; line-height: 1.5;
+  }
+  textarea:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
+  .nextrow { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 14px; }
+  .nextrow .note { font-size: 12px; color: var(--chrome-soft); }
+
+  .done { text-align: center; padding: 46px 20px; }
+  .done h2 { font-size: 26px; font-weight: 800; margin: 0 0 8px; }
+  .done pre {
+    text-align: left; margin: 22px auto 0; max-width: 720px; padding: 14px;
+    background: var(--bench-deep); border: 1px solid var(--rule); border-radius: 3px;
+    font-family: "IBM Plex Mono", monospace; font-size: 11.5px; line-height: 1.5;
+    color: var(--chrome-soft); overflow-x: auto; max-height: 320px;
+  }
+
+  footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--rule);
+           font-size: 12px; color: var(--chrome-soft); }
+  .rec { display: inline-flex; align-items: center; gap: 6px; }
+  .rec::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--good); }
+  .rec.off::before { background: var(--bad); }
+
+  @media (max-width: 900px) {
+    .bench, .picks { grid-template-columns: 1fr; }
+    header { gap: 18px; }
+    .specimen-body { max-height: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">Authorship bench</div>
+      <h1>Which one did Abe write?</h1>
+      <p class="sub">One is a real message from the krewe list. One was generated from the
+        same facts. Pick the real one. If the generator has the voice, you will be right
+        half the time and no more.</p>
+    </div>
+    <div class="readout">
+      <div class="stat"><span class="n" id="stat-rate">–</span><span class="k">Fooled you</span></div>
+      <div class="stat"><span class="n" id="stat-gap">–</span><span class="k">From target</span></div>
+      <div class="stat"><span class="n" id="stat-rounds">0</span><span class="k">Rounds</span></div>
+    </div>
+    <div class="gauge">
+      <div class="gauge-track">
+        <div class="gauge-fill" id="gauge-fill" style="width:0%"></div>
+        <div class="gauge-target" title="50% — indistinguishable"></div>
+      </div>
+      <div class="gauge-legend"><span>0% — always caught</span><span>50% target</span><span>100%</span></div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="roundbar">
+      <span class="eyebrow" id="round-label">Round 1</span>
+      <span class="q">Which of these was written by a person?</span>
+    </div>
+
+    <div class="bench">
+      <article class="specimen" id="pane-A">
+        <div class="specimen-head"><span class="tag">A</span><span class="verdict" id="vd-A"></span></div>
+        <pre class="specimen-body" id="body-A"></pre>
+      </article>
+      <article class="specimen" id="pane-B">
+        <div class="specimen-head"><span class="tag">B</span><span class="verdict" id="vd-B"></span></div>
+        <pre class="specimen-body" id="body-B"></pre>
+      </article>
+    </div>
+
+    <div class="picks">
+      <button id="pick-A" type="button">A is the real one <span class="key">A</span></button>
+      <button id="pick-B" type="button">B is the real one <span class="key">B</span></button>
+    </div>
+
+    <section class="reveal" id="reveal" hidden>
+      <div class="callout" id="callout"></div>
+      <div class="tellbox">
+        <div class="eyebrow">What gave it away?</div>
+        <div class="chips" id="chips"></div>
+        <textarea id="note" placeholder="Anything else — a phrase, a rhythm, a word he would never use."></textarea>
+        <div class="nextrow">
+          <span class="note" id="save-note"></span>
+          <button id="next" type="button">Next round <span class="key">↵</span></button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span class="rec" id="rec">Recording verdicts</span>
+    · Signatures are stripped from both sides; spacing is untouched on both.
+  </footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const BURST = /*__PAIRS__*/{"seed":0,"pairs":[]};
+  const PAIRS = BURST.pairs || [];
+
+  const TELLS = ["too tidy","third person","no joke","too accurate","rhythm",
+                 "vocabulary","length","structure","spacing","punctuation"];
+
+  const $ = id => document.getElementById(id);
+  let db = null, i = 0, picked = null, shownAt = 0;
+  const results = [];
+
+  // --- rendering ---
+
+  function layout(n) {
+    const p = PAIRS[n];
+    // Side is randomized per round so position carries no information.
+    const realOnA = Math.random() < 0.5;
+    return { pair: p, realSide: realOnA ? "A" : "B",
+             A: realOnA ? p.real : p.ai, B: realOnA ? p.ai : p.real };
+  }
+  let round = null;
+
+  function renderRound() {
+    if (i >= PAIRS.length) return finish();
+    round = layout(i);
+    $("round-label").textContent = `Round ${i + 1} of ${PAIRS.length}`;
+    $("body-A").textContent = round.A;
+    $("body-B").textContent = round.B;
+    for (const s of ["A", "B"]) {
+      $("pane-" + s).classList.remove("is-real", "is-ai");
+      $("vd-" + s).textContent = "";
+      $("pick-" + s).disabled = false;
+    }
+    $("reveal").hidden = true;
+    $("note").value = "";
+    $("save-note").textContent = "";
+    renderChips();
+    picked = null;
+    shownAt = Date.now();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  let chosenTells = new Set();
+  function renderChips() {
+    chosenTells = new Set();
+    const box = $("chips");
+    box.textContent = "";
+    for (const t of TELLS) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = t;
+      b.setAttribute("aria-pressed", "false");
+      b.addEventListener("click", () => {
+        const on = b.getAttribute("aria-pressed") === "true";
+        b.setAttribute("aria-pressed", String(!on));
+        if (on) chosenTells.delete(t); else chosenTells.add(t);
+      });
+      box.appendChild(b);
+    }
+  }
+
+  function stats() {
+    const n = results.length;
+    if (!n) { $("stat-rate").textContent = "–"; $("stat-gap").textContent = "–"; return; }
+    const fooled = results.filter(r => !r.correct).length;
+    const rate = Math.round((fooled / n) * 100);
+    const gap = Math.abs(rate - 50);
+    const el = $("stat-rate");
+    el.textContent = rate + "%";
+    el.className = "n" + (gap <= 10 ? " good" : gap >= 30 ? " bad" : "");
+    $("stat-gap").textContent = (rate === 50 ? "0" : (rate > 50 ? "+" : "−") + gap) + " pts";
+    $("stat-rounds").textContent = String(n);
+    $("gauge-fill").style.width = rate + "%";
+  }
+
+  // --- a pick ---
+
+  function pick(side) {
+    if (picked) return;
+    picked = side;
+    const correct = side === round.realSide;
+    const aiSide = round.realSide === "A" ? "B" : "A";
+    $("pane-" + round.realSide).classList.add("is-real");
+    $("pane-" + aiSide).classList.add("is-ai");
+    $("vd-" + round.realSide).textContent = "Real — Abe";
+    $("vd-" + aiSide).textContent = "Generated";
+    $("pick-A").disabled = true; $("pick-B").disabled = true;
+
+    const c = $("callout");
+    c.className = "callout " + (correct ? "bad" : "good");
+    c.innerHTML = correct
+      ? 'You caught it.<span class="why">A point against the generator. What tipped you off?</span>'
+      : 'It fooled you.<span class="why">That is the target. Anything still feel off?</span>';
+    $("reveal").hidden = false;
+    $("next").focus();
+  }
+
+  async function commit() {
+    const rec = {
+      pair: round.pair.id,
+      date: round.pair.date || "",
+      realSide: round.realSide,
+      picked,
+      correct: picked === round.realSide,
+      tells: [...chosenTells],
+      note: $("note").value.trim(),
+      ms: Date.now() - shownAt,
+      seed: BURST.seed || 0,
+      ts: new Date().toISOString()
+    };
+    results.push(rec);
+    stats();
+    await flush();
+    i++;
+    renderRound();
+  }
+
+  /* db resolves on its own schedule -- later than the first render, and up to
+     ten seconds out. A fast first round would otherwise be answered before it
+     arrived and never written anywhere. Verdicts queue in `results` and every
+     unwritten one goes out on the next flush, including the ones from before
+     db existed. */
+  async function flush() {
+    if (!db) return;
+    for (const r of results) {
+      if (r._saved) continue;
+      try {
+        const { _saved, ...row } = r;
+        await db.collection("rounds").add(row);
+        r._saved = true;
+      } catch (e) {
+        $("save-note").textContent = "not saved (" + ((e && e.code) || "error") + ")";
+        return;
+      }
+    }
+  }
+
+  function finish() {
+    const n = results.length;
+    const fooled = results.filter(r => !r.correct).length;
+    const rate = n ? Math.round((fooled / n) * 100) : 0;
+    $("main").innerHTML =
+      '<div class="done"><div class="eyebrow">Burst complete</div>' +
+      '<h2>' + fooled + ' of ' + n + ' fooled you — ' + rate + '%</h2>' +
+      '<p class="sub" style="margin:0 auto">Target is 50%. ' +
+      (Math.abs(rate - 50) <= 10
+        ? 'That is inside the band.'
+        : rate < 50 ? 'The generator is still detectable.'
+                    : 'You are picking the generated one as real more often than chance — also detectable, inverted.') +
+      '</p>' + (db ? '' :
+        '<p class="sub" style="margin:14px auto;color:var(--bad)">Verdicts were not recorded. Copy this:</p>' +
+        '<pre>' + JSON.stringify(results, null, 2).replace(/[<&]/g, c => c === "<" ? "&lt;" : "&amp;") + '</pre>') +
+      '</div>';
+  }
+
+  // --- wiring ---
+
+  $("pick-A").addEventListener("click", () => pick("A"));
+  $("pick-B").addEventListener("click", () => pick("B"));
+  $("next").addEventListener("click", commit);
+  document.addEventListener("keydown", e => {
+    if (e.target.tagName === "TEXTAREA") return;
+    const k = e.key.toLowerCase();
+    if (!picked && (k === "a" || k === "b")) { e.preventDefault(); pick(k.toUpperCase()); }
+    else if (picked && (e.key === "Enter" || k === "n")) { e.preventDefault(); commit(); }
+  });
+
+  if (!PAIRS.length) {
+    $("main").innerHTML = '<div class="done"><h2>No pairs in this burst</h2>' +
+      '<p class="sub" style="margin:0 auto">Run <code>duel.mjs</code> and publish again.</p></div>';
+  } else {
+    renderRound();
+    stats();
+  }
+
+  // db is optional: the game works without it, it just stops being a record.
+  (async () => {
+    try { db = await window.claude?.use?.("db"); } catch (_) { db = null; }
+    const el = $("rec");
+    if (!db) { el.classList.add("off"); el.textContent = "Not recording — verdicts shown at the end"; }
+    else await flush();
+  })();
+})();
+</script>

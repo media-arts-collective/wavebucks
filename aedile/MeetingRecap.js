@@ -61,10 +61,10 @@ const MeetingRecap = (function () {
    * recap context tells the model to report these rather than resolve them;
    * dropping them here would undo that.
    */
-  function appendOpenQuestions(bodyHtml, openQuestions) {
-    if (!openQuestions || !openQuestions.length) return bodyHtml;
-    const items = openQuestions.map(q => `<li>${q}</li>`).join('\n');
-    return `${bodyHtml}\n<p><strong>Still open:</strong></p>\n<ul>\n${items}\n</ul>`;
+  function appendOpenQuestions(body, openQuestions) {
+    if (!openQuestions || !openQuestions.length) return body;
+    const items = openQuestions.map(q => `  - ${q}`).join('\n');
+    return `${body}\n\nStill open:\n${items}`;
   }
 
   /**
@@ -96,14 +96,14 @@ const MeetingRecap = (function () {
       return { error: String(err) };
     }
 
-    if (!decision.subject || !decision.body_html) {
-      const why = 'model returned no subject or no body_html';
+    if (!decision.subject || !decision.body) {
+      const why = 'model returned no subject or no body';
       Logger.log(`[MeetingRecap] ${why} — nothing drafted.`);
       if (!dryRun) Config.logEvent('', 'recap', RECAP_RECIPIENT, String(decision.subject || ''), 'recap_error', why);
       return { error: why, decision };
     }
 
-    const body = appendOpenQuestions(decision.body_html, decision.open_questions);
+    const body = appendOpenQuestions(decision.body, decision.open_questions);
 
     if (dryRun) {
       Logger.log(`[MeetingRecap] DRY RUN — would GmailApp.createDraft(${RECAP_RECIPIENT}) and nothing else`);
@@ -111,7 +111,10 @@ const MeetingRecap = (function () {
     }
 
     // The ONLY Gmail mutation in this file. Never .send(), never replyAll().
-    GmailApp.createDraft(RECAP_RECIPIENT, decision.subject, '', { htmlBody: body });
+    // Plain body, no htmlBody: the archive is plain text (628 threads, one
+    // carries markup and it is a forwarded message from outside), and HTML
+    // actively costs us -- `<3` has to be escaped to survive a tag stripper.
+    GmailApp.createDraft(RECAP_RECIPIENT, decision.subject, body);
 
     Config.logEvent(
       '', 'recap', RECAP_RECIPIENT, decision.subject,
@@ -123,8 +126,67 @@ const MeetingRecap = (function () {
     return { drafted: true, decision, recipient: RECAP_RECIPIENT };
   }
 
+  // The recap SINK — putting an already-written recap from redige.mjs into the
+  // drafts folder — used to live here as MeetingRecap.createDraft, a second
+  // draft path that assembled the body in Apps Script. #41 replaced it with the
+  // single reusable WriteApi createDraft primitive (originate form): redige.mjs
+  // now assembles the finished plain-text body itself and POSTs it, so there is
+  // one draft sink, not one per tier. draftRecap below (the in-Apps-Script
+  // transcript path) is untouched, and is what still uses appendOpenQuestions.
+
   return { draftRecap, isEnabled };
 })();
+
+/**
+ * Entry point for WriteApi's setRecapEnabled action: flip RECAP_ENABLED from
+ * outside the editor, both directions.
+ *
+ * WHY THIS ONE PROPERTY AND NOT A GENERAL SETTER. The objection to a
+ * remotely-flippable kill switch is real but it is not uniform, and the
+ * difference is what can happen while the switch is on:
+ *
+ *   AEDILE_ENABLED gates scanInbox, which can auto-send mail via replyAll()
+ *   to anyone clearing AUTOSEND_ALLOWLIST. A remote flip there puts mail in
+ *   other people's inboxes and no human sees it first. It stays editor-only.
+ *
+ *   RECAP_ENABLED gates a tier whose only Gmail mutation is createDraft().
+ *   The worst a wrongly-flipped switch does here is put an unwanted draft in
+ *   the krewe's own drafts folder, where a director sees it and deletes it.
+ *   Nothing leaves. That is a mess, not an incident.
+ *
+ * So: one named property, not `action=setProperty&key=...`. A general setter
+ * would reach AEDILE_ENABLED and AUTOSEND_ENABLED, and the argument above
+ * would no longer hold. (Zach, 2026-09-06, overriding an earlier refusal of
+ * mine that had not made this distinction.)
+ *
+ * Being able to turn it OFF from here is the half that improves safety: the
+ * tier can now be stopped without a browser.
+ */
+function setRecapEnabled(enabled, dryRun) {
+  let want;
+  try {
+    // Same strict parse as dryRun/ignoreDue: "true"/"false" and nothing else.
+    // `enabled=1` or `enabled=ture` is refused rather than read as "off".
+    want = WRITE_API.strictBool(enabled, 'enabled');
+  } catch (err) {
+    Logger.log(`[setRecapEnabled] ${err.message} — switch not touched.`);
+    return { error: String(err.message) };
+  }
+
+  const was = MeetingRecap.isEnabled();
+
+  if (dryRun) {
+    Logger.log(`[setRecapEnabled] DRY RUN — would set ${RECAP_ENABLED_PROPERTY} ${was} -> ${want}`);
+    return { dryRun: true, was, wouldBe: want };
+  }
+
+  // Through the existing switches rather than setProperty directly, so the
+  // editor route and this one cannot drift apart.
+  if (want) enableMeetingRecap();
+  else disableMeetingRecap();
+
+  return { was, now: MeetingRecap.isEnabled() };
+}
 
 /** Kill switch on for the recap tier only — independent of AEDILE_ENABLED/BUMP_ENABLED */
 function enableMeetingRecap() {

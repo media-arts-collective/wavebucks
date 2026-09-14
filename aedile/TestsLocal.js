@@ -221,10 +221,10 @@ console.log('\nMeetingRecap — the two guards that keep a draft from becoming a
   const RECAP_RECIPIENT = 'kreweofvaporwave@googlegroups.com';
   const MIN_TRANSCRIPT_CHARS = 500;
 
-  function appendOpenQuestions(bodyHtml, openQuestions) {
-    if (!openQuestions || !openQuestions.length) return bodyHtml;
-    const items = openQuestions.map(q => `<li>${q}</li>`).join('\n');
-    return `${bodyHtml}\n<p><strong>Still open:</strong></p>\n<ul>\n${items}\n</ul>`;
+  function appendOpenQuestions(body, openQuestions) {
+    if (!openQuestions || !openQuestions.length) return body;
+    const items = openQuestions.map(q => `  - ${q}`).join('\n');
+    return `${body}\n\nStill open:\n${items}`;
   }
 
   function tooShort(transcript) {
@@ -247,19 +247,70 @@ console.log('\nMeetingRecap — the two guards that keep a draft from becoming a
   // Open questions must survive into the draft. The recap context tells the
   // model to report what the meeting did NOT settle rather than resolve it;
   // dropping them here would quietly undo that instruction.
-  const body = appendOpenQuestions('<p>1. THE LIVESTREAM. Building Sunday at 1.</p>', ['Who is getting the tires?']);
+  const body = appendOpenQuestions('1. THE LIVESTREAM. Building Sunday at 1.', ['Who is getting the tires?']);
   assertTrue(body.includes('Who is getting the tires?'), 'an open question reaches the draft body');
   assertTrue(body.includes('Still open:'), 'open questions are labelled, not silently appended');
-  assertEqual(
-    appendOpenQuestions('<p>body</p>', []),
-    '<p>body</p>',
-    'no open questions adds no empty section'
-  );
-  assertEqual(
-    appendOpenQuestions('<p>body</p>', undefined),
-    '<p>body</p>',
-    'a missing open_questions field is not an error'
-  );
+  assertEqual(appendOpenQuestions('body', []), 'body', 'no open questions adds no empty section');
+  assertEqual(appendOpenQuestions('body', undefined), 'body', 'a missing open_questions field is not an error');
+}
+
+console.log('\nsetRecapEnabled — a kill switch that can be flipped from outside the editor');
+{
+  // Inline copies from MeetingRecap.js / WriteApi.js. Change one, change both.
+  const RECAP_ENABLED_PROPERTY = 'RECAP_ENABLED';
+  let prop = null;                       // stands in for the Script Property
+  const Logger = { log: () => {} };
+  const MeetingRecap = { isEnabled: () => prop === 'true' };
+  const enableMeetingRecap = () => { prop = 'true'; };
+  const disableMeetingRecap = () => { prop = 'false'; };
+
+  function strictBool(value, name) {
+    if (value === undefined || value === null || value === '') return false;
+    const s = String(value);
+    if (s === 'true') return true;
+    if (s === 'false') return false;
+    throw new Error(`${name} must be exactly "true" or "false" (got "${s}").`);
+  }
+  const WRITE_API = { strictBool };
+
+  function setRecapEnabled(enabled, dryRun) {
+    let want;
+    try {
+      want = WRITE_API.strictBool(enabled, 'enabled');
+    } catch (err) {
+      Logger.log(`[setRecapEnabled] ${err.message} — switch not touched.`);
+      return { error: String(err.message) };
+    }
+    const was = MeetingRecap.isEnabled();
+    if (dryRun) {
+      Logger.log(`[setRecapEnabled] DRY RUN — would set ${RECAP_ENABLED_PROPERTY} ${was} -> ${want}`);
+      return { dryRun: true, was, wouldBe: want };
+    }
+    if (want) enableMeetingRecap();
+    else disableMeetingRecap();
+    return { was, now: MeetingRecap.isEnabled() };
+  }
+
+  prop = null;
+  assertEqual(setRecapEnabled('true', false), { was: false, now: true }, 'unset -> true, and it reports both ends');
+  assertEqual(setRecapEnabled('false', false), { was: true, now: false }, 'and back off again — both directions');
+
+  // A misread value must not silently mean "off". Same failure direction the
+  // strictBool guard was added for on dryRun.
+  prop = 'true';
+  for (const bad of ['1', 'yes', 'ture', 'TRUE', 'on']) {
+    assertTrue(setRecapEnabled(bad, false).error, `enabled=${bad} is refused, not guessed at`);
+  }
+  assertEqual(prop, 'true', 'and no refusal moved the switch');
+
+  // Absent reads as false everywhere else in this endpoint, so it does here.
+  prop = 'true';
+  assertEqual(setRecapEnabled(undefined, false), { was: true, now: false }, 'an absent value is false, consistently with dryRun');
+
+  // dryRun answers what it would do and changes nothing.
+  prop = 'false';
+  assertEqual(setRecapEnabled('true', true), { dryRun: true, was: false, wouldBe: true }, 'dryRun reports the transition it would make');
+  assertEqual(prop, 'false', 'and dryRun leaves the switch alone');
 }
 
 console.log('\nWriteApi.chooseDraftForm — the createDraft sink picks exactly one shape');
@@ -277,17 +328,41 @@ console.log('\nWriteApi.chooseDraftForm — the createDraft sink picks exactly o
     if (hasThread) return { form: 'reply' };
     if (params.to && params.subject) return { form: 'originate' };
     if (hasOriginate) {
-      return { error: 'createDraft (originate form) requires BOTH to and subject alongside htmlBody.' };
+      return { error: 'createDraft (originate form) requires BOTH to and subject alongside a body.' };
     }
     return { error: 'createDraft requires either threadId (reply) or to+subject (originate).' };
   }
 
   assertEqual(chooseDraftForm({ threadId: 'abc' }).form, 'reply', 'threadId alone is the reply form');
-  assertEqual(chooseDraftForm({ to: 'a@x.org', subject: 'hi' }).form, 'originate', 'to+subject is the originate form');
+  assertEqual(chooseDraftForm({ to: 'a@x.org', subject: 'hi' }).form, 'originate', 'to+subject is the originate form (the recap sink)');
   assertTrue(chooseDraftForm({ threadId: 'abc', to: 'a@x.org' }).error, 'threadId + to is refused as ambiguous, not guessed at');
   assertTrue(chooseDraftForm({ to: 'a@x.org' }).error, 'to without subject is refused, not a half-originate');
   assertTrue(chooseDraftForm({ subject: 'hi' }).error, 'subject without to is refused, not a half-originate');
   assertTrue(chooseDraftForm({}).error, 'neither shape is refused rather than drafting nothing');
+}
+
+console.log('\nWriteApi.chooseBody — one body, plain XOR html; recap goes plain so `<3` survives');
+{
+  // Inline copy of WriteApi.js's chooseBody (see that file). The createDraft
+  // primitive became the single draft sink in #41; a recap (plain text) and a
+  // triage/bump reply (HTML) both flow through it, so it takes exactly one of
+  // `body` (plain) or `htmlBody`. Plain matters: the recap sign-off `<3 SM` is
+  // swallowed by an HTML tag-stripper unless it is drafted as plain text — the
+  // reason MeetingRecap.js drafts plain and redige.mjs posts a plain body.
+  function chooseBody(params) {
+    const hasHtml = params.htmlBody !== undefined && params.htmlBody !== '';
+    const hasPlain = params.body !== undefined && params.body !== '';
+    if (hasHtml && hasPlain) return { error: 'createDraft takes EITHER body (plain) OR htmlBody, not both.' };
+    if (hasHtml) return { html: params.htmlBody };
+    if (hasPlain) return { plain: params.body };
+    return { error: 'createDraft requires a body (plain text) or htmlBody (POST it as a form field).' };
+  }
+
+  assertEqual(chooseBody({ body: 'thanks all\n\n<3 SM' }).plain, 'thanks all\n\n<3 SM', 'a plain body routes to the plain path, `<3 SM` untouched');
+  assertEqual(chooseBody({ htmlBody: '<p>hi</p>' }).html, '<p>hi</p>', 'an htmlBody routes to the html path');
+  assertTrue(chooseBody({ body: 'x', htmlBody: '<p>x</p>' }).error, 'both body and htmlBody is refused, not silently preferred');
+  assertTrue(chooseBody({}).error, 'no body at all is refused rather than drafting an empty message');
+  assertTrue(chooseBody({ body: '' }).error, 'an empty-string body counts as absent');
 }
 
 console.log('\nWriteApi.sendGate — the send primitive fails closed, master kill first');

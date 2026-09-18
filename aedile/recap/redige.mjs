@@ -25,13 +25,14 @@
  * the live project: Apps Script has no `import`, no `fs`, no `process`.
  */
 
-import { readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { callModel, parseDecision } from '../brain/model.mjs';
 import { runChecks, report } from './checks.mjs';
 import { dealDevices, dealFlourish, dealTypo, dealSignoff, devicesBlock } from './devices.mjs';
+import { postExec } from './execClient.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const AEDILE = join(HERE, '..');
@@ -184,7 +185,7 @@ function appendOpenQuestions(body, openQuestions) {
  *  not the decision's raw fields for the far end to assemble -- the primitive is
  *  the single dumb draft sink and judges nothing.
  */
-function post(decision, dryRun) {
+async function post(decision, dryRun) {
   const token = process.env.WRITE_API_TOKEN;
   if (!token) {
     die('WRITE_API_TOKEN is not set -- it gates the sink, and this end has no other way in', 5);
@@ -194,9 +195,6 @@ function post(decision, dryRun) {
   // things like `<3` -- the same reason MeetingRecap.js drafts plain.
   const body = appendOpenQuestions(decision.body, decision.open_questions);
 
-  // The whole form body goes through a 0600 file rather than argv: a token on
-  // a command line is readable out of /proc by any local account for as long
-  // as curl runs.
   // logLabel/logNote name the genre + provenance for the Log tab (#53). The
   // primitive is genre-blind; the caller supplies these, so a recap reads as a
   // recap in the audit trail (restoring what the removed MeetingRecap.createDraft
@@ -212,35 +210,17 @@ function post(decision, dryRun) {
     `logNote=${encodeURIComponent('written by aedile/recap/redige.mjs on mandark')}`,
   ].filter(Boolean).join('&');
 
-  const bodyFile = `/tmp/redige-post-${process.pid}.form`;
-  writeFileSync(bodyFile, form, { mode: 0o600 });
-
-  let raw;
-  try {
-    // -L because /exec answers a POST with a 302 to googleusercontent.com and
-    // the result is served from there. NO -X POST: it pins the method across
-    // that redirect, so curl re-POSTs with no body and Google answers with a
-    // sign-in page instead of JSON -- which reads exactly like a missing
-    // version cut and is not one. --data-binary alone already means POST.
-    raw = execFileSync('curl', ['-sfL', '--max-time', '120', EXEC,
-      '-H', 'Content-Type: application/x-www-form-urlencoded',
-      '--data-binary', `@${bodyFile}`],
-      { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
-  } catch (err) {
-    die(`the sink did not answer: ${err.message}`, 7);
-  } finally {
-    rmSync(bodyFile, { force: true });
-  }
-
+  // postExec (#54) carries the retry: /exec answers a POST with a 302 to
+  // googleusercontent.com whose echo intermittently serves Google's
+  // "unable to open the file" HTML instead of the action JSON, and that
+  // flake is a retry-the-whole-request problem, not a redirect-following one.
   let res;
   try {
-    res = JSON.parse(raw);
-  } catch {
-    // An HTML page here is the endpoint 404ing or asking for a login, which is
-    // what a missing version cut looks like from this side.
-    die(`the sink answered with something that is not JSON:\n${raw.slice(0, 300)}`, 7);
+    res = await postExec(EXEC, form);
+  } catch (err) {
+    die(err.message, 7);
   }
-  if (!res.ok) die(`the sink refused: ${res.error || raw}`, 7);
+  if (!res.ok) die(`the sink refused: ${res.error || JSON.stringify(res)}`, 7);
 
   // ok:true only means the endpoint ran the action. The action reports its own
   // refusals in the result, and a refusal that reads as success is the failure
@@ -302,7 +282,7 @@ async function main(argv) {
   if (args.includes('--post')) {
     if (blocking.length) die(`${blocking.length} blocking finding(s) -- not posting`, 6);
     const dryRun = args.includes('--dry-run');
-    const r = post(decision, dryRun);
+    const r = await post(decision, dryRun);
     console.error(dryRun
       ? `-- DRY RUN: the sink would have drafted to ${r.wouldSendTo}. Nothing was written.`
       : `-- drafted to ${r.recipient}. NOTHING WAS SENT -- a director opens the draft and sends it.`);

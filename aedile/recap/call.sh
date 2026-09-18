@@ -11,6 +11,15 @@
 #     with a sign-in PAGE at HTTP 200 -- which reads exactly like a missing
 #     version cut and is not one. --data-binary already means POST.
 #
+# /exec's 302 also occasionally echoes Google's "unable to open the file"
+# HTML instead of the action JSON (#54) -- a flake in what the far end
+# serves, not in the redirect-following above. Retries the whole request
+# (AEDILE_EXEC_ATTEMPTS, default 8) rather than trying to distinguish it from
+# a real failure; a JSON-looking body, even one with ok:false, is returned
+# on the first attempt that produces one. Same policy and env var name as
+# execClient.mjs's postExec, which redige.mjs uses, so both callers share one
+# knob.
+#
 #   ./call.sh setRecapEnabled enabled=false
 #   ./call.sh setRecapEnabled enabled=true dryRun=true
 #   ./call.sh scanInbox dryRun=true
@@ -42,7 +51,25 @@ for kv in sys.argv[3:]:
 open(sys.argv[1], 'w').write(urllib.parse.urlencode(d))
 " "$FORM" "$@"
 
-curl -sL --max-time 120 "$URL" \
-  -H 'Content-Type: application/x-www-form-urlencoded' \
-  --data-binary @"$FORM"
-echo
+ATTEMPTS="${AEDILE_EXEC_ATTEMPTS:-8}"
+attempt=1
+while :; do
+  # The `if` guards the assignment from `set -e`: a transport failure (curl's
+  # own exit code, since no -f here) falls through to the retry below instead
+  # of aborting the script outright.
+  if RESPONSE=$(curl -sL --max-time 120 "$URL" \
+    -H 'Content-Type: application/x-www-form-urlencoded' \
+    --data-binary @"$FORM"); then
+    case "$RESPONSE" in
+      '{'*|'['*) echo "$RESPONSE"; exit 0 ;;
+    esac
+  fi
+  [ "$attempt" -lt "$ATTEMPTS" ] || {
+    echo "call.sh: /exec did not return JSON after ${ATTEMPTS}x -- last response:" >&2
+    printf '%s' "${RESPONSE:-<curl failed>}" | head -c 300 >&2
+    echo >&2
+    exit 7
+  }
+  sleep "$attempt"
+  attempt=$((attempt + 1))
+done

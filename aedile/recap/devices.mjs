@@ -127,14 +127,21 @@ function rng(seed) {
  *  probabilities are still hand-set placeholders and stay open in #49. */
 const GENRE_OFF = {
   headsup: ['numberedList'],
+  // A nudge is the morning-of summons and asks for nothing: AEDILE_CONTEXT.
+  // headsup.md has it "present-tense/imperative, drops the intro and questions",
+  // and the real Half Moon nudge is two lines that close on an imperative ("Bring
+  // a buddy") where its own lock-in two days earlier had carried the ask ("Reply
+  // with bars."). Same voice, same event, opposite about soliciting. Dealt at the
+  // pool's 0.62 the question came back anyway, so the beat has to suppress it.
+  'headsup:nudge': ['numberedList', 'question'],
 };
 
 /** Deal one email its hand. `seed` makes it reproducible; omit for a real
  *  recap, where each one should simply differ from the last. `genre` suppresses
  *  devices that belong to another register. */
-export function dealDevices(seed, genre) {
+export function dealDevices(seed, genre, beat) {
   const rand = seed === undefined ? Math.random : rng(seed);
-  const off = new Set(GENRE_OFF[genre] || []);
+  const off = new Set(GENRE_OFF[`${genre}:${beat}`] || GENRE_OFF[genre] || []);
   const hand = {};
   for (const d of DEVICES) {
     hand[d.key] = off.has(d.key) ? false

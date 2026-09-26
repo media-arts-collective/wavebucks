@@ -259,6 +259,24 @@ expectClean('they/them needs no support from the notes', (() => {
   return d;
 })());
 
+// A notice that names the wrong day is the worst thing this file can pass.
+{
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('Hi friends!', 'Hi friends! Build day is TOMORROW.');
+  const got = runChecks(d, NOTES, VAULT, { leadDays: 0 }).filter(f => f.level === 'fail').map(f => f.id);
+  const ok = got.includes('temporal-mismatch');
+  if (ok) { passed++; console.log('  ok   lead 0 rejects "tomorrow"'); }
+  else { failed++; console.log(`  FAIL lead 0 rejects "tomorrow" -- got [${got}]`); }
+}
+{
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('Hi friends!', 'Hi friends! Build day is TOMORROW.');
+  const got = runChecks(d, NOTES, VAULT, { leadDays: 1 }).map(f => f.id);
+  const ok = !got.includes('temporal-mismatch');
+  if (ok) { passed++; console.log('  ok   lead 1 accepts "tomorrow"'); }
+  else { failed++; console.log(`  FAIL lead 1 accepts "tomorrow" -- got [${got}]`); }
+}
+
 console.log('\ntells a human named, then measured');
 // Zach, 2026-09-26, on a posted draft: "still sounds slightly AI... especially
 // corny". Both of these came out of one sentence pair in it.

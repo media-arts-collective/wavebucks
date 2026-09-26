@@ -169,6 +169,28 @@ export function runChecks(d, notes, vault, opts = {}) {
       `gendered pronoun(s) the input does not supply: ${unsupported.join(', ')}. Use the person's name, or they/them. Guessing misgenders a real member`);
   }
 
+  // 1c. The day-word must match the computed lead time.
+  //
+  // `--as-of` exists so a nudge written the night before reads correctly on the
+  // morning it is sent, and the prompt is handed the answer as a literal ("which
+  // is TODAY. Lead time: 0 day(s)"). The generator wrote "TOMORROW, Sunday, 1pm"
+  // anyway, in the subject as well, and every other check passed it: no figure is
+  // invented, the date is real, the prose is fine. A notice that tells 40 people
+  // the wrong day is the worst output this file can emit and it was the only one
+  // with nothing watching it.
+  //
+  // Only fires when the caller supplies leadDays, so a recap is unaffected.
+  if (typeof opts.leadDays === 'number') {
+    const wrong = opts.leadDays === 0 ? /\btomorrow\b/i
+      : opts.leadDays === 1 ? /\b(?:today|tonight)\b/i
+      : /\b(?:today|tonight|tomorrow)\b/i;
+    const hit = whole.match(wrong);
+    if (hit) {
+      add('fail', 'temporal-mismatch',
+        `says "${hit[0]}" but the event is ${opts.leadDays} day(s) out from the send date`);
+    }
+  }
+
   // 2. No invented figures. Dates, money, times, counts.
   const knownFigures = figures(notes);
   const inventedFigures = [...figures(whole)].filter(n => !knownFigures.has(n));

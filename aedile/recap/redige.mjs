@@ -203,11 +203,19 @@ export function buildSystemPrompt(vault, genre = 'recap') {
  *
  *  Beat comes from the corpus, not from taste: lead time is bimodal with a mode
  *  at 0-1 days, and a same-day nudge goes out in the morning. */
-export function leadTimeBlock(eventDate, beat) {
+export function leadTimeBlock(eventDate, beat, asOf) {
   if (!eventDate) return '';
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) die(`--event-date must be YYYY-MM-DD, got "${eventDate}"`, 2);
+  for (const [flag, v] of [['--event-date', eventDate], ['--as-of', asOf]]) {
+    if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) die(`${flag} must be YYYY-MM-DD, got "${v}"`, 2);
+  }
+  // `--as-of` is the day the mail will be READ, which is not always the day it is
+  // generated. A nudge goes out in the morning (corpus median 10am) and gets
+  // written the night before, so computing lead time against the clock makes it
+  // say "tomorrow" to someone reading it on the day. The operator states the send
+  // date; nothing here guesses it.
   const day = s => Math.floor(new Date(s + 'T12:00:00').getTime() / 86400000);
-  const days = day(eventDate) - day(new Date().toISOString().slice(0, 10));
+  const days = day(eventDate) - day(asOf || new Date().toISOString().slice(0, 10));
+  leadTimeBlock.days = days;  // the one derivation, reused by the checks below
   const when = days === 0 ? 'TODAY' : days === 1 ? 'TOMORROW' : days < 0
     ? `${-days} day(s) AGO, which is almost certainly a mistake in the call`
     : `in ${days} days`;
@@ -320,6 +328,7 @@ async function main(argv) {
   if (!args.length || args[0] === '--help') {
     console.error('usage: redige.mjs <notes.md|meeting.m4a|saved.json> [--genre recap|headsup]');
     console.error('                  [--beat lock-in|nudge] [--event-date YYYY-MM-DD]');
+    console.error('                  [--as-of YYYY-MM-DD: the day it will be READ, default today]');
     console.error('                  [--out FILE] [--post [--dry-run]] [--json]');
     process.exit(2);
   }
@@ -334,6 +343,7 @@ async function main(argv) {
   if (!GENRES[genre]) die(`unknown --genre "${genre}" -- one of ${Object.keys(GENRES).join(', ')}`, 2);
   const beat = flag('--beat');
   const eventDate = flag('--event-date');
+  const asOf = flag('--as-of');
   if (genre === 'headsup' && !eventDate) {
     // Fail loud. A heads-up whose lead time nobody computed is the exact draft
     // that goes out saying "Sunday the 27th" to people reading it on the 27th.
@@ -351,7 +361,8 @@ async function main(argv) {
     const saved = JSON.parse(readFileSync(input, 'utf8'));
     if (!saved.body || !saved.subject) die(`${input} has no subject/body -- not a saved decision`, 3);
     if (!saved._notes) die(`${input} has no _notes -- regenerate it with this version, which saves them`, 3);
-    const findings = runChecks(saved, saved._notes, readVault(), { genre, beat });
+    leadTimeBlock(eventDate, beat, asOf);  // recompute leadTimeBlock.days for the check
+    const findings = runChecks(saved, saved._notes + '\n' + (eventDate || ''), readVault(), { genre, beat, leadDays: eventDate ? leadTimeBlock.days : undefined });
     report(findings);
     console.log(render(saved));
     const blocked = findings.filter(f => f.level === 'fail');
@@ -377,7 +388,7 @@ async function main(argv) {
   // Which optional devices this recap gets. Presentation only -- it never
   // touches what the recap SAYS. A single generation cannot reproduce a
   // corpus frequency on its own, so the caller rolls and tells it.
-  const hand = dealDevices(undefined, genre);
+  const hand = dealDevices(undefined, genre, beat);
   const flourish = dealFlourish();
   const typo = dealTypo();
   const signoff = dealSignoff();
@@ -386,9 +397,11 @@ async function main(argv) {
   console.error(`-- genre: ${genre}${beat ? ` (beat: ${beat})` : ''}`);
   console.error(`-- devices: ${dealt.join(', ') || 'none'}; gap ${gap}`);
 
+  const lead = leadTimeBlock(eventDate, beat, asOf);
+  const leadDays = eventDate ? leadTimeBlock.days : undefined;
   const prompt = [
     buildSystemPrompt(vault, genre),
-    leadTimeBlock(eventDate, beat),
+    lead,
     devicesBlock(hand, [flourish, signoff].filter(Boolean).join('\n- '), typo, gap),
   ].filter(Boolean).join('\n\n');
   let decision;
@@ -398,7 +411,7 @@ async function main(argv) {
     die(String(err.message || err), 5);
   }
 
-  const findings = runChecks(decision, notes + '\n' + (eventDate || ''), vault, { genre, beat });
+  const findings = runChecks(decision, notes + '\n' + (eventDate || ''), vault, { genre, beat, leadDays });
 
   writeFileSync(out, JSON.stringify({ ...decision, _checks: findings, _notes: notes }, null, 2));
   console.error(`-- wrote ${out}`);

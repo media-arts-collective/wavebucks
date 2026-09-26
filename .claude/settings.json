@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(aedile/recap/call.sh get:*)",
+      "Bash(aedile/recap/call.sh readThread:*)",
+      "Bash(gh issue create:*)",
+      "Bash(gh issue edit:*)",
+      "Bash(gh issue list:*)",
+      "Bash(gh issue view:*)",
+      "Bash(git push:*)",
+      "Bash(clasp deployments:*)",
+      "Bash(clasp pull:*)",
+      "Bash(node --check:*)",
+      "Bash(node aedile/TestsLocal.js)"
+    ],
+    "ask": [
+      "Bash(clasp push:*)",
+      "Bash(clasp deploy:*)",
+      "Bash(clasp version:*)",
+      "Bash(aedile/recap/call.sh scanInbox:*)",
+      "Bash(aedile/recap/call.sh checkBumps:*)",
+      "Bash(aedile/recap/call.sh createDraft:*)",
+      "Bash(aedile/recap/call.sh sendReplyAll:*)",
+      "Bash(aedile/recap/call.sh setRecapEnabled:*)",
+      "Bash(aedile/recap/redige.mjs:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)"
+    ]
+  }
+}

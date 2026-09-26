@@ -74,6 +74,18 @@ times (`5pm`, `noon`, `-ish` ranges); **no em-dashes** (an AI tell the corpus
 never uses; recap's `checks.mjs` hard-fails on the em-dash, the en-dash, and the
 spaced double hyphen, and this file is graded by the same rule it states).
 
+Two more, both blocking or warned in `checks.mjs` and both named by a human
+reading this genre's first generated draft (Zach, 2026-09-26: "still sounds
+slightly AI... especially corny"):
+
+- **Never three clauses opening with the same word.** "tell us what feels wrong,
+  what lags, what you expected to happen and did not" is 0 of 480 archived
+  messages. Name one thing, or two, and stop.
+- **Do not reassure the reader that nothing is required.** "No tools and no skills
+  needed, just hands and a reaction" is the shape to avoid. The archive's one
+  instance is concrete and joking ("just grit and grind. Hustle and flow."). If you
+  cannot name a physical thing in that slot, cut the sentence.
+
 NOTE: those recap rates are measured on the 400-4000-char (digest-length) pool
 and do NOT transfer to the terse heads-up register. There, greeting ~52% and
 sign-off ~47% are **both optional**, and one-line **unsigned** nudges are common.

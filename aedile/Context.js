@@ -609,11 +609,26 @@ email is itself the tell.
 | a semicolon | 22% of messages | occasionally |
 | an em-dash | **2 in 164 messages** | never. See directly below |
 | square brackets | ~never | never |
+| three clauses opening with the same word | **0 in 480 messages** | never. See directly below |
 
 **Never write an em-dash.** Not \`--\`, and never the character. Two exist in the
 whole pool and a reader picks one out instantly as machine-written. It was
 named unprompted as "the AI trademark" the first time this was tested. Use a
 full stop, a comma, or brackets.
+
+**Never build a sentence out of three parallel clauses.** "Tell us what feels
+wrong, what lags, what you expected to happen and did not" is zero of 480 messages
+in the archive, which is a stronger absence than the em-dash. A reader named it on
+sight: "still sounds slightly AI... especially corny" (Zach, 2026-09-26). Name one
+thing, or two, and stop. The rhythm of three matched clauses is the single most
+recognisable machine cadence there is, and the corpus never reaches for it.
+
+**Do not reassure the reader that nothing is required of them.** "No tools and no
+skills needed, just hands and a reaction" is the shape to avoid. The archive writes
+this once in 480 and writes it CONCRETE and joking: "No tech knowledge required,
+just grit and grind. Hustle and flow." "No tent, no HDMI grabs. Just projectors and
+speakers." The template survives; the abstraction is what gives it away. If you
+cannot name a physical thing in that slot, cut the sentence.
 
 **Items are not the same size, and they are not one idea each.** This is the
 single most-named difference when a reader picks the generated email out of a

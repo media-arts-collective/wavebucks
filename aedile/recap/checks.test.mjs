@@ -249,6 +249,31 @@ expectWarn('ragged spacing is not flagged', (() => {
   return d;
 })(), 'uniform-spacing', false);
 
+console.log('\ntells a human named, then measured');
+// Zach, 2026-09-26, on a posted draft: "still sounds slightly AI... especially
+// corny". Both of these came out of one sentence pair in it.
+expectFinding('three clauses opening with the same word', d => {
+  d.body = d.body.replace('Cost unknown.',
+    'Tell us what feels wrong, what lags, what you expected to happen and did not.');
+}, 'parallel-clauses');
+expectWarn('reassurance that nothing is needed', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('Cost unknown.', 'No tools and no skills needed for that part.');
+  return d;
+})(), 'unasked-reassurance');
+// The archive's own analogue must survive both: same template, concrete nouns.
+expectClean('the archive\'s concrete version is not flagged', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('Cost unknown.', 'No tent, no HDMI grabs. Just projectors and speakers.');
+  return d;
+})());
+// Two parallel clauses are ordinary English; only three trip it.
+expectClean('two parallel clauses are fine', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('Cost unknown.', 'Say what lags and what feels wrong.');
+  return d;
+})());
+
 console.log('\nthe heads-up genre is graded by its own form rules');
 // AEDILE_CONTEXT.headsup.md: the terse register signs ~47% of the time and "the
 // barest form is a single unsigned line". This file used to FAIL that at blocking

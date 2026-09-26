@@ -197,6 +197,35 @@ export function runChecks(d, notes, vault, opts = {}) {
       'contains an em-dash or a spaced `--`; the archive has two in 164 messages, and it reads as machine-written on sight');
   }
 
+  // Tells named by a human reading a real draft, then measured. Zach, 2026-09-26,
+  // on "No tools and no skills needed for that part, just hands and a reaction":
+  // "still sounds slightly AI... especially corny". Both patterns below come out
+  // of that one sentence pair, and they are NOT the same finding: one has zero
+  // support in the corpus and one has a single real instance that differs from the
+  // draft in a way no regex can see.
+
+  // Three or more clauses opening with the same function word inside one
+  // sentence: "what feels wrong, what lags, what you expected to happen and did
+  // not". 0 of 480 MS messages. That is a stronger absence than the em-dash,
+  // which has one. Blocking, like the em-dash, because it is cheap to reword and
+  // a human is asked before anything is posted.
+  if (/\b(what|that|how|where|who|whether)\b[^,.!?;:]{2,60},\s*\1\b[^,.!?;:]{2,60},\s*(?:and\s+|or\s+)?\1\b/i.test(whole)) {
+    add('fail', 'parallel-clauses',
+      'three or more clauses opening with the same word in one sentence; 0 of 480 archived messages do this, and it is the shape a human named as sounding machine-written');
+  }
+
+  // Unasked reassurance: "no tools and no skills needed". 1 of 480, and that one
+  // is "No tech knowledge required, just grit and grind. Hustle and flow." The
+  // template is not the problem; what the archive puts after it is CONCRETE and
+  // usually joking (projectors and speakers, you and a camera, grit and grind),
+  // where the draft put an abstraction ("a reaction"). A regex cannot grade
+  // concreteness, so this warns and names the distinction rather than blocking on
+  // a shape the archive does use.
+  if (/\bno (?:[a-z]+ ){0,2}[a-z]+ (?:needed|required|necessary)\b/i.test(whole)) {
+    add('warn', 'unasked-reassurance',
+      'reassures the reader that nothing is needed; 1 of 480 archived messages does this ("No tech knowledge required, just grit and grind"), and that one names concrete things where a generated one names abstractions');
+  }
+
   // 92% of comparable archived messages carry at least one, averaging 3.5. The
   // generator averaged 0.7 and only two thirds had any. Warn: a short, sober
   // logistics note can legitimately have none.

@@ -127,28 +127,12 @@ generally.
   result to `WriteApi`'s `createDraft` action. Excluded from `clasp push` by
   `.claspignore` — it is node ESM and pushing it would break the project at
   load.
-- `createDraft` is the sink for that generator: it assembles and files a draft
-  that arrived already written. It judges nothing and calls no model, and it
-  cannot send. The generator holds no Google credential; the Apps Script project
-  does, which is why the capability lives there.
-
-  **Corrected 2026-09-26.** This bullet previously said `RECAP_ENABLED` gates
-  `createDraft` and that the recipient is hard-coded. Neither is true of the
-  primitive: `primCreateDraft` checks no kill switch and passes `params.to`
-  through unchecked (deliberately, per the recipient-allowlist note in
-  `CLAUDE.md`), and the hard-coded recipient lives in the *caller*
-  (`recap/redige.mjs`), not the sink. `RECAP_ENABLED` gates only the legacy
-  in-Apps-Script `draftRecap`.
-
-  It also said "aedile already runs as the krewe account." **It does not.** The
-  project executes as `zach@nomac.org`, so every draft `createDraft` files lands
-  in `zach@nomac.org`'s Drafts, and every `readInbox` / `readThread` reads that
-  mailbox. The krewe address appears in the `From` line because it is configured
-  as a send-as identity, which is not the same thing as the mailbox, and reading
-  `From` as evidence of the mailbox is the specific mistake this note exists to
-  prevent. Observed by Zach, 2026-09-26, looking at the folder. Making the Office
-  the account aedile actually runs as is #47, which is OPEN: do not read its
-  decided target as current state.
+- `createDraft` is the sink for that generator: it assembles and files a recap
+  that arrived already written. It judges nothing and calls no model. Same
+  bounds as `draftRecap`, on purpose — `RECAP_ENABLED` gates it, the recipient
+  is hard-coded, and it cannot send. The generator holds no Google credential;
+  aedile already runs as the krewe account, so the capability stays where the
+  credential already is.
 - Transcription rides the same whisper the Zaxon relay calls (the container at
   `/srv/zaxon` on dexter), by the same two steps `whisper_stt.sh` uses. There
   is no second STT.

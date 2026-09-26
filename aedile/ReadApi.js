@@ -39,6 +39,12 @@
  *       limit default 50, hard cap 500.
  *   ?scope=log[&limit=<n>]        Recent Log rows, newest first (cap 500).
  *   ?scope=requests[&status=open] Requests rows; status filters.
+ *
+ * Every scope here reads a SHEET. Live Gmail reads are deliberately NOT here
+ * (#35): a thread body is more sensitive than an archived row, and this
+ * endpoint puts its token in a query string, where it reaches server logs,
+ * browser history and /proc. `action=readThread` lives on WriteApi's doPost
+ * instead — POST-only, write-token-gated, nothing in a URL.
  */
 
 // Column layouts mirror the writers: MessageLog.js, OpenLoops.js,

@@ -75,7 +75,18 @@ generally.
   workflow can pull institutional-memory state on demand without Sheets/
   Gmail creds. Strictly read-only (no mutation, no send, no guardrail
   touch); gated by the `READ_API_TOKEN` script property and fails closed if
-  it's unset. See the file header for deploy steps and scopes.
+  it's unset. See the file header for deploy steps and scopes. **Sheet tabs
+  only** — it is history, not current state. Live Gmail reads are `WriteApi`'s
+  `readInbox`/`readThread` (#35), deliberately on the `doPost` side: a thread
+  body should not be reachable by a URL that can be pasted, logged or
+  prefetched, and those two are POST-only and write-token-gated.
+- **Which store answers which question.** `Messages` holds what `scanInbox`
+  reviewed, so it stops dead the moment that trigger does — it cannot answer
+  anything after its last row, and a quiet tab is indistinguishable from a
+  dead one without checking the date first. For "what is happening now,"
+  search live mail (`readInbox`), then read the one thread (`readThread`).
+  A `Log` row proves an action happened and **its Subject column is
+  truncated** — never quote one as the message.
 
 **Triage** (per-message, `scanInbox()`)
 - `InboxProcessor.js` — classifies each message "dm" or "list"

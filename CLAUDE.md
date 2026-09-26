@@ -98,6 +98,51 @@ redundant friction, not real safety — removed the earlier
 `WAVEBUCKS_AUTOPUSH` env-var gate from this file (2026-07-24) for
 exactly that reason.
 
+## Agent permissions live in `.claude/settings.json` (2026-09-25, human-directed)
+
+Zach: *"permission needs to be persistent somehow: a skill? a script?
+this is literally the point of the repo."* A skill cannot grant
+permission — it is instructions. The grant is `.claude/settings.json`,
+which is the one path un-ignored under `.claude/` (see `.gitignore`), so
+the policy reviews like code and reaches Tyler and unattended runs alike.
+
+The split is the operating rule, not a convenience:
+
+- **allow** — reads and bookkeeping. `call.sh get`/`readThread`, `gh
+  issue` verbs, `git push`, `clasp pull`/`deployments`, the local test
+  suite. None of these can send mail, spend the krewe's API budget, or
+  change production.
+- **ask** — everything that can. `clasp push`/`deploy`/`version` (changes
+  what the live deployment runs), `call.sh scanInbox`/`checkBumps`
+  (spends the Anthropic budget and can auto-send within the allowlist),
+  `createDraft`/`sendReplyAll`/`setRecapEnabled`, and `redige.mjs`.
+- **deny** — `git push --force` in any spelling.
+
+**`clasp push` promoted to `allow` (2026-09-25, human-directed).** Zach:
+*"I need you to be able to push unattended as a rule."* Asked again the
+same session after the first `ask` prompt, so it is a standing grant, not
+one approval. Scope is `clasp push` only — `clasp deploy` and `clasp
+version` stay in `ask`, because a push changes saved code (what the
+time-driven triggers execute) while those two change what the anonymous
+`/exec` serves to every caller. That line is the whole distinction; do
+not blur it by promoting the other two on the strength of this entry.
+
+**Not yet in effect — #62.** `Bash(clasp push:*)` is listed in `allow`
+AND still in `ask`, and `ask` wins, so the prompt remains. The classifier
+refused an agent edit that deletes its own confirmation requirement
+(Self-Modification, twice), which is the guard behaving correctly:
+*adding* the `allow` entry was permitted, *removing* the `ask` entry was
+not. #62 is one line, and it needs a human hand by design.
+
+**Do not move a row from `ask` to `allow` to get unblocked mid-task.**
+The point of the `ask` list is that a human sees those specific actions
+every time. Widening it is a decision, dated and recorded here like the
+push grant above.
+
+Because this repo is public, a pull request can edit this file. Treat a
+diff to `.claude/settings.json` as a privilege change and review it as
+one — it is the only file here that grants an agent anything.
+
 **Prefer noisy failures over silent guards in this phase.** This project
 is pre-full-list-deployment — the whitelist scope is intentionally
 narrow right now specifically so problems surface loudly and get fixed

@@ -6,8 +6,19 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Claude Code local state (per-developer, not shared)
-.claude/
+# Claude Code local state (per-developer, not shared).
+# `.claude/*`, not `.claude/`: git never descends into an excluded DIRECTORY,
+# so a negation under one can never fire. Excluding the contents instead is
+# what makes the one exception below possible.
+.claude/*
+# ...except the permission policy, which is a PROJECT fact, not per-developer
+# state: which commands an agent may run here unattended is the same question
+# for Zach, Tyler and any unattended run, and it reviews like code. Same
+# reasoning as Config.getLexicon() living in source rather than a sheet.
+# NOTHING ELSE under .claude/ gets un-ignored — no settings.local.json (that
+# is where personal overrides belong), no transcripts, no FOCUS.md (see
+# aedile/.scheduler/ for why that moved out of .claude/ entirely).
+!.claude/settings.json
 
 # Node dependencies (aedile/brain, #40). package.json + package-lock.json are
 # committed; the installed tree is per-box and never committed.

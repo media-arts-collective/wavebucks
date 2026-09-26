@@ -39,12 +39,12 @@
  *       limit default 50, hard cap 500.
  *   ?scope=log[&limit=<n>]        Recent Log rows, newest first (cap 500).
  *   ?scope=requests[&status=open] Requests rows; status filters.
- *   ?scope=thread&threadId=<id>
- *       LIVE GMAIL, not a sheet (#35). Every message on that thread — From/To/
- *       Cc/Date/Subject/plain body — read or unread. Widens this endpoint from
- *       "what aedile archived" to "any thread in the krewe mailbox, by id",
- *       which is why the token gate above matters more, not less. Adds no new
- *       OAuth scope: the project already reads Gmail in InboxProcessor.
+ *
+ * Every scope here reads a SHEET. Live Gmail reads are deliberately NOT here
+ * (#35): a thread body is more sensitive than an archived row, and this
+ * endpoint puts its token in a query string, where it reaches server logs,
+ * browser history and /proc. `action=readThread` lives on WriteApi's doPost
+ * instead — POST-only, write-token-gated, nothing in a URL.
  */
 
 // Column layouts mirror the writers: MessageLog.js, OpenLoops.js,
@@ -111,34 +111,7 @@ const READ_API = (() => {
     return rows;
   }
 
-  /**
-   * The one scope that reads Gmail instead of a sheet (#35). It exists because
-   * a thread is sometimes the ONLY copy: a director sending under the
-   * kreweofvaporwave@ alias from their own mailbox leaves the Sent copy in
-   * THAT mailbox, never the krewe's, and mail already read never reaches the
-   * Messages tab once the triage trigger stops. getMessages() returns the
-   * whole thread regardless of read state, which is the point — the unread
-   * replies are findable without this, the root message is not.
-   *
-   * Throws rather than returning an error row: handle() turns that into a 500
-   * with the message, which is the loud failure a missing thread deserves.
-   */
-  function thread(p) {
-    if (!p.threadId) throw new Error('scope=thread requires threadId.');
-    const t = GmailApp.getThreadById(String(p.threadId));
-    if (!t) throw new Error(`thread ${p.threadId} not found.`);
-    return t.getMessages().map(m => ({
-      MessageId: m.getId(),
-      Date: m.getDate(),
-      From: m.getFrom(),
-      To: m.getTo(),
-      Cc: m.getCc(),
-      Subject: m.getSubject(),
-      Body: m.getPlainBody(),
-    }));
-  }
-
-  const SCOPES = { openloops, messages, log, requests, thread };
+  const SCOPES = { openloops, messages, log, requests };
 
   function handle(params) {
     const configured = PropertiesService.getScriptProperties().getProperty('READ_API_TOKEN');

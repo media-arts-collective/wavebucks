@@ -49,6 +49,14 @@
  *      with the link.
  *   4. Call: POST <exec-url> -d token=<WRITE_API_TOKEN> -d action=<action>
  *
+ * READS (POST; dryRun meaningless and ignored):
+ *   ?action=readThread&threadId=<id>
+ *       Every message on that thread — from/to/cc/date/subject/plain body —
+ *       read or unread. The only live-Gmail read in this project (#35). It is
+ *       on this endpoint rather than ReadApi because ReadApi is a doGet whose
+ *       token rides in a query string; a thread body should not be reachable
+ *       by a URL someone can paste, log or prefetch. See readThread below.
+ *
  * EXECUTE-ONLY PRIMITIVES (all POST; all honor dryRun):
  *   ?action=createDraft   Drafts finished text. Never sends, never marks read.
  *       Body: exactly one of `body` (plain text) or `htmlBody`. Recap drafts
@@ -358,6 +366,41 @@ const WRITE_API = (() => {
     addLabel: primAddLabel,
   };
 
+  /**
+   * readThread — the one READ on this endpoint (#35). It reads and mutates
+   * nothing, so dryRun is meaningless and ignored.
+   *
+   * Why it is here and not on ReadApi, which is the read endpoint: a thread's
+   * message bodies are more sensitive than an archived row, and ReadApi is a
+   * doGet whose token rides in a query string — into server logs, browser
+   * history and /proc. This endpoint is POST-only precisely so a bare link or
+   * a prefetch cannot reach it, and its token is the one already treated as
+   * higher-trust (#38). Nothing about the read wants a URL.
+   *
+   * It exists because a thread is sometimes the only copy. A director sending
+   * under the kreweofvaporwave@ alias from their own mailbox leaves the Sent
+   * copy in THAT mailbox, never the krewe's, and mail already read never
+   * reaches the Messages tab once the triage trigger stops — as it has since
+   * 2026-07-18. getMessages() returns the whole thread regardless of read
+   * state, which is the point: unread replies were already findable, the root
+   * message was not.
+   */
+  function readThread(params) {
+    const thread = requireThread(params.threadId);
+    const messages = thread.getMessages().map(m => ({
+      messageId: m.getId(),
+      date: m.getDate(),
+      from: m.getFrom(),
+      to: m.getTo(),
+      cc: m.getCc(),
+      subject: m.getSubject(),
+      body: m.getPlainBody(),
+    }));
+    return { status: 200, body: { ok: true, action: 'readThread', threadId: params.threadId, count: messages.length, messages } };
+  }
+
+  const READS = { readThread };
+
   function handle(params) {
     const configured = PropertiesService.getScriptProperties().getProperty('WRITE_API_TOKEN');
     if (!configured) return { status: 503, body: { ok: false, error: 'WRITE_API_TOKEN not set; endpoint disabled.' } };
@@ -373,6 +416,13 @@ const WRITE_API = (() => {
       return { status: 400, body: { ok: false, error: String(err.message) } };
     }
 
+    // Reads (#35): no mutation, no model call, no kill switch — there is
+    // nothing for one to gate. Checked before the mutating dispatch so a read
+    // can never fall through into it.
+    if (READS[action]) {
+      return READS[action](params);
+    }
+
     // Execute-only primitives (#36): the brain POSTs finished text, these enact
     // one Gmail mutation. Each handler validates its own params and returns a
     // fully-formed { status, body } (including its own refusals).
@@ -384,7 +434,7 @@ const WRITE_API = (() => {
     // tier cutovers (#42/#43) and removed at #46. Not the target topology.
     const fn = ACTIONS[action];
     if (!fn) {
-      const known = Object.keys(PRIMITIVES).concat(Object.keys(ACTIONS)).join(', ');
+      const known = Object.keys(READS).concat(Object.keys(PRIMITIVES), Object.keys(ACTIONS)).join(', ');
       return { status: 400, body: { ok: false, error: 'Unknown action. Use one of: ' + known } };
     }
 

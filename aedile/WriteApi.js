@@ -56,6 +56,10 @@
  *       on this endpoint rather than ReadApi because ReadApi is a doGet whose
  *       token rides in a query string; a thread body should not be reachable
  *       by a URL someone can paste, log or prefetch. See readThread below.
+ *   ?action=whoami
+ *       Which mailbox this project acts in: the effective user, the send-as
+ *       aliases it may use, and how many drafts it holds. Answers "where did that
+ *       draft go" with a command instead of a doc. See whoami below.
  *   ?action=readInbox[&q=<gmail query>][&limit=<n>]
  *       Gmail search. Returns thread id, subject, last sender/date, message
  *       count and a 300-char snippet — identity, not bodies. Default query
@@ -435,7 +439,35 @@ const WRITE_API = (() => {
     return { status: 200, body: { ok: true, action: 'readInbox', query, count: threads.length, threads } };
   }
 
-  const READS = { readThread, readInbox };
+  /**
+   * whoami — which mailbox this project actually acts in.
+   *
+   * Exists because prose kept getting it wrong. README.md asserted "aedile
+   * already runs as the krewe account" and was believed over a director looking
+   * at his own Drafts folder (2026-09-26). The `From` on a draft is a SEND-AS
+   * IDENTITY, not the mailbox that stores it, so every observation of `From` fits
+   * either answer and neither doc nor inference settles it. Zach: "it should be
+   * predicates to test not prose."
+   *
+   * So this returns the answer instead of a document claiming it. `effectiveUser`
+   * is the account whose Gmail every read reaches and whose Drafts every
+   * createDraft fills; `aliases` are the addresses it may send AS, which is the
+   * distinction that caused the mistake. Both come from the executing copy, so a
+   * stale deployment reports itself rather than hiding.
+   *
+   * Reads and mutates nothing. dryRun is meaningless and ignored.
+   */
+  function whoami() {
+    return { status: 200, body: {
+      ok: true,
+      action: 'whoami',
+      effectiveUser: Session.getEffectiveUser().getEmail(),
+      aliases: GmailApp.getAliases(),
+      draftCount: GmailApp.getDrafts().length,
+    } };
+  }
+
+  const READS = { readThread, readInbox, whoami };
 
   function handle(params) {
     const configured = PropertiesService.getScriptProperties().getProperty('WRITE_API_TOKEN');
@@ -493,6 +525,38 @@ const WRITE_API = (() => {
   // and (strictBool) for the top-level payload actions; the rest is internal.
   return { handle, chooseDraftForm, chooseBody, sendGate, strictBool };
 })();
+
+/**
+ * whoAmI — run this from the Apps Script editor. No deployment, no token.
+ *
+ * It answers one question that no document can be trusted to: which mailbox this
+ * project acts in. On 2026-09-26 two different answers were asserted from a
+ * draft's `From` header and from README prose, and both were wrong, while the one
+ * person looking at a real Drafts folder was told he was mistaken. A `From` is a
+ * send-as identity; the mailbox is `Session.getEffectiveUser()`. They differ here.
+ *
+ * It is a top-level function on purpose. The `whoami` action beside it needs the
+ * pinned web-app deployment updated, and `clasp deploy` refuses with "Only users
+ * in the same domain as the script owner may deploy this script" -- which is
+ * itself a fact about identity that no doc records. This runs from the editor by
+ * whoever opens it, so the measurement never depends on being able to deploy.
+ *
+ * Reads and mutates nothing.
+ */
+function whoAmI() {
+  var out = {
+    effectiveUser: Session.getEffectiveUser().getEmail(),
+    activeUser: Session.getActiveUser().getEmail(),
+    aliases: GmailApp.getAliases(),
+    draftCount: GmailApp.getDrafts().length,
+    newestDrafts: GmailApp.getDrafts().slice(-4).map(function (d) {
+      var m = d.getMessage();
+      return { subject: m.getSubject(), from: m.getFrom(), date: m.getDate() };
+    }),
+  };
+  Logger.log(JSON.stringify(out, null, 2));
+  return out;
+}
 
 function doPost(e) {
   const params = (e && e.parameter) || {};

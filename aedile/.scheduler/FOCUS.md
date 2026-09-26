@@ -13,6 +13,63 @@
      exempt from the harness's .claude/-write block -- QUESTIONS.md
      writes were ALSO failing for that second reason, now fixed too). -->
 
+## Handoff 2026-09-26 (interactive session, Zach AFK at the end)
+
+**The thing with a deadline: the build day is Sunday 2026-09-27 and the list
+has never been told when or where.** A verified day-before notice is written
+and waiting at `~/Documents/vkv-build-day-notice-2026-09-27.txt` (outside this
+repo on purpose: it names three members, and `.gitignore`'s existing guard is
+about exactly that). It passes `aedile/recap/checks.mjs` clean, 0 fail 0 warn,
+gaps `[3,3,3,3]`. Time and place are Zach's, 2026-09-26, with 1pm/3pm
+confirmed against the archive against his own initial "2 pm" (archive: 1pm x10,
+3pm x5, 2pm x1; and his 2026-08-16 line, *"the usual 1pm Brunch 3pm meeting at
+920 St. Mary"*). To post it, `createDraft` is in the `ask` list, so a human
+sees the prompt:
+
+```
+aedile/recap/call.sh createDraft to=kreweofvaporwave@googlegroups.com \
+  subject="<SUBJECT line from that file>" body="<BODY from that file>" \
+  logLabel=headsup_draft_posted logNote="day-before notice for the 9/27 build day"
+```
+
+A first hand-written attempt was correctly rejected by Zach on sight for an
+em-dash. `checks.mjs:159` makes that a **fail** ("the archive has two in 164
+messages, and it reads as machine-written"). The lesson is mechanical: draft
+prose goes through `runChecks` before a human is asked to look at it, never
+straight from the model's hands.
+
+**Why nobody knew about the build day.** Aedile has been blind since
+2026-07-18. Two independent causes, both still open: `AnthropicClient.js:27`
+sends `x-api-key` with the metered key, which is **out of credit** (the Node
+brain moved to the subscription's OAuth credentials; Apps Script did not, and
+that is #46's decommission, not a bug to fix by buying credits), and the hourly
+trigger is **separately not firing** (`AEDILE_ENABLED` is on and a firing
+trigger would log `error` rows; there are none between 2026-07-22 and
+2026-09-08). The recap tier kept posting drafts from mandark through 09-14, so
+the system looked alive.
+
+**Landed this session.** #35 (`readInbox`/`readThread` live-Gmail reads on
+`WriteApi`'s doPost, deployed v17/v18), #62 (`clasp push` no longer prompts),
+#61 (`extractEmail` takes the last bracketed address, closing the display-name
+allowlist spoof; 66 tests pass; saved Apps Script code verified by pulling the
+executing copy back and diffing). `.claude/settings.json` is now committed as
+project policy, and `/krewe-activity` encodes the search-live-mail-first method.
+
+**Needs a human, in order:**
+1. Send the Sunday notice (above). Today is the day before.
+2. Three people owed replies on thread `1a07dabc90373a49` since 09-08: Lester
+   (carpentry, 504 578 8677), Izze (tapes, 504-654-9886), Francesca (her friend
+   `adam.scilk@gmail.com` wants on the list). Aedile would have bumped these.
+3. Cut a version so `/exec` carries #61's fix: it still serves `@18`, which
+   predates the commit, so a `scanInbox` call through `WriteApi` runs the old
+   parse. `clasp version` / `clasp deploy` are in `ask`.
+4. #60 — Zach 2026-09-26: *"lives somewhere realisateur could provision. I'm
+   not sure."* Direction ruled, path open. Candidate and the file's actual
+   contents are in that issue's comment. Needs his password either way.
+
+**Still open, not urgent:** #54 (the `/exec` 302 flake, now measured at roughly
+3 in 15 calls with today's evidence in the issue), #46, #45, #37, #38.
+
 ## Stability milestone
 
 **Current:** the scenario library (`aedile/TestsLocal.js`) covers both of this project's known real bugs plus the validated live-data dry-run scenarios, proving out as the PR-review gate's actual replacement — so the nightly cycle can auto-merge on a clean scenario run instead of always waiting on a human, without losing the bug-catching/Tyler-visibility function the PR gate exists for today — status: in-progress

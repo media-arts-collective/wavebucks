@@ -10,6 +10,7 @@
       "Bash(git push:*)",
       "Bash(clasp deployments:*)",
       "Bash(clasp pull:*)",
+      "Bash(clasp push:*)",
       "Bash(node --check:*)",
       "Bash(node aedile/TestsLocal.js)"
     ],

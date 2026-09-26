@@ -118,6 +118,22 @@ The split is the operating rule, not a convenience:
   `createDraft`/`sendReplyAll`/`setRecapEnabled`, and `redige.mjs`.
 - **deny** — `git push --force` in any spelling.
 
+**`clasp push` promoted to `allow` (2026-09-25, human-directed).** Zach:
+*"I need you to be able to push unattended as a rule."* Asked again the
+same session after the first `ask` prompt, so it is a standing grant, not
+one approval. Scope is `clasp push` only — `clasp deploy` and `clasp
+version` stay in `ask`, because a push changes saved code (what the
+time-driven triggers execute) while those two change what the anonymous
+`/exec` serves to every caller. That line is the whole distinction; do
+not blur it by promoting the other two on the strength of this entry.
+
+**Not yet in effect — #62.** `Bash(clasp push:*)` is listed in `allow`
+AND still in `ask`, and `ask` wins, so the prompt remains. The classifier
+refused an agent edit that deletes its own confirmation requirement
+(Self-Modification, twice), which is the guard behaving correctly:
+*adding* the `allow` entry was permitted, *removing* the `ask` entry was
+not. #62 is one line, and it needs a human hand by design.
+
 **Do not move a row from `ask` to `allow` to get unblocked mid-task.**
 The point of the `ask` list is that a human sees those specific actions
 every time. Widening it is a decision, dated and recorded here like the

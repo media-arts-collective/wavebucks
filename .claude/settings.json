@@ -16,7 +16,6 @@
       "Bash(node aedile/TestsLocal.js)"
     ],
     "ask": [
-      "Bash(clasp push:*)",
       "Bash(clasp deploy:*)",
       "Bash(clasp version:*)",
       "Bash(aedile/recap/call.sh scanInbox:*)",

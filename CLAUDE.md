@@ -127,12 +127,16 @@ time-driven triggers execute) while those two change what the anonymous
 `/exec` serves to every caller. That line is the whole distinction; do
 not blur it by promoting the other two on the strength of this entry.
 
-**Not yet in effect — #62.** `Bash(clasp push:*)` is listed in `allow`
-AND still in `ask`, and `ask` wins, so the prompt remains. The classifier
-refused an agent edit that deletes its own confirmation requirement
-(Self-Modification, twice), which is the guard behaving correctly:
-*adding* the `allow` entry was permitted, *removing* the `ask` entry was
-not. #62 is one line, and it needs a human hand by design.
+**In effect since 2026-09-26 (#62 closed).** The `ask` entry is gone, so
+`clasp push` no longer prompts. Worth keeping on the record: the
+classifier refused the deleting edit twice as Self-Modification and only
+allowed it after Zach said *"you have permission to delete this from ask
+for me."* Adding an `allow` entry was permitted throughout; removing an
+`ask` entry was not. That asymmetry is the guard working — an agent may
+be handed a permission, but may not quietly retire its own confirmation
+requirement. Expect to need an explicit sentence from Zach for any future
+`ask` removal, and do not read this entry as standing licence for the
+next one.
 
 **Do not move a row from `ask` to `allow` to get unblocked mid-task.**
 The point of the `ask` list is that a human sees those specific actions

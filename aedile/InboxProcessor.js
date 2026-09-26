@@ -155,9 +155,25 @@ const InboxProcessor = (function () {
       || _GmailApp.createLabel(AEDILE_FLAGGED_LABEL);
   }
 
+  /**
+   * The LAST bracketed group, not the first (#61). RFC 5322 puts the real
+   * address after the display name, so a display name that itself contains
+   * `<someone@allowlisted>` decided what this returned — and therefore what
+   * getThreadParticipants recorded and isAllowlistEligible compared. Any
+   * sender who can set a display name could present as Zach and make a thread
+   * look fully allowlisted.
+   *
+   * No spam vector: an auto-reply goes back to whoever wrote in. The reason it
+   * matters is coupling. buildUserContent prepends a rolling 365 days of the
+   * private archive to every triage call, classifyAudience sends a
+   * single-recipient thread down the DM prompt (the one told to answer rather
+   * than hedge), and #37's uncapped sendReplyAll is safe only because the
+   * allowlist holds. One parse decided all three.
+   */
   function extractEmail(header) {
-    const match = header.match(/<([^>]+)>/);
-    return (match ? match[1] : header).toLowerCase().trim();
+    const matches = String(header).match(/<([^<>]+)>/g);
+    const last = matches && matches[matches.length - 1];
+    return (last ? last.slice(1, -1) : header).toLowerCase().trim();
   }
 
   function formatMessageDate(date) {

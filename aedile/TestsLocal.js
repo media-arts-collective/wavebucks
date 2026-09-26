@@ -23,8 +23,9 @@
 // --- Inline copies of the functions under test (see InboxProcessor.js) ---
 
 function extractEmail(header) {
-  const match = header.match(/<([^>]+)>/);
-  return (match ? match[1] : header).toLowerCase().trim();
+  const matches = String(header).match(/<([^<>]+)>/g);
+  const last = matches && matches[matches.length - 1];
+  return (last ? last.slice(1, -1) : header).toLowerCase().trim();
 }
 
 function getThreadParticipants(thread) {
@@ -101,6 +102,41 @@ function assertTrue(actual, label) {
 // --- Scenarios ---
 
 console.log('InboxProcessor pure-logic regression suite\n');
+
+console.log('extractEmail — display-name spoofing of the allowlist (#61, 2026-09-25)');
+{
+  // Regression case for the audit finding of 2026-09-25. extractEmail took the
+  // FIRST bracketed group, so a display name containing <zach@nomac.org> made
+  // getThreadParticipants record Zach for a stranger, and isAllowlistEligible
+  // then saw a fully allowlisted thread. The fix is to take the LAST group:
+  // RFC 5322 puts the real address after the display name.
+  const allowlist = ['zach@nomac.org', 'tyler@nomac.org', 'kreweofvaporwave@kreweofvaporwave.com'];
+
+  assertEqual(extractEmail('Zachary Pine <zach@nomac.org>'), 'zach@nomac.org',
+    'an ordinary display name still yields the real address');
+  assertEqual(extractEmail('plain@nomac.org'), 'plain@nomac.org',
+    'a bare address with no brackets is unchanged');
+
+  const spoofed = '"Zach <zach@nomac.org>" <evil@example.com>';
+  assertEqual(extractEmail(spoofed), 'evil@example.com',
+    'a bracketed address inside the display name does NOT win over the real one');
+  assertEqual(matchesAllowlist(extractEmail(spoofed), allowlist), false,
+    'the spoofed header does not match the allowlist');
+
+  // The whole point: such a thread must not become autosend-eligible.
+  const spoofedThread = mockThread([
+    mockMessage({ from: spoofed, to: 'kreweofvaporwave@kreweofvaporwave.com' }),
+  ]);
+  assertEqual(isAllowlistEligible(spoofedThread, allowlist), false,
+    'a thread whose only outside sender spoofs an allowlisted display name is NOT eligible');
+
+  // Suffix matching was already sound; kept here so a future "fix" to
+  // matchesAllowlist cannot quietly widen it.
+  assertEqual(matchesAllowlist('evil@notnomac.org', ['@nomac.org']), false,
+    'an @domain entry does not match a domain that merely ends with it');
+  assertEqual(matchesAllowlist('x@evil.nomac.org', ['@nomac.org']), false,
+    'an @domain entry does not match a subdomain');
+}
 
 console.log('getRecipientCompletion — recipient-completion bug (2026-07-22)');
 {

@@ -39,9 +39,12 @@ const VAULT = process.env.KREWE_VAULT
   || '/srv/vaporwave-reports/obsidian-vault/mailing-list-archive';
 const WHISPER = process.env.WHISPER_URL || 'http://100.107.253.56:8090/inference';
 
-// aedile's Web App, the `@10` deployment the anonymous URL serves. A version
-// cut updates THIS deployment rather than making a new one, so the URL is
-// stable and belongs in the source.
+// aedile's Web App, the deployment the anonymous URL serves. A version cut
+// updates THIS deployment rather than making a new one, so the URL is stable
+// and belongs in the source. The version it points at is NOT stable and does
+// not belong here: this comment said `@10` while the deployment had moved to
+// @16, then @18 (2026-09-26, readThread/readInbox). `clasp deployments` is the
+// answer to which version is live; a number in a comment is a claim that rots.
 const EXEC = process.env.AEDILE_EXEC_URL
   || 'https://script.google.com/macros/s/AKfycbyyx1N_0hMP2-GG3z1gM_EgNL0RXFB83yvrY57JOKPQ026a2y2hOARKjGc-lKF-qj7s5w/exec';
 

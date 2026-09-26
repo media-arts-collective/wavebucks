@@ -72,9 +72,17 @@ requires taste or would take a side in a human disagreement, it doesn't.
   explicitly, not defaulted into.
 - **Label, don't mark as read.** Processed threads get a tracking label;
   the unread flag stays untouched. Directors rely on unread-as-signal.
-- **Recipient allowlist.** Never let generated content introduce a new
-  recipient. To/Cc stays limited to existing thread participants or a small
-  hardcoded set (currently: Zach, Tyler). Distinct from `AUTOSEND_ALLOWLIST`
+- **Recipient allowlist, on the paths that send.** Never let generated
+  content introduce a new recipient to a *reply*. To/Cc stays limited to
+  existing thread participants or a small hardcoded set (currently: Zach,
+  Tyler). **`WriteApi`'s `createDraft` originate form is deliberately
+  outside this** — it passes `params.to` through unchecked, because a draft
+  cannot leave without a human opening and sending it, and the caller that
+  uses it (`MeetingRecap`/`redige.mjs`) hardcodes the list address. Zach,
+  2026-09-25: *"drafts are safe by construction."* This paragraph used to
+  state the rule unconditionally, which read as though the code enforced it
+  everywhere; it does not, and the gap was the sentence rather than the
+  code (#61). Distinct from `AUTOSEND_ALLOWLIST`
   above — this rule is about never *adding* an unexpected recipient to a
   reply; that one is about whether the *existing* participants are safe
   enough to skip human review entirely.

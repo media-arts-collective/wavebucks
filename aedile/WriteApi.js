@@ -56,6 +56,11 @@
  *       on this endpoint rather than ReadApi because ReadApi is a doGet whose
  *       token rides in a query string; a thread body should not be reachable
  *       by a URL someone can paste, log or prefetch. See readThread below.
+ *   ?action=readInbox[&q=<gmail query>][&limit=<n>]
+ *       Gmail search. Returns thread id, subject, last sender/date, message
+ *       count and a 300-char snippet — identity, not bodies. Default query
+ *       `in:inbox`, limit 20, hard cap 100. Pair with readThread for the one
+ *       thread that matters, so a broad query cannot export the mailbox.
  *
  * EXECUTE-ONLY PRIMITIVES (all POST; all honor dryRun):
  *   ?action=createDraft   Drafts finished text. Never sends, never marks read.
@@ -399,7 +404,38 @@ const WRITE_API = (() => {
     return { status: 200, body: { ok: true, action: 'readThread', threadId: params.threadId, count: messages.length, messages } };
   }
 
-  const READS = { readThread };
+  /**
+   * readInbox — Gmail search, the other half of #35. readThread can only
+   * answer about a thread whose id you already hold, which is useless for
+   * "is anything scheduled" questions: the thread nobody has seen is exactly
+   * the one with no id to pass. This runs a Gmail query and returns thread
+   * IDENTITY plus a short snippet — not full bodies. Follow up with
+   * readThread on the one that matters, so a broad search cannot become a
+   * bulk export of the mailbox in one call.
+   *
+   * Default query is `in:inbox`; pass q for anything else, using Gmail's own
+   * search syntax. Mutates nothing, calls no model, reads no sheet.
+   */
+  function readInbox(params) {
+    const query = params.q ? String(params.q) : 'in:inbox';
+    const raw = parseInt(params.limit, 10);
+    const limit = Math.min(Number.isFinite(raw) && raw > 0 ? raw : 20, 100);
+    const threads = GmailApp.search(query, 0, limit).map(t => {
+      const messages = t.getMessages();
+      const last = messages[messages.length - 1];
+      return {
+        threadId: t.getId(),
+        messageCount: messages.length,
+        lastDate: last.getDate(),
+        lastFrom: last.getFrom(),
+        subject: t.getFirstMessageSubject(),
+        snippet: last.getPlainBody().slice(0, 300),
+      };
+    });
+    return { status: 200, body: { ok: true, action: 'readInbox', query, count: threads.length, threads } };
+  }
+
+  const READS = { readThread, readInbox };
 
   function handle(params) {
     const configured = PropertiesService.getScriptProperties().getProperty('WRITE_API_TOKEN');

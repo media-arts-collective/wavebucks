@@ -3,6 +3,7 @@
     "allow": [
       "Bash(aedile/recap/call.sh get:*)",
       "Bash(aedile/recap/call.sh readThread:*)",
+      "Bash(aedile/recap/call.sh readInbox:*)",
       "Bash(gh issue create:*)",
       "Bash(gh issue edit:*)",
       "Bash(gh issue list:*)",

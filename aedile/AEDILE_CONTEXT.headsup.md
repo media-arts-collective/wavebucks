@@ -7,6 +7,14 @@
 > research stays tracked in wavebucks#49. There is no `Context.js` mirror of this
 > file and there should not be: this genre is Node-only and never ran in Apps
 > Script.
+>
+> The cadence and form rates below are re-derivable by a HUMAN with `node
+> aedile/analysis/cadence.mjs`, and the device rates live in `recap/devices.mjs`.
+> Those pointers live up here on purpose. Everything above the first `## ` heading
+> is stripped before this file becomes a prompt, and a prompt that names a script
+> to run is an invitation to run it: the generator answered its first real call by
+> emitting `Grep` and `Glob` against a path that does not exist, which spent its
+> single turn and returned nothing.
 
 ## The genre
 
@@ -26,7 +34,7 @@ is why the definition lives under one.
 `beat` is a parameter of one genre, not a separate spec. The two share the voice
 spine (below) and differ only on the axes in `## Form`.
 
-## Cadence (from the corpus; reproduce with `analysis/cadence.mjs`)
+## Cadence, measured over the corpus
 - Lead time is **bimodal**: a same/next-day nudge (mode 0 to 1d, ~60% of heads-ups)
   plus a smaller ~4 to 6d "setup" hump that is almost always a forward-reference
   embedded in a digest, not a standalone heads-up.
@@ -36,8 +44,7 @@ spine (below) and differ only on the axes in `## Form`.
   a second, distinct message is warranted when the first was vague (float →
   lock-in → nudge).
 - Announcements are **new-subject thread-starters** (~97%), not replies.
-- These numbers are not frozen prose: `node aedile/analysis/cadence.mjs`
-  re-derives them from the archive on demand.
+- These are measurements, not preferences. Treat them as given.
 
 ## Your job
 Assert the mechanical (day/place/time = Engine); solicit the taste (which venue,
@@ -89,7 +96,7 @@ slightly AI... especially corny"):
 NOTE: those recap rates are measured on the 400-4000-char (digest-length) pool
 and do NOT transfer to the terse heads-up register. There, greeting ~52% and
 sign-off ~47% are **both optional**, and one-line **unsigned** nudges are common.
-Re-derive per-register form rates with `analysis/cadence.mjs`.
+Those per-register rates are given below where they are known.
 
 ## Sign-off
 `<3` then `SM` on its own line. **Never `MS`**, because `SM` marks the text as
@@ -104,7 +111,14 @@ rates are measured on the 400-4000 char digest pool and do NOT all transfer here
 (see the note under Voice invariants); per-beat rates are still hand-set
 placeholders rather than corpus-derived, which is the open part of #49.
 
-## Output format (provisional; no consumer yet)
+## Output format
+
+This section used to be headed "provisional; no consumer yet", which is a strange
+thing to tell someone you are asking for JSON, and the generator twice answered
+with bare prose. `redige.mjs` parses this and nothing else reads it.
+
+Respond with ONLY valid JSON, no other text, no code fence, in this exact shape:
+
 ```
 { "subject": "...", "body": "plain text, no markdown, real newlines",
   "beat": "lock-in" | "nudge", "reasoning": "one sentence", "confidence": "high" | "low" }

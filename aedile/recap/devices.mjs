@@ -272,20 +272,35 @@ export function dealSignoff(seed) {
  *  and asserts nothing about who or what produced it. If #27 resolves against
  *  Abe, the weights change here and nowhere else, which is the point of putting
  *  them in one draw instead of in prose. */
-export const GAPS = [
-  { key: 'three', p: 0.54, n: 3 },
-  { key: 'two',   p: 0.34, n: 2 },
-  { key: 'one',   p: 0.11, n: 1 },
-];
+/** Gap size scales with LENGTH, so it is per genre. Modal gap by message size,
+ *  MS-authored, measured 2026-09-26:
+ *
+ *    0-250    n=160   gap1 42%  gap0 34%  gap2 17%  gap3  8%
+ *    250-400  n= 50   gap1 42%  gap2 40%  gap3 18%
+ *    400-1000 n= 85   gap3 49%  gap2 27%  gap1 24%
+ *    1000-2000 n= 98  gap3 58%  gap2 34%  gap1  8%
+ *    2000-4000 n= 72  gap3 76%  gap2 18%  gap1  6%
+ *
+ *  Monotonic, no discontinuity: the 54/34/11 that AEDILE_CONTEXT.recap.md used to
+ *  state as a house default is the 400-4000 DIGEST rate, and it is simply wrong
+ *  for a terse notice. The hand-written Half Moon heads-up (2026-09-14, 230 chars)
+ *  is single-spaced throughout, and so is 42% of its length band. Dealing 3 to a
+ *  heads-up is the numberedList mistake again: a digest rate applied to a register
+ *  that does not share it. */
+export const GAPS = {
+  recap:   [{ p: 0.54, n: 3 }, { p: 0.34, n: 2 }, { p: 0.11, n: 1 }],
+  headsup: [{ p: 0.42, n: 1 }, { p: 0.40, n: 2 }, { p: 0.18, n: 3 }],
+};
 
-export function dealGap(seed) {
+export function dealGap(seed, genre) {
+  const table = GAPS[genre] || GAPS.recap;
   const rand = seed === undefined ? Math.random : rng(String(seed) + ':gap');
   let r = rand();
-  for (const g of GAPS) {
+  for (const g of table) {
     if (r < g.p) return g.n;
     r -= g.p;
   }
-  return 3;  // float slack at the tail lands on the archive's usual gap
+  return table[0].n;  // float slack at the tail lands on that register's usual gap
 }
 
 /** Deal at most one flourish. Same seeding contract as dealDevices. */

@@ -616,6 +616,13 @@ whole pool and a reader picks one out instantly as machine-written. It was
 named unprompted as "the AI trademark" the first time this was tested. Use a
 full stop, a comma, or brackets.
 
+**Never guess someone's pronouns.** The notes are the only thing you know about a
+person. Given "Alex's anime people" you write "Alex's anime people" or "Alex will
+run it", never "his anime people". If you need a pronoun and the input has not
+given you one, use they. This is not a style rule and it does not bend: getting it
+wrong misgenders a real member in front of the whole list, and \`checks.mjs\` blocks
+a draft that introduces a gendered pronoun the input does not supply.
+
 **Never build a sentence out of three parallel clauses.** "Tell us what feels
 wrong, what lags, what you expected to happen and did not" is zero of 480 messages
 in the archive, which is a stronger absence than the em-dash. A reader named it on

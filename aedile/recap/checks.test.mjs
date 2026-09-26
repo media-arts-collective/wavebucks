@@ -249,6 +249,16 @@ expectWarn('ragged spacing is not flagged', (() => {
   return d;
 })(), 'uniform-spacing', false);
 
+// A gendered pronoun the notes never supply is an invented fact about a person.
+expectFinding('a gendered pronoun the input does not supply', d => {
+  d.body = d.body.replace('Tyler knows of', 'Tyler knows of, at his place,');
+}, 'invented-pronoun');
+expectClean('they/them needs no support from the notes', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('Cost unknown.', 'Tyler will say what they think of it.');
+  return d;
+})());
+
 console.log('\ntells a human named, then measured');
 // Zach, 2026-09-26, on a posted draft: "still sounds slightly AI... especially
 // corny". Both of these came out of one sentence pair in it.

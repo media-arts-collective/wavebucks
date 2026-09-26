@@ -168,10 +168,26 @@ export function buildSystemPrompt(vault, genre = 'recap') {
     .map((e, i) => `--- REAL RECAP ${i + 1}, written by the krewe's own voice ---\n${e}`)
     .join('\n\n');
 
+  // The transport advertises the CLI's tools even though `allowedTools: []`
+  // refuses them, so the model can still EMIT a tool_use block. `maxTurns: 1`
+  // then spends the only turn on the rejected call and the run ends
+  // `error_max_turns` with no text: six consecutive failures on 2026-09-26,
+  // diagnosed as `Grep`/`Glob` against a path that never existed. The prompt says
+  // so plainly rather than the transport being loosened, because a second turn
+  // would buy a retry for a call that should not happen at all.
+  const closed = ['## You have no tools here', '',
+    'Everything you need is in this prompt and the notes that follow it. There is no',
+    'archive to search and no file to read: any tool call is refused and costs you',
+    'the whole answer. Write the email from what you have been given.'].join('\n');
+
+  // The genre file ENDS with its output contract, so it goes last: the two blocks
+  // that are not the contract sit above it. A prompt whose final words are
+  // anything other than "respond with only JSON" gets prose some of the time.
   return [
     contextBody('AEDILE_CONTEXT.core.md'),
-    contextBody(g.context),
     `## Two real recaps from the archive\n\nMatch this register. Do not copy their content.\n\n${examples}`,
+    closed,
+    contextBody(g.context),
   ].join('\n\n');
 }
 
@@ -365,7 +381,7 @@ async function main(argv) {
   const flourish = dealFlourish();
   const typo = dealTypo();
   const signoff = dealSignoff();
-  const gap = dealGap();
+  const gap = dealGap(undefined, genre);
   const dealt = Object.entries(hand).filter(([, v]) => v).map(([k]) => k);
   console.error(`-- genre: ${genre}${beat ? ` (beat: ${beat})` : ''}`);
   console.error(`-- devices: ${dealt.join(', ') || 'none'}; gap ${gap}`);

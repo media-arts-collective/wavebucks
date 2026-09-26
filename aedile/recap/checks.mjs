@@ -146,6 +146,29 @@ export function runChecks(d, notes, vault, opts = {}) {
       `name(s) in the draft that are not in the input: ${invented.join(', ')}`);
   }
 
+  // 1b. No invented pronouns. A gendered third-person pronoun the input does not
+  // supply is an invented fact about a real member, and the failure is not a style
+  // tell but misgendering someone on a 40-person list.
+  //
+  // This is NOT a claim that the archive avoids them: 9% of messages use one, and
+  // correctly, because the author knows the person ("Thanks to Kevin for his
+  // patient tutelage"). The generator does not. Given notes reading "Alex's anime
+  // people", it wrote "Alex will run later with HIS anime people" on 2026-09-26,
+  // inventing a fact that no amount of good prose makes acceptable. Same shape as
+  // invented-name and invented-figure, and blocking for the same reason: the input
+  // is the only source of truth about people.
+  //
+  // `they/them/their` is always fine and needs no support: it is what the notes use
+  // and what a writer who does not know should use.
+  const PRONOUNS = /\b(?:he|him|his|she|her|hers)\b/gi;
+  const inNotes = new Set((text(notes).match(PRONOUNS) || []).map(w => w.toLowerCase()));
+  const inDraft = new Set((text(whole).match(PRONOUNS) || []).map(w => w.toLowerCase()));
+  const unsupported = [...inDraft].filter(w => !inNotes.has(w));
+  if (unsupported.length) {
+    add('fail', 'invented-pronoun',
+      `gendered pronoun(s) the input does not supply: ${unsupported.join(', ')}. Use the person's name, or they/them. Guessing misgenders a real member`);
+  }
+
   // 2. No invented figures. Dates, money, times, counts.
   const knownFigures = figures(notes);
   const inventedFigures = [...figures(whole)].filter(n => !knownFigures.has(n));

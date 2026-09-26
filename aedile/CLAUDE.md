@@ -103,6 +103,59 @@ outside the Workspace, exactly the single-point-of-failure pattern this
 project exists to avoid). Config/Log data lives in a spreadsheet owned by
 that same account, not a director's personal Drive.
 
+## Outbound genres: what is wired, and why you must not hand-write one
+**(2026-09-26)**
+
+`aedile/recap/redige.mjs` writes outbound list mail. It takes `--genre`:
+
+- `recap` (`AEDILE_CONTEXT.recap.md`) — what a meeting settled. Numbered,
+  digest-length.
+- `headsup` (`AEDILE_CONTEXT.headsup.md`) — a gathering. Terse, **unnumbered**,
+  two beats (`lock-in`, `nudge`), and `--event-date` is REQUIRED because Node
+  computes the lead time so the model never has to know today's date.
+
+`AEDILE_CONTEXT.headsup.md` was written 2026-09-13 and sat unwired until
+2026-09-26. In between, two sessions produced heads-up mail by hand-writing prose
+into `call.sh createDraft`, which is how a numbered, digest-length notice with a
+`1.`-prefixed subject reached the drafts folder under a spec whose own text says a
+single-venue heads-up should not be numbered. **A spec no code reads is a
+document, not a rule.** Do not hand-write a body and post it: generate it, let the
+checks grade it, then post the saved decision.
+
+`checks.mjs` is **genre-gated** (`runChecks(d, notes, vault, { genre, beat })`) and
+defaults to `recap`. Every rate in it was measured on the 400-4000 char digest
+pool, and `headsup.md` says in its own text that those rates do not transfer: for
+a heads-up the sign-off drops to `warn` (the barest attested nudge is one unsigned
+line), numbering inverts to `numbered-headsup`, and the two spacing checks are
+skipped because a terse notice has no modal gap. What does NOT relax: invented
+names, invented figures, the em-dash, and never signing `MS`.
+
+`devices.mjs` also deals by genre now: `GENRE_OFF.headsup` forces `numberedList`
+off, because 0.82 is the digest's rate and dealing it to a heads-up put the dealer
+and the checker in disagreement about the same draft.
+
+Two rules the corpus turned out not to support, both deleted the same day:
+
+- The subject doctrine (#30). `messages.jsonl` has **no subject field**; the
+  scraper built thread titles from body first lines, so titles matched openings
+  382 times in 385 and the "habit" was the pipeline. 18 of 628 titles begin with
+  `N. ` (2.9%), and the real subjects are never numbered. The prompt rule and the
+  `subject-body-mismatch` check are gone; the traits in `recap.md` now come from
+  the live group listing.
+- The three-blank-line default (#27). Now a per-email draw (`dealGap`) at the
+  measured 54/34/11, not an instruction. Zach: *"defaulting to 3 spaces as a rule
+  is wrong, it should be stochastic."* The distribution itself stays UNVERIFIED as
+  a human habit; #27 has the 2020 regime change.
+
+**Before teaching the generator any new trait, check its provenance against a
+source outside the scrape.** Non-breaking spaces, gap sizes and subjects all read
+as strong authorial signal and all three were the pipeline.
+
+`figures()` was blind to ordinal dates (`27th`) and spaced times (`1 pm`) until
+2026-09-26, so `invented-figure` — a blocking check whose whole job is to stop a
+made-up date or time — never examined the date or either time of a day-before
+notice. Fixed, with cases. If you add a figure format, add a case.
+
 ## Voice
 The voice carries over close to verbatim from Scriba Senatus — dry,
 deadpan, memory-invoking, in the tradition of Abraham's own register —

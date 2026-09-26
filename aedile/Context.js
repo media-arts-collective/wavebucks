@@ -527,17 +527,29 @@ opinion, an attendance record, or an assessment.
 The krewe's recaps have a shape, drawn from 628 threads in the archive. Follow
 it; do not invent a house style.
 
-- **The subject IS the opening of the body, not a summary of it.** This is
-  why the archive's subjects look the way they do: \`0. Next Meeting. Sunday
-  3pm 826 Rosedale. 1. The commercial…\`, \`1. NO MEETING SUNDAY. Spend your
-  time on your contributions\`. They are simply the first line or two of the
-  email, cut off where the subject line runs out.
+- **The subject is crafted, and it is NOT the body's opening.** An earlier
+  version of this file told you the opposite. That was measured off the scrape,
+  which has no subject field at all: the scraper built each thread title from the
+  body's first line and discarded the real \`Subject:\` header, so the titles agreed
+  with the openings 382 times in 385 and the habit was the pipeline (#30).
 
-  So write the body first, then set \`subject\` to its opening, trimmed at a
-  sensible point. The two must never number things differently or describe
-  different items: they are one text. A subject that promotes something to
-  item 2 when the body has it inside item 1 is the specific way this goes
-  wrong.
+  Measured instead against the live group listing, real subjects almost never
+  repeat the first line. \`183 SHARES\` opens "Happy snow day! I am having deep
+  homesickness". \`Snowpocalypse: Later\` opens "Friends Good meeting yesterday".
+  \`Someone bring a floor jack!\` opens "I'd like to get the wheels off of the
+  trailer".
+
+  The traits, from 29 real subjects: **never numbered**, not one of them carries
+  \`0.\` or \`1.\` or \`-1.\`; frequently lowercase-initial (\`today!\`, \`sunday! the
+  retrospective begins\`); slash-separated when the mail is an omnibus (\`AI meeting
+  recap / wings tonight / AI meeting tomorrow / Sunday\`); colon constructions (\`a
+  BIG email: the weeks ahead\`, \`Today: Bring newspaper!\`); ALL-CAPS payload markers
+  (\`183 SHARES\`, \`DEAD INTERNET\`, \`(GUEST LIST)\`); \`re:\` as a preposition rather
+  than a reply marker (\`Directions re: posters and promo codes\`); and jokes carried
+  in the subject (\`golf butt\`). Length runs 6 to 62 characters, most 20 to 45.
+
+  So write the subject as its own small act of writing, after the body. Do not
+  copy the body's opening into it, and do not number it.
 
 - **Not every email is a list.** Roughly one in five is prose with a label
   ("Clean-up: We will get as much done as we can on Sunday"), and a short one
@@ -565,15 +577,12 @@ it; do not invent a house style.
   "Let's start working at 1" beats "we'll begin in the early afternoon".
 - **Short.** The archive's own apology when it isn't, "Apologies for the
   brevity. There is much to do.", tells you which way it errs.
-- **THREE blank lines between items, most of the time.** Measured over every
-  paragraph gap in the archive: three blank lines 54% of the time, two 34%,
-  one only 11%. The generator's default is one blank line, 39% of its gaps,
-  and a reader flagged spacing on half the pairs in a sitting.
-
-  So the default separator is three blank lines. Use two sometimes, one rarely,
-  and vary it within the email rather than picking one and repeating it. It is
-  what a decade of typing into Gmail and hitting return twice more than you
-  meant to looks like, and it is what the list has read the whole time.
+- **Blank lines between items are DEALT, not defaulted.** A gap size is drawn
+  per email from the archive's measured distribution and handed to you in the
+  presentation block below. Use the gap you are dealt as the default separator and
+  vary it within the email rather than repeating one size down the page. Do not
+  pick a house default here: an instruction that names one produces it 100% of the
+  time, which is the tell. (The distribution itself is contested, #27.)
 - Dry, warm, unhurried. Not corporate minutes, not a press release, and not
   enthusiastic on the krewe's behalf.
 
@@ -681,7 +690,7 @@ If a director edits the sign-off before sending, that is theirs to do.
 Respond with ONLY valid JSON, no other text, in this exact shape:
 
     {
-      "subject": "the subject line, carrying the first numbered item as above",
+      "subject": "the subject line, crafted as above: short, never numbered",
       "body": "the recap as PLAIN TEXT: numbered items, ragged blank lines between them (see Form)",
       "open_questions": ["anything the meeting did not settle, attributed"],
       "reasoning": "one sentence, for an internal log",

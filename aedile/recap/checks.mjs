@@ -57,12 +57,20 @@ const norm = w => w.toLowerCase().replace(/[’']s$/, '');
 function nameCandidates(src) {
   const body = text(src);
   const out = new Set();
-  const re = /([^\s])?\s+([A-Z][a-z][a-zA-Z'’-]*)\b/g;
+  const re = /([^\s])?(\s+)([A-Z][a-z][a-zA-Z'’-]*)\b/g;
   let m;
   while ((m = re.exec(body)) !== null) {
     const prev = m[1];
-    if (prev === undefined || /[.!?:;–—-]/.test(prev)) continue; // sentence start
-    const w = norm(m[2]);
+    // A line start is a sentence start. Deleting the subject doctrine (#30)
+    // exposed this: real subjects carry no terminal period, so `...failed\nHi
+    // friends!` left `Hi` looking mid-sentence and every correctly-subjected
+    // draft failed on the invented name "hi". The cost is that a capitalised
+    // word first on its own line is never name-checked, which is the same
+    // exemption sentence starts already had and for the same reason: the
+    // archive puts people mid-clause ("Tyler knows someone with a gutted
+    // house"), so that is where a hallucinated one shows up.
+    if (prev === undefined || /\n/.test(m[2]) || /[.!?:;–—-]/.test(prev)) continue;
+    const w = norm(m[3]);
     if (!NOT_A_NAME.has(w)) out.add(w);
   }
   return out;
@@ -77,23 +85,45 @@ const vocabulary = src => new Set(
 );
 
 /** Numbers that carry meaning: money, times, dates, counts. Deliberately not
- *  list ordinals -- "1." is structure, not a claim about the world. */
+ *  list ordinals: "1." is structure, not a claim about the world.
+ *
+ *  Two holes closed 2026-09-26, both found by grading a real draft. The old
+ *  pattern ended in `\b`, so an ORDINAL DATE was invisible: "Sunday the 27th"
+ *  yielded only the street number, because `7`/`t` is no word boundary. And a
+ *  SPACED TIME was invisible too: "1 pm to turn up, 3 pm to work" yielded
+ *  nothing at all, since the unit had to abut the digit. That made
+ *  invented-figure, a FAIL-level check whose entire job is to stop a made-up
+ *  date or time, blind to the date and both times of a day-before notice: the
+ *  three facts the email exists to carry. `1 pm` normalises to `1pm` so a draft
+ *  may respace what the notes wrote. */
 const figures = src => new Set(
-  (text(src).match(/(?<![.\d])\$?\d[\d,.:]*(?:ms|am|pm|%)?\b/gi) || [])
-    .map(n => n.toLowerCase().replace(/[.,]$/, ''))
+  (text(src).match(/(?<![.\d])\$?\d[\d,.:]*(?:\s?(?:ms|am|pm)|%|st|nd|rd|th)?\b/gi) || [])
+    .map(n => n.toLowerCase().replace(/[.,]$/, '').replace(/\s+/, ''))
     .filter(n => !/^\d\.?$/.test(n))
 );
 
-const itemNumbers = src => (text(src).match(/(?:^|\s)(-?\d+)\.\s/g) || [])
+/** Anchored at a line start, like every comparable pattern in style.mjs. Without
+ *  the anchor, "Doors at 8, show at 9. See you" read as item 9. */
+const itemNumbers = src => (text(src).match(/(?:^|\n)\s*(-?\d+)\.\s/g) || [])
   .map(s => s.trim().replace(/\.$/, ''));
 
 /** Words in the input that mean "I am not sure". If the notes hedge and the
  *  draft surfaces nothing as open, something was quietly resolved. */
 const HEDGES = /\b(hazy|not recalled|not certain|unknown|not sure|unclear|not verified|scope not defined|may want|possible|floated|tbd)\b/i;
 
-export function runChecks(d, notes, vault) {
+export function runChecks(d, notes, vault, opts = {}) {
   const out = [];
   const add = (level, id, msg) => out.push({ level, id, msg });
+
+  // Which genre's form rules apply. These rates were all measured on the
+  // 400-4000 char digest pool, and AEDILE_CONTEXT.headsup.md says in its own
+  // text that they "do NOT transfer to the terse heads-up register": there a
+  // sign-off is ~47% and optional, a greeting ~52%, numbering belongs to the
+  // digest and not to a single-venue notice, and a one-line unsigned nudge
+  // ("1pm tomorrow! 826 Rosedale") is an attested shape that this file used to
+  // fail at blocking level. Default `recap` so every existing caller is
+  // unchanged; a heads-up must ask for its own rules.
+  const headsup = opts.genre === 'headsup';
 
   const body = d.body || '';
   const subject = d.subject || '';
@@ -125,13 +155,17 @@ export function runChecks(d, notes, vault) {
   }
 
   // 3. What the meeting did not settle has to survive as an open question.
-  if (HEDGES.test(notes) && !(d.open_questions || []).length) {
+  if (!headsup && HEDGES.test(notes) && !(d.open_questions || []).length) {
     add('fail', 'swallowed-uncertainty',
       'the input hedges but the draft surfaces no open questions -- something was resolved that should not have been');
   }
 
-  // 4. Form, from the archive. Sign-off, numbering, and the subject being the
-  //    body's opening rather than a separate summary of it.
+  // 4. Form, from the archive: sign-off and numbering. The subject rule that
+  //    used to live here is gone (#30) -- it enforced a scraper artifact, since
+  //    the corpus has no subject field and the scraper built thread titles from
+  //    body first lines. Nothing grades the subject's shape now, because nothing
+  //    measured can: see AEDILE_CONTEXT.recap.md for the traits, taken from the
+  //    live group listing rather than from the scrape.
   // The `<3` is DEALT now (devices.mjs `dealSignoff`), not mandatory: the
   // archive writes it above the initials in 74% of MS-signed messages and
   // writes `Best`, `xoxo`, a short line of its own, or nothing at all in the
@@ -145,7 +179,9 @@ export function runChecks(d, notes, vault) {
   // the previous version of this check rejected exactly that.
   const lastLine = body.trimEnd().split('\n').pop().trim();
   if (!/^(?:(?:<3[ \t]*)+|(?:<3[ \t]*)*SM)$/.test(lastLine)) {
-    add('fail', 'sign-off',
+    // Blocking for a digest, advisory for a heads-up: the terse register signs
+    // ~47% of the time and the barest attested nudge is a single unsigned line.
+    add(headsup ? 'warn' : 'fail', 'sign-off',
       `the last line must be \`<3\`, the initials \`SM\`, or both; got ${JSON.stringify(lastLine)}`);
   }
   if (/\bMS\b/.test(body.replace(/<3\s*SM/g, ''))) {
@@ -169,15 +205,15 @@ export function runChecks(d, notes, vault) {
       'no exclamation mark; 92% of the archive has at least one, averaging 3.5 per message');
   }
 
+  // Numbering cuts the opposite way per genre. The digest numbers almost
+  // everything; a heads-up should not, and numbering there is a borrowed digest
+  // trait rather than a missing one.
   const bodyItems = itemNumbers(body);
-  const subjectItems = itemNumbers(subject);
-  if (!bodyItems.length) {
+  if (headsup && bodyItems.length) {
+    add('warn', 'numbered-headsup',
+      `numbers ${bodyItems.length} item(s); numbering is not a heads-up trait, it scales with length and belongs to the digest, and a single-venue notice should not be numbered`);
+  } else if (!headsup && !bodyItems.length) {
     add('warn', 'no-numbering', 'no numbered items -- the archive numbers almost everything');
-  }
-  const orphan = subjectItems.filter(n => !bodyItems.includes(n));
-  if (orphan.length) {
-    add('fail', 'subject-body-mismatch',
-      `subject numbers item(s) ${orphan.join(', ')} that the body does not -- the subject is the body's opening, not a separate summary`);
   }
 
   // 5. Motifs the corpus says are near-universal. Warn only: a short recap
@@ -199,7 +235,12 @@ export function runChecks(d, notes, vault) {
   // 400-4000 chars and signed). Uniform single spacing is the most reliable
   // way for a generated recap to look generated. Warn, not fail: a three-item
   // recap can legitimately be too short to show the pattern.
-  if (!isRagged(body)) {
+  if (headsup) {
+    // Skipped, not passed. Both spacing checks are calibrated on the 400-4000
+    // char pool; a terse notice has too few gaps to have a modal one at all, and
+    // `modalGap` returns 0 when there are none, so grading it here reports a
+    // shape problem that is really a length difference.
+  } else if (!isRagged(body)) {
     add('warn', 'uniform-spacing',
       'single blank lines throughout; 93% of the archive is ragged (2-4 blank lines between items)');
   } else if (modalGap(body) < 2) {

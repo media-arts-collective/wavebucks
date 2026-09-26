@@ -110,13 +110,36 @@ function rng(seed) {
   };
 }
 
+/** Rates that do not survive a change of genre.
+ *
+ *  Every `p` above was measured on the 400-4000 char digest pool, and
+ *  AEDILE_CONTEXT.headsup.md says so in its own text: those rates "do NOT
+ *  transfer to the terse heads-up register." Numbering is the one that bites,
+ *  because it is dealt at 0.82 and the same spec says numbering "is NOT a
+ *  lock-in trait... a single-venue heads-up should not be numbered" (it scales
+ *  with length: 14% / 50% / 93% for short / mid / long). Dealing the digest's
+ *  hand to a heads-up produced a numbered three-item notice on the genre's first
+ *  real run, which `checks.mjs` then warned at: the dealer and the checker
+ *  disagreeing about the same genre.
+ *
+ *  A forced `false` here, rather than a second probability, because these are
+ *  not "rarer in this genre", they are wrong in it. The per-beat rates that ARE
+ *  probabilities are still hand-set placeholders and stay open in #49. */
+const GENRE_OFF = {
+  headsup: ['numberedList'],
+};
+
 /** Deal one email its hand. `seed` makes it reproducible; omit for a real
- *  recap, where each one should simply differ from the last. */
-export function dealDevices(seed) {
+ *  recap, where each one should simply differ from the last. `genre` suppresses
+ *  devices that belong to another register. */
+export function dealDevices(seed, genre) {
   const rand = seed === undefined ? Math.random : rng(seed);
+  const off = new Set(GENRE_OFF[genre] || []);
   const hand = {};
   for (const d of DEVICES) {
-    hand[d.key] = d.requires && !hand[d.requires] ? false : rand() < d.p;
+    hand[d.key] = off.has(d.key) ? false
+      : d.requires && !hand[d.requires] ? false
+      : rand() < d.p;
   }
   return hand;
 }
@@ -125,11 +148,16 @@ export function dealDevices(seed) {
  *  say are dropped: "no whole line in capitals" is noise, and a prompt that
  *  lists every device every time is teaching the model that every device is
  *  always in play, which is the habit being corrected. */
-export function devicesBlock(hand, flourish, typo) {
+export function devicesBlock(hand, flourish, typo, gap) {
   const lines = DEVICES
     .map(d => (hand[d.key] ? d.yes : d.no))
     .filter(Boolean)
     .map(s => `- ${s}`);
+  if (gap) {
+    lines.push(`- Separate paragraphs and items with ${gap} blank line${gap === 1 ? '' : 's'}`
+      + ' as the default for this email, and vary off it in a place or two rather than'
+      + ' spacing the whole message identically.');
+  }
   if (flourish) lines.push(`- ${flourish}`);
   if (typo) lines.push(`- ${typo.replace(/\n/g, '\n  ')}`);
   if (!lines.length) return '';
@@ -223,6 +251,41 @@ export function dealSignoff(seed) {
     r -= s.p;
   }
   return null;  // float slack at the tail lands on the common case
+}
+
+/** Blank-line gap size, drawn per email.
+ *
+ *  This was the last measured distribution shipped as a fixed instruction:
+ *  AEDILE_CONTEXT.recap.md told the generator "THREE blank lines between items,
+ *  most of the time", which is the failure this whole file exists to fix. An
+ *  instruction that names a default produces it ~100% of the time; a frequency is
+ *  a fact about a corpus, so it has to be drawn. Zach, 2026-09-26, on reading a
+ *  draft spaced three throughout: "defaulting to 3 spaces as a rule is wrong, it
+ *  should be stochastic."
+ *
+ *  Weights are the archive's measured gaps: 3 at 54%, 2 at 34%, 1 at 11%.
+ *
+ *  UNVERIFIED that the distribution is a person. #27 measures a step change in
+ *  2020 that then held for six years, 97% of gaps quantized to 2/3/4, and gap-4
+ *  correlating with what FOLLOWS it -- all of which a compose client or an export
+ *  pipeline does and a typist does not. So this reproduces a measured frequency
+ *  and asserts nothing about who or what produced it. If #27 resolves against
+ *  Abe, the weights change here and nowhere else, which is the point of putting
+ *  them in one draw instead of in prose. */
+export const GAPS = [
+  { key: 'three', p: 0.54, n: 3 },
+  { key: 'two',   p: 0.34, n: 2 },
+  { key: 'one',   p: 0.11, n: 1 },
+];
+
+export function dealGap(seed) {
+  const rand = seed === undefined ? Math.random : rng(String(seed) + ':gap');
+  let r = rand();
+  for (const g of GAPS) {
+    if (r < g.p) return g.n;
+    r -= g.p;
+  }
+  return 3;  // float slack at the tail lands on the archive's usual gap
 }
 
 /** Deal at most one flourish. Same seeding contract as dealDevices. */

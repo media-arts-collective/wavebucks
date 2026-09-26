@@ -33,8 +33,12 @@ Attendees: Me, Tyler, Zach, Adam, Alex.
 // two em-dashes, which is to say it was written the way the generator writes
 // rather than the way the list does; adding the em-dash check failed it, which
 // is the check doing its job on the first draft it ever saw.
+// The subject used to be the body's opening, numbered: `0. THIS RECAP IS
+// RECONSTRUCTED. The recording failed. 1. LASER HARP...`. That was the shape the
+// deleted doctrine prescribed and the scraper invented (#30). A real one is
+// short, crafted, and never numbered.
 const CLEAN = {
-  subject: '0. THIS RECAP IS RECONSTRUCTED. The recording failed. 1. LASER HARP by next month.',
+  subject: 'reconstructed notes: the recording failed',
   body: 'Hi friends!\n\n' +
     '0. THIS RECAP IS RECONSTRUCTED FROM MEMORY. The recording failed. Correct it on-list.\n\n' +
     '1. LASER HARP. Working group is Tyler, Zach and Adam, meeting monthly. The relays and their 100ms delay get settled then.\n\n' +
@@ -104,7 +108,7 @@ expectFinding('a name not in the notes', d => {
 // Deliberately placed in the SUBJECT: it is part of the draft, and an earlier
 // version of these checks read only the body and let this through.
 expectFinding('a date not in the notes, in the subject', d => {
-  d.subject = d.subject.replace('by next month', 'on March 14 2027');
+  d.subject += ', March 14 2027';
 }, 'invented-figure');
 
 expectFinding('a date not in the notes, in the body', d => {
@@ -127,9 +131,36 @@ expectFinding('missing sign-off', d => { d.body = d.body.replace('<3 SM', ''); }
 expectFinding('borrowing the MS figure', d => {
   d.body = d.body.replace('<3 SM', '<3 MS');
 }, 'signed-as-ms');
-expectFinding('subject numbers an item the body does not', d => {
-  d.subject += ' 7. Send us venues.';
-}, 'subject-body-mismatch');
+// subject-body-mismatch is GONE (#30): it enforced the scrape's artifact, so a
+// crafted subject failed and an artifact-shaped one passed. What replaces it is
+// the absence of a rule, which only a passing case can show.
+expectClean('a crafted subject that is not the body\'s opening', (() => {
+  const d = structuredClone(CLEAN);
+  d.subject = 'Someone bring a floor jack!';
+  return d;
+})());
+expectClean('a subject carrying a figure the body does not', (() => {
+  const d = structuredClone(CLEAN);
+  d.subject = 'the relays: 100ms or pivot';
+  d.body = d.body.replace(' and their 100ms delay', '');
+  return d;
+})());
+
+// Both holes in `figures()`, with the exact strings that exposed them in a real
+// draft. An invented date or time is the one thing this file most has to stop.
+expectFinding('an ordinal date not in the notes', d => {
+  d.body = d.body.replace('meeting monthly', 'meeting monthly, next on the 27th');
+}, 'invented-figure');
+expectFinding('a spaced time not in the notes', d => {
+  d.body = d.body.replace('on Wednesdays', 'on Wednesdays, 7 pm');
+}, 'invented-figure');
+
+// itemNumbers had no line anchor, so prose ending in a digit read as an item.
+expectWarn('prose ending in a digit is not a numbered item', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = 'Hi friends!\n\nDoors at 8, show at 9. See you there!\n\n<3 SM';
+  return d;
+})(), 'no-numbering', true);
 
 console.log('\nthings that must NOT be flagged');
 // Every one of these was a real false positive on the first run.
@@ -217,6 +248,71 @@ expectWarn('ragged spacing is not flagged', (() => {
   d.body = d.body.replace(/\n\n/g, '\n\n\n');
   return d;
 })(), 'uniform-spacing', false);
+
+console.log('\nthe heads-up genre is graded by its own form rules');
+// AEDILE_CONTEXT.headsup.md: the terse register signs ~47% of the time and "the
+// barest form is a single unsigned line". This file used to FAIL that at blocking
+// level, so the archetypal nudge could not be posted. The asymmetry is the point,
+// so both directions are asserted.
+const NUDGE = { subject: '1pm tomorrow!', body: '1pm tomorrow! 920 St. Mary',
+                confidence: 'high' };
+const NUDGE_NOTES = 'Build day 1pm tomorrow at 920 St. Mary. Zach confirmed.';
+const levelsOf = (d, opts) => runChecks(d, NUDGE_NOTES, VAULT, opts)
+  .filter(f => f.id === 'sign-off').map(f => f.level);
+
+{
+  const asRecap = levelsOf(NUDGE, {});
+  const asHeadsup = levelsOf(NUDGE, { genre: 'headsup' });
+  const ok = asRecap[0] === 'fail' && asHeadsup[0] === 'warn';
+  if (ok) { passed++; console.log('  ok   an unsigned nudge blocks as a recap and only warns as a heads-up'); }
+  else {
+    failed++;
+    console.log('  FAIL an unsigned nudge blocks as a recap and only warns as a heads-up');
+    console.log(`       recap=[${asRecap}] headsup=[${asHeadsup}]`);
+  }
+}
+
+// Numbering inverts: the digest numbers almost everything, a single-venue notice
+// should not. Same body, opposite finding.
+{
+  const numbered = { subject: 'build day tomorrow',
+    body: '1. BUILD DAY IS TOMORROW. 920 St. Mary, 1pm!\n\n<3\nSM', confidence: 'high' };
+  const got = runChecks(numbered, NUDGE_NOTES, VAULT, { genre: 'headsup' })
+    .map(f => f.id);
+  const ok = got.includes('numbered-headsup') && !got.includes('no-numbering');
+  if (ok) { passed++; console.log('  ok   a numbered heads-up is warned at, not a numberless one'); }
+  else {
+    failed++;
+    console.log('  FAIL a numbered heads-up is warned at, not a numberless one');
+    console.log(`       got [${got.join(', ')}]`);
+  }
+}
+
+// Spacing is skipped rather than passed: a two-line notice has no modal gap.
+{
+  const got = runChecks(NUDGE, NUDGE_NOTES, VAULT, { genre: 'headsup' }).map(f => f.id);
+  const ok = !got.includes('uniform-spacing') && !got.includes('tight-default-spacing');
+  if (ok) { passed++; console.log('  ok   digest spacing rules are not applied to a terse notice'); }
+  else {
+    failed++;
+    console.log('  FAIL digest spacing rules are not applied to a terse notice');
+    console.log(`       got [${got.join(', ')}]`);
+  }
+}
+
+// What does NOT relax. An invented figure and the em-dash are genre-neutral.
+{
+  const bad = { ...NUDGE, body: '2pm tomorrow! 920 St. Mary, bring a soldering iron \u2014 or a friend' };
+  const got = runChecks(bad, NUDGE_NOTES, VAULT, { genre: 'headsup' })
+    .filter(f => f.level === 'fail').map(f => f.id);
+  const ok = got.includes('invented-figure') && got.includes('em-dash');
+  if (ok) { passed++; console.log('  ok   invented figures and em-dashes still block a heads-up'); }
+  else {
+    failed++;
+    console.log('  FAIL invented figures and em-dashes still block a heads-up');
+    console.log(`       got [${got.join(', ') || 'none'}]`);
+  }
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

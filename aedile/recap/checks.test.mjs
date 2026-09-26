@@ -284,6 +284,24 @@ expectClean('two parallel clauses are fine', (() => {
   return d;
 })());
 
+// The real Half Moon nudge carries no `!`, so a short heads-up must not be warned
+// at for lacking one: 49% at <=150 chars against 97% in the digest band.
+{
+  const nudge = { subject: 'Half Moon tonight',
+    body: 'Half Moon tonight, kitchen opens at 5: wings, pizza, skeeball.\n\nBring a buddy',
+    confidence: 'high' };
+  const notes = 'Half Moon tonight, kitchen opens at 5. Wings, pizza, skeeball. Bring a buddy.';
+  const asHeadsup = runChecks(nudge, notes, VAULT, { genre: 'headsup' }).map(f => f.id);
+  const asRecap = runChecks(nudge, notes, VAULT, {}).map(f => f.id);
+  const ok = !asHeadsup.includes('no-exclamation') && asRecap.includes('no-exclamation');
+  if (ok) { passed++; console.log('  ok   a short nudge is not warned for having no exclamation mark'); }
+  else {
+    failed++;
+    console.log('  FAIL a short nudge is not warned for having no exclamation mark');
+    console.log(`       headsup=[${asHeadsup}] recap=[${asRecap}]`);
+  }
+}
+
 console.log('\nthe heads-up genre is graded by its own form rules');
 // AEDILE_CONTEXT.headsup.md: the terse register signs ~47% of the time and "the
 // barest form is a single unsigned line". This file used to FAIL that at blocking

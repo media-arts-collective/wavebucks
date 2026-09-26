@@ -252,9 +252,16 @@ export function runChecks(d, notes, vault, opts = {}) {
   // 92% of comparable archived messages carry at least one, averaging 3.5. The
   // generator averaged 0.7 and only two thirds had any. Warn: a short, sober
   // logistics note can legitimately have none.
-  if (!/!/.test(body)) {
+  // Also a length rate, not a house rule. Measured MS-authored: 49% at <=150
+  // chars, 69% at 150-300, 82% at 400-1000, 97% at 1000-2000. The 92% below is
+  // the digest band. The real Half Moon nudge ("Half Moon tonight, kitchen opens
+  // at 5... Bring a buddy") has no `!` at all, so warning on a two-line notice
+  // reports the length difference as a voice problem. Fourth instance of a digest
+  // rate applied to the terse register, after numberedList, the blank-line gap and
+  // the spacing checks.
+  if (!/!/.test(body) && !(headsup && body.length <= 300)) {
     add('warn', 'no-exclamation',
-      'no exclamation mark; 92% of the archive has at least one, averaging 3.5 per message');
+      `no exclamation mark; ${body.length <= 300 ? '49-69% of archived messages this short have one' : '92% of the archive has at least one, averaging 3.5 per message'}`);
   }
 
   // Numbering cuts the opposite way per genre. The digest numbers almost

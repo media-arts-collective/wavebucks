@@ -15,7 +15,15 @@
     "aedile:true marks subjects this project generated. They are excluded from every",
     "rate: training a subject generator on its own output is a feedback loop.",
     "",
-    "FOUR are aedile's, not two. The Half Moon pair was marked on 2026-09-26 after",
+    "TWO were SENT by aedile and two were never sent at all. The Half Moon pair went",
+    "out; the two laser harp rows are unsent drafts that reached this list because the",
+    "Gmail pull matched the group label against in:drafts. A draft counted as received",
+    "is the same error as counting aedile's sent output, one step earlier and worse in",
+    "kind, because a draft may never go out. Both were caught by the aedile marker,",
+    "which is luck: a HUMAN's unsent draft would have leaked in unmarked and read as a",
+    "real message from a real member. The human set is 31 either way.",
+    "",
+    "The Half Moon pair was marked on 2026-09-26 after",
     "the list-scrape session built a Log-based detector. This session had ALREADY READ",
     "the Log rows -- five recap_draft_posted rows for those two subjects at",
     "2026-09-14T02:29-02:35Z -- reported them, and then spent an hour citing Half Moon",
@@ -59,7 +67,9 @@
       "note": "CANDIDATE human rewrite of aedile's generated `Hi friends!`, not established. It is the single alias-ambiguity row inside the Log's window: from the krewe address with no outbound Log row behind it, which is equally what a director sending under the alias looks like (the open From-ambiguity bug, 2026-07-22). The Log has recap rows either side of that date whose subject a human could have rewritten before sending." },
     { "date": "2026-09-13", "subject": "Wednesday: Half Moon", "aedile": true },
     { "date": "2026-09-16", "subject": "Wings tonight at Half Moon", "aedile": true },
-    { "date": "2026-09-26", "subject": "Laser harp build day. Sun 9/27 @ 1pm, 920 St. Mary", "aedile": true },
-    { "date": "2026-09-26", "subject": "Laser harp build day today at 920 St. Mary", "aedile": true }
+    { "date": "2026-09-26", "subject": "Laser harp build day. Sun 9/27 @ 1pm, 920 St. Mary", "aedile": true, "unsent_draft": true,
+      "note": "NEVER SENT. It is a draft in the Office mailbox, and it is in this file only because the pull that produced the list matched `list:kreweofvaporwave.googlegroups.com` against unsent drafts. Verified: `in:drafts subject:Laser harp` returns 2, `in:sent` returns 0. A draft is not list traffic and should never have been in a subject corpus." },
+    { "date": "2026-09-26", "subject": "Laser harp build day today at 920 St. Mary", "aedile": true, "unsent_draft": true,
+      "note": "NEVER SENT. It is a draft in the Office mailbox, and it is in this file only because the pull that produced the list matched `list:kreweofvaporwave.googlegroups.com` against unsent drafts. Verified: `in:drafts subject:Laser harp` returns 2, `in:sent` returns 0. A draft is not list traffic and should never have been in a subject corpus." }
   ]
 }

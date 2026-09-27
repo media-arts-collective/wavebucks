@@ -36,8 +36,18 @@ WHAT IS WRONG WITH THE ARCHIVE THIS REPLACES
        already produced one wrong published number (a UTC-5 shift applied to
        an hour that was already local). Gmail's API really is UTC. The two
        sources cannot be mixed without an offset on each row.
-    4. TRUNCATED.      Ends 2026-06-17 overall and 2026-02-19 for the
-       operator, and May-Sep 2025 is missing outright.
+    4. TRUNCATED.      Ends 2026-06-17 overall and 2026-01-24 for the
+       operator. 2025-05, 2025-06 and 2025-08 hold no message at all;
+       2025-07 holds one, which is not a gap -- aedile/CLAUDE.md records
+       July as historically silent.
+
+       This entry said "2026-02-19 for the operator, and May-Sep 2025 is
+       missing outright" until 2026-09-26, both taken from a peer's message
+       and neither run. 2026-02-19 is the last message of the vaporwaRE
+       MEMBER, not the operator: it is what the buggy `/^kreweofv/`
+       predicate returns, so the figure was an artifact of the bug
+       documented in `unmask` below. Inheriting a number is how a bug
+       travels into the docs of the tool that found it.
     5. NO THREADING.   No Message-ID, In-Reply-To or References, so thread
        membership is inferred from a URL. 86 of its 628 topics have no
        thread file at all.
@@ -251,6 +261,13 @@ def unmask(rows):
     only from 2025-10), and it is deliberately not applied: it argues from
     the absence of earlier posts in a corpus that is itself redacted, which
     is the kind of inference this file exists to stop.
+
+    It does BOUND the damage, though, which is worth stating because "85
+    unattributable rows" sounds far worse than it is: of those 85, only 2
+    are dated 2025-10 or later (both 2026-01), so at most 2 could be the
+    other member and at least 83 are the operator's. The tool still refuses
+    all 85, because the bound is a property of the set and not evidence
+    about any individual row.
     """
     plain = {(r.get('email') or '').lower() for r in rows if r.get('email')}
     plain.discard('')

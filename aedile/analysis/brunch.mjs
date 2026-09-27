@@ -267,6 +267,26 @@ p(`  restates the address: ${rate(lf, 'address')}%   distinct clock times: media
 p(`  greeting ${rate(lf, 'greet')}%   sign-off ${rate(lf, 'signoff')}%   numbered ${rate(lf, 'numbered')}%   ALL-CAPS ${rate(lf, 'caps')}%   "!" ${rate(lf, 'bang')}%`);
 p('');
 
+if (process.argv.includes('--bumps')) {
+  // The day-before/day-of messages, whole. A median is not a specimen: "947 chars,
+  // address 82%, one clock time" does not tell you what the thing READS like, and
+  // the generator is being asked to write one of these, not to hit a percentile.
+  const bumps = evList.flatMap(([ev, l]) => l.filter(x => x.lead <= 1).map(x => ({ ev, ...x })));
+  p(`LEAD 0-1d MESSAGES, VERBATIM (n=${bumps.length}):`);
+  const t = b => new Set((b.match(/\b\d{1,2}\s?(?::\d{2})?\s?(?:am|pm)\b|\bnoon\b/gi) || [])
+    .map(x => x.toLowerCase().replace(/\s+/g, '')));
+  for (const x of bumps) {
+    const f = form(x.m.body);
+    p(`\n=== Sunday ${new Date(x.ev * 86400000).toISOString().slice(0, 10)}  sent ${x.lead}d before @${x.hour}h  `
+      + `${f.words}w/${f.chars}c  times=[${[...t(x.m.body)].join(',')}]`);
+    p(x.m.body.trim().split('\n').map(l => '  | ' + l).join('\n'));
+  }
+  p('');
+  p('distinct clock times per bump: ' + JSON.stringify(
+    bumps.reduce((a, x) => { const n = t(x.m.body).size; a[n] = (a[n] || 0) + 1; return a; }, {})));
+  process.exit(0);
+}
+
 if (ALL) {
   p('EVERY MATCHED EVENT (newest last):');
   for (const [ev, l] of evList) {

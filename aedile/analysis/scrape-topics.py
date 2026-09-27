@@ -49,7 +49,16 @@ from pathlib import Path
 VAULT_JSONL = Path('/srv/vaporwave-reports/obsidian-vault/mailing-list-archive/messages.jsonl')
 COOKIES = Path('/srv/vaporwave-reports/aedile/.groups-cookies.txt')
 GROUP = 'kreweofvaporwave'
-LEDGER = Path(__file__).resolve().parent / '.scrape-used.json'
+# Consecutive post-refresh denials that mean the SESSION died rather than the topic.
+MAX_DENIED_IN_A_ROW = 6
+# Overridable so a SECOND worker can run concurrently over the same 628 topics from the
+# other end of the list (`--reverse`) with its own ledger and its own mbox. The two never
+# write the same file, so there is no lock and no race; they meet in the middle, and the
+# handful of topics both reach are fused by ingest.py's merge key (day + first 60 body
+# characters), which reports 0 collisions on this corpus. Halves wall-clock on a run whose
+# per-topic cost is dominated by waiting on Google, not on this box.
+LEDGER = Path(os.environ.get(
+    'SCRAPE_LEDGER', Path(__file__).resolve().parent / '.scrape-used.json'))
 
 # `display<addr@host>` immediately followed by a date line. Google renders the masked display
 # form and the real address together, which is the whole reason owner rights matter.
@@ -281,7 +290,7 @@ def as_mbox(records, topic_id):
     return ''.join(chunks)
 
 
-def scrape(limit=None, out_path=None, verbose=False, headless=True):
+def scrape(limit=None, out_path=None, verbose=False, headless=True, reverse=False):
     from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
     if not COOKIES.exists():
@@ -290,6 +299,8 @@ def scrape(limit=None, out_path=None, verbose=False, headless=True):
 
     used = set(json.loads(LEDGER.read_text())) if LEDGER.exists() else set()
     todo = [t for t in topic_ids() if t not in used]
+    if reverse:
+        todo.reverse()
     if limit:
         todo = todo[:limit]
     out_path = Path(out_path or (Path(tempfile.gettempdir()) / f'{GROUP}-topics.mbox'))
@@ -297,6 +308,8 @@ def scrape(limit=None, out_path=None, verbose=False, headless=True):
     print(f'out: {out_path}', flush=True)
 
     done = failed = messages = 0
+    # Consecutive access denials. One is a bad topic; a run of them is a lost session.
+    denied = 0
     with sync_playwright() as pw:
         browser = pw.firefox.launch(headless=headless)
         ctx = browser.new_context()
@@ -326,19 +339,44 @@ def scrape(limit=None, out_path=None, verbose=False, headless=True):
                             pass
                         text = page.inner_text('body')
                         subject = (page.title() or '').strip()
-                        if not ('Content unavailable' in text or (
-                                'Sign in' in text and 'My groups' not in text)):
+                        # A TOPIC-LEVEL ACCESS ERROR LOOKS EXACTLY LIKE A DEAD SESSION.
+                        # Google redirects an inaccessible topic to
+                        # `groups.google.com/access-error`, and renders that page in
+                        # SIGNED-OUT chrome: "Sign in", no "My groups", 169 characters,
+                        # "try switching accounts". So the page cannot tell you which of
+                        # the two it is -- and reading it as a dead session aborted a
+                        # whole pass on one bad topic, at the NEWEST topic in the list,
+                        # while the forward worker ran on happily.
+                        #
+                        # The refresh below is the right move for either cause and costs
+                        # one re-export, so it runs first. What distinguishes them is
+                        # whether it KEEPS happening: one topic is a bad topic, many in a
+                        # row is a lost session. That is the counter in the caller.
+                        if not ('Sign in' in text and 'My groups' not in text):
                             break
                         if attempt == 0:
                             print(f'  [{n}/{len(todo)}] {tid}: signed out -- '
                                   f're-exporting the container session', flush=True)
                             refresh_cookies(ctx)
                     else:
-                        print(f'\nSTOP: still not signed in at topic {n} ({tid}) after a '
-                              f'fresh export. The container itself is signed out -- sign '
-                              f'{GROUP} back in, then re-run; the ledger resumes.',
-                              flush=True)
-                        break
+                        denied += 1
+                        if denied >= MAX_DENIED_IN_A_ROW:
+                            print(f'\nSTOP: {denied} topics in a row denied after a fresh '
+                                  f'export, last {tid}. That is a lost session, not bad '
+                                  f'topics -- sign {GROUP} back in, then re-run; the '
+                                  f'ledger resumes.', flush=True)
+                            break
+                        failed += 1
+                        print(f'  [{n}/{len(todo)}] {tid}: access denied after refresh '
+                              f'({denied} in a row) -- skipping this topic', flush=True)
+                        continue
+                    denied = 0
+
+                    if 'Content unavailable' in text:
+                        failed += 1
+                        print(f'  [{n}/{len(todo)}] {tid}: topic unavailable (deleted or '
+                              f'moderated) -- skipped, session is fine', flush=True)
+                        continue
 
                     expand_all(page)
                     records, expected = messages_on_page(page, subject)
@@ -396,8 +434,11 @@ def main():
     ap.add_argument('--out')
     ap.add_argument('--verbose', action='store_true')
     ap.add_argument('--headed', action='store_true', help='watch it work')
+    ap.add_argument('--reverse', action='store_true',
+                    help='newest first, for a second concurrent worker')
     a = ap.parse_args()
-    done, failed, _ = scrape(a.limit, a.out, a.verbose, headless=not a.headed)
+    done, failed, _ = scrape(a.limit, a.out, a.verbose, headless=not a.headed,
+                             reverse=a.reverse)
     sys.exit(0 if done else 1)
 
 

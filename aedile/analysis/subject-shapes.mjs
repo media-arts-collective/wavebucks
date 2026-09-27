@@ -26,6 +26,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { load } from './corpus.mjs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -36,7 +37,7 @@ const DATA = JSON.parse(readFileSync(join(HERE, 'subjects-live.json'), 'utf8'));
  *  close a loop in which the generator's habits become the corpus's habits. */
 export const HUMAN = DATA.subjects.filter(s => !s.aedile).map(s => s.subject);
 
-const F = {
+export const F = {
   dayWord:   s => /\b(sun|mon|tues|wednes|thurs|fri|satur)(day|\.)?\b|\b(today|tonight|tomorrow|weekend)\b/i.test(s),
   clockTime: s => /\b\d{1,2}(?::\d{2})?\s?(?:am|pm)\b|@\s?\d{1,2}|\b\d{1,2}\s?-\s?\d{1,2}\b/i.test(s),
   calDate:   s => /\b\d{1,2}\/\d{1,2}\b/.test(s),
@@ -58,6 +59,32 @@ const F = {
 /** Carries at least one of day, time or date. The proxy for "announces something",
  *  since the subjects arrived without their bodies. */
 export const carriesLogistics = s => F.dayWord(s) || F.clockTime(s) || F.calDate(s);
+
+/** Operator subjects out of the CORPUS, which had none until the 2026-09-27 topic
+ *  scrape. `messages.jsonl` carried no `subject` field at all, so every subject figure
+ *  in this repo was measured over the 31 recovered live-Gmail subjects -- successor era
+ *  only, 19 of them human, 10 carrying any logistics. `aedile/CLAUDE.md` stated as a
+ *  premise that "Abe-era subjects exist in no store"; at 38% scrape coverage the corpus
+ *  holds 186 Abe-era operator subjects, so that premise is now false and the denominator
+ *  it justified is no longer the only one available.
+ *
+ *  ONLY THE <=2024 SLICE IS CLEAN. `isOperator` matches every `kreweofv*` sender, which
+ *  includes aedile's OWN sent mail, and this loader has no `--mark-aedile` pass behind it.
+ *  So a successor-era subject pool measures the generator partly against itself -- the
+ *  exact loop `HUMAN` exists to avoid. The Abe era needs no such filter: aedile did not
+ *  exist before 2026, so `{ until: 2024 }` cannot contain its output. Condition on that
+ *  slice, or mark the aedile rows first.
+ *
+ *  STILL NOT A GENERATOR SOURCE WITHOUT A DECISION. These arrive with their bodies, so
+ *  unlike the 31 they can be conditioned on what the message actually announced rather
+ *  than on a day-word proxy. That is a better measurement and a different one; adopting
+ *  it changes what the generator imitates, which is Zach's call, not a side effect of a
+ *  scrape finishing. */
+export function corpusSubjects(opts = {}) {
+  return load(opts)
+    .filter(m => typeof m.subject === 'string' && m.subject.trim())
+    .map(m => m.subject.trim());
+}
 
 const pct = (n, d) => d ? Math.round(100 * n / d) : 0;
 

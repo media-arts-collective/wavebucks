@@ -4,6 +4,17 @@
  *
  *   ./style.mjs [burst.json] [--all]
  *
+ * THESE ARE DIAGNOSTICS, NOT AN OBJECTIVE FUNCTION (#29). They were built to find tells by
+ * comparing a BURST against the archive. Hand-editing one draft until this table goes green
+ * is Goodhart's law and it converges on flattened prose in about four passes -- measured:
+ * four iterations took `mean paragraph chars` to +1% of the archive (155 against 156) by
+ * cutting long paragraphs into even ones, which moved paragraph spread from 0.70 to 0.54
+ * against an archive at ~0.9. The draft it started from was ALREADY closer. Tune the prompt
+ * and the deal, then measure; do not tune the specimen.
+ *
+ * That failure is now visible in the output rather than invisible: the SPREAD family ranks
+ * a dispersion collapse as a finding, so "every mean matched" can no longer hide it.
+ *
  * Zach, after the first burst came back 33%: "is there a general punctuation
  * frequency, capitalization frequency, numbering frequency, etc. we can
  * measure? or like when jokes happen, what percentage, where in the message?"
@@ -164,13 +175,47 @@ function battery(punct) {
     ['first person I',           /\bI\b/g],
   ];
 
-  return { RATE, SHARE, SHAPE, POSITION };
+  // DISPERSION, not just central tendency (#29). Every row above is a mean or a share,
+  // so the cheapest way to make the table go green is to write UNIFORMLY -- which is the
+  // exact tell the duel exists to find. Measured: tuning a real recap against this tool
+  // moved `mean paragraph chars` to +1% of the archive (155 vs 156) by cutting long
+  // paragraphs into even ones, and in doing so took paragraph spread from 0.70 to 0.54
+  // against the archive's 0.85. The hand-edited draft was already closer and the tuning
+  // moved it away. Nothing in the output said so, because a collapsed distribution with a
+  // matched average reads as a win.
+  //
+  // So spread is its own family and ranks on its own divergence. sd/mean (coefficient of
+  // variation) is used rather than sd because it is scale-free, which is what makes it
+  // comparable across a 200-word and a 900-word message. Computed WITHIN each message and
+  // then averaged, because the trait is "he writes uneven blocks", not "his messages
+  // differ from each other".
+  const SPREAD = [
+    ['paragraph chars sd/mean', t => cv(t.split(/\n\s*\n/).filter(x => x.trim()).map(x => x.length))],
+    ['sentence words sd/mean',  t => cv(sentences(t).map(x => words(x).length))],
+    ['numbered item chars sd/mean', t => cv(t.split(/(?:^|\n)\s*-?\d+\.\s/).slice(1).map(x => x.length))],
+  ];
+
+  return { RATE, SHARE, SHAPE, SPREAD, POSITION };
 }
 
 // --- comparison --------------------------------------------------------------
 
 const mean = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0;
 const meanOf = (c, f) => mean(c.map(f));
+/** Sample sd, and sd/mean. NaN below two data points: one paragraph has no spread, and
+ *  reporting 0 there would read as "perfectly uniform" rather than "not measurable". */
+const sd = a => {
+  if (a.length < 2) return NaN;
+  const m = mean(a);
+  return Math.sqrt(a.reduce((t, x) => t + (x - m) ** 2, 0) / (a.length - 1));
+};
+const cv = a => { const m = mean(a); return (a.length < 2 || !m) ? NaN : sd(a) / m; };
+/** Mean over only the messages where the metric is defined -- one NaN would otherwise
+ *  poison the whole pool's average. */
+const meanDefined = (c, f) => {
+  const v = c.map(f).filter(Number.isFinite);
+  return v.length ? mean(v) : NaN;
+};
 const shareOf = (c, f) => 100 * c.filter(f).length / (c.length || 1);
 const meanPos = (c, re) => { const all = c.flatMap(t => positions(t, re)); return all.length ? mean(all) : NaN; };
 
@@ -195,23 +240,36 @@ const ai = burstPath
   ? (JSON.parse(readFileSync(burstPath, 'utf8')).pairs || []).map(p => p.ai)
   : null;
 
-const { RATE, SHARE, SHAPE, POSITION } = battery(punctuationSet(real, ai || []));
+const { RATE, SHARE, SHAPE, SPREAD, POSITION } = battery(punctuationSet(real, ai || []));
 
 const rows = [];
 const add = (family, name, r, a, unit) => rows.push({ family, name, r, a, unit, d: divergence(r, a) });
 
 for (const [name, f] of RATE) add('RATE', name, meanOf(real, f), ai ? meanOf(ai, f) : NaN, '/1k');
-for (const [name, f] of SHARE) add('SHARE', name, shareOf(real, f), ai ? shareOf(ai, f) : NaN, '%');
+// A SHARE over ONE generated message is a presence bit, not a percentage (#29): every row
+// reads 0% or 100% and lands in the ranking as a confident -100% or "new". Suppressed
+// rather than ranked, so a single specimen cannot be over-fitted against a coin flip.
+const shareIsNoise = !!ai && ai.length < 2;
+if (!shareIsNoise) {
+  for (const [name, f] of SHARE) add('SHARE', name, shareOf(real, f), ai ? shareOf(ai, f) : NaN, '%');
+}
 for (const [name, f] of SHAPE) add('SHAPE', name, meanOf(real, f), ai ? meanOf(ai, f) : NaN, '');
+for (const [name, f] of SPREAD) add('SPREAD', name, meanDefined(real, f), ai ? meanDefined(ai, f) : NaN, '');
 for (const [name, re] of POSITION) add('POSITION', name, meanPos(real, re), ai ? meanPos(ai, re) : NaN, '0-1');
 
 console.log(`archive pool: ${real.length} messages` + (ai ? `   generated: ${ai.length}` : ''));
 
-for (const family of ['RATE', 'SHARE', 'SHAPE', 'POSITION']) {
+if (shareIsNoise) {
+  console.log('note: SHARE family suppressed -- one generated message makes every share a '
+    + '0/100 presence bit, not a rate (#29). Give it a burst to compare shares.');
+}
+
+for (const family of ['RATE', 'SHARE', 'SHAPE', 'SPREAD', 'POSITION']) {
   const group = rows.filter(r => r.family === family);
   if (!group.length) continue;
   const w = Math.max(...group.map(r => r.name.length));
-  console.log(`\n${family}${family === 'POSITION' ? '  (0.0 = opening line, 1.0 = sign-off)' : ''}`);
+  console.log(`\n${family}${family === 'POSITION' ? '  (0.0 = opening line, 1.0 = sign-off)'
+    : family === 'SPREAD' ? '  (sd/mean within a message; HIGHER = more uneven. Lower than the archive means flattened prose, which is a finding, not a win.)' : ''}`);
   console.log('  ' + 'metric'.padEnd(w), 'archive'.padStart(9), (ai ? 'generated' : '').padStart(10), ai ? '  off by' : '');
   for (const r of group) {
     if (!showAll && !ai && r.family === 'RATE' && r.r < 0.05) continue;

@@ -67,7 +67,49 @@ async function judgeOne(pair, vote) {
   const body = `--- EMAIL A ---\n${onA ? pair.real : pair.ai}\n\n--- EMAIL B ---\n${onA ? pair.ai : pair.real}`;
   const d = parse(await callModelAsync(JUDGE_PROMPT, body));
   const pickedReal = (d.pick === 'A') === onA;
-  return { pick: d.pick, pickedReal, confidence: d.confidence, why: String(d.why || '').trim() };
+  // `onA` is kept so the run can score what a CONSTANT responder would have got on this
+  // exact layout (#22). Without it, position bias is invisible and a judge that always
+  // says A reports a fooled-rate that reads like discrimination.
+  return { pick: d.pick, pickedReal, onA, confidence: d.confidence, why: String(d.why || '').trim() };
+}
+
+/** Two-sided exact binomial p for `k` of `n` at p=0.5, by summing the tail. No
+ *  dependency and no approximation: n here is dozens, so exact is cheap and a normal
+ *  approximation would be wrong in exactly the small-n case that matters. */
+export function twoSidedBinomialP(k, n) {
+  if (!n) return 1;
+  const hi = Math.max(k, n - k);
+  // Factorials in log space, so a few hundred votes cannot overflow.
+  const logFact = new Array(n + 1).fill(0);
+  for (let i = 1; i <= n; i++) logFact[i] = logFact[i - 1] + Math.log(i);
+  let tail = 0;
+  for (let i = hi; i <= n; i++) {
+    tail += Math.exp(logFact[n] - logFact[i] - logFact[n - i] + n * Math.log(0.5));
+  }
+  return Math.min(1, 2 * tail);
+}
+
+/** A run that did not DISCRIMINATE returns output shaped like one that did (#22).
+ *
+ *  Burst 11, batched: the judge answered A in ten of twelve rounds and the harness
+ *  reported 67% fooled -- 67 points above the same specimens scored per-pair, against an
+ *  arc that eleven bursts of real tuning had moved by 8. The twelve rationales were
+ *  fluent, specific and drawn from the correct vocabulary, so nothing in the output
+ *  distinguished it from a breakthrough. Position bias at 10/12 is p=0.039; the 67% is
+ *  p=0.194 against chance. The bias was the only significant effect in the run.
+ *
+ *  So the split is ALWAYS reported, and past the binomial threshold no rate is emitted at
+ *  all -- a number withheld cannot be pasted into an arc table. A figure that is always
+ *  printed is a guard; a threshold someone might trip is a rule they edit later. */
+export function positionAudit(results) {
+  const n = results.length;
+  const saidA = results.filter(r => r.pick === 'A').length;
+  const p = twoSidedBinomialP(saidA, n);
+  // What a responder that ALWAYS said A, or always B, would have scored as "fooled" on
+  // this exact layout. On a balanced layout both land near 50%.
+  const constA = n ? 100 * results.filter(r => !r.onA).length / n : 0;
+  const constB = n ? 100 * results.filter(r => r.onA).length / n : 0;
+  return { n, saidA, saidB: n - saidA, p, constA, constB, degenerate: n > 0 && p < 0.05 };
 }
 
 async function pool(items, jobs, fn) {
@@ -117,47 +159,75 @@ async function run(path, votes, jobs) {
   if (byPair.size < pairs.length) {
     console.error(`   ${pairs.length - byPair.size} of ${pairs.length} pair(s) got no verdict; rate below is on the rest`);
   }
-  return { path, pairs: byPair.size, votes: ok.length, caught, fooled,
-           rate: byPair.size ? Math.round(100 * fooled / byPair.size) : 0, results: ok };
+  const audit = positionAudit(ok);
+  return { path, pairs: byPair.size, votes: ok.length, caught, fooled, audit,
+           // No rate at all when the run did not discriminate (#22). null, not 0 -- a 0
+           // would read as "never fooled", which is a finding, and this is the absence of
+           // one.
+           rate: audit.degenerate || !byPair.size
+             ? null : Math.round(100 * fooled / byPair.size),
+           results: ok };
 }
 
-const args = process.argv.slice(2);
-if (!args.length || args.includes('--help')) {
-  console.error('usage: judge.mjs pairs.json [--votes 3] [--jobs 4] [--out FILE]');
-  console.error('       judge.mjs a.json b.json c.json --trend');
-  process.exit(2);
-}
-
-const votes = Number(arg(args, '--votes', 3));
-const jobs = Number(arg(args, '--jobs', 4));
-const out = arg(args, '--out', null);
-const files = args.filter(a => !a.startsWith('--') && a.endsWith('.json') && a !== out);
-
-const all = [];
-for (const f of files) {
-  const r = await run(f, votes, jobs);
-  all.push(r);
-  console.log(`${f.split('/').pop().padEnd(16)} fooled the judge on ${r.fooled}/${r.pairs}  (${r.rate}%)   ${r.votes} votes`);
-}
-
-if (all.length > 1) {
-  console.log('\ntrend, blind judge, 50% is indistinguishable:');
-  for (const r of all) {
-    const bar = '#'.repeat(Math.round(r.rate / 2)).padEnd(50, '.');
-    console.log(`  ${r.path.split('/').pop().padEnd(16)} ${String(r.rate + '%').padStart(4)} |${bar}|`);
+// CLI only when INVOKED, not when imported. Without this guard a test that imports
+// `twoSidedBinomialP` runs the whole command line and exits 2 on the usage check --
+// which is how the guard in #22 nearly shipped untested.
+if (process.argv[1] && process.argv[1].endsWith('judge.mjs')) {
+  const args = process.argv.slice(2);
+  if (!args.length || args.includes('--help')) {
+    console.error('usage: judge.mjs pairs.json [--votes 3] [--jobs 4] [--out FILE]');
+    console.error('       judge.mjs a.json b.json c.json --trend');
+    process.exit(2);
   }
-}
 
-// The reasons are the automated version of a human's notes, and the whole
-// point of running this unattended.
-const last = all[all.length - 1];
-const caughtWhy = last.results.filter(r => r.pickedReal).map(r => r.why).filter(Boolean);
-if (caughtWhy.length) {
-  console.log(`\nwhat gave it away, ${last.path.split('/').pop()}:`);
-  for (const w of caughtWhy.slice(0, 14)) console.log(`  - ${w}`);
-}
+  const votes = Number(arg(args, '--votes', 3));
+  const jobs = Number(arg(args, '--jobs', 4));
+  const out = arg(args, '--out', null);
+  const files = args.filter(a => !a.startsWith('--') && a.endsWith('.json') && a !== out);
 
-if (out) {
-  writeFileSync(out, JSON.stringify(all, null, 2));
-  console.log(`\n-- wrote ${out}`);
+  const all = [];
+  for (const f of files) {
+    const r = await run(f, votes, jobs);
+    all.push(r);
+    const a = r.audit;
+    const split = `said A ${a.saidA}/${a.n}`;
+    if (r.rate === null && a.degenerate) {
+      // The whole point: no percentage on this line, so nothing can be copied out of it.
+      console.log(`${f.split('/').pop().padEnd(16)} DEGENERATE -- ${split} (two-sided p=${a.p.toFixed(3)}). `
+        + `No fooled-rate emitted: this run did not discriminate, so any rate would describe `
+        + `position bias. A constant "A" scores ${a.constA.toFixed(0)}% fooled on this layout.`);
+    } else {
+      console.log(`${f.split('/').pop().padEnd(16)} fooled the judge on ${r.fooled}/${r.pairs}  (${r.rate}%)   `
+        + `${r.votes} votes   ${split}, p=${a.p.toFixed(2)}, constant-A would score ${a.constA.toFixed(0)}%`);
+    }
+  }
+
+  if (all.length > 1) {
+    console.log('\ntrend, blind judge, 50% is indistinguishable:');
+    for (const r of all) {
+      // A degenerate run is not plotted. Giving it a bar would put it on the arc, which is
+      // the exact mistake #22 records -- 67% read as the breakthrough eleven bursts had been
+      // waiting for.
+      if (r.rate === null) {
+        console.log(`  ${r.path.split('/').pop().padEnd(16)}    - |${'DEGENERATE, not plotted'.padEnd(50, ' ')}|`);
+        continue;
+      }
+      const bar = '#'.repeat(Math.round(r.rate / 2)).padEnd(50, '.');
+      console.log(`  ${r.path.split('/').pop().padEnd(16)} ${String(r.rate + '%').padStart(4)} |${bar}|`);
+    }
+  }
+
+  // The reasons are the automated version of a human's notes, and the whole
+  // point of running this unattended.
+  const last = all[all.length - 1];
+  const caughtWhy = last.results.filter(r => r.pickedReal).map(r => r.why).filter(Boolean);
+  if (caughtWhy.length) {
+    console.log(`\nwhat gave it away, ${last.path.split('/').pop()}:`);
+    for (const w of caughtWhy.slice(0, 14)) console.log(`  - ${w}`);
+  }
+
+  if (out) {
+    writeFileSync(out, JSON.stringify(all, null, 2));
+    console.log(`\n-- wrote ${out}`);
+  }
 }

@@ -104,7 +104,13 @@ for (const [name, fn] of Object.entries(PROPS)) {
   rows.push({ name, A, B, agrees, verdict });
 }
 
-if (!process.argv.includes('--block')) {
+// ONLY WHEN INVOKED. This condition used to be `!argv.includes('--block')` with no check
+// that the file was the entry point, so ANY import printed the whole report: `redige.mjs`
+// imports `formBlock`/`measuredRates` directly, so every generator run emitted this
+// measurement to stdout ahead of its own output, and so did every test whose import chain
+// reached here. Same class as judge.mjs's unguarded CLI (#22).
+const INVOKED = !!process.argv[1] && process.argv[1].endsWith('headsup-form.mjs');
+if (INVOKED && !process.argv.includes('--block')) {
   console.log(`era: <=${ERA_UNTIL} (Abe)   operator messages: ${all.length}   announcements: ${anns.length}`);
   console.log(`A/POOL      Sunday meeting, lead 0-1d   n=${POOL.length}`);
   console.log(`B/NEIGHBOUR any announcement, lead 0-1d  n=${NEIGHBOUR.length}`);
@@ -242,4 +248,4 @@ export function formBlock() {
   return say.join('\n');
 }
 
-if (process.argv.includes('--block')) console.log(formBlock());
+if (INVOKED && process.argv.includes('--block')) console.log(formBlock());

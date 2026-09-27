@@ -51,3 +51,18 @@ cookies.sqlite
 # The scrape's resume ledger: which topic IDs already landed in the mbox. Per-machine
 # progress, not a fact about the project.
 aedile/analysis/.scrape-used.json
+
+# THE CORPUS IS PRIVATE MAIL FROM REAL PEOPLE and this repo is public (#45). The canonical
+# copy lives at /srv/vaporwave-reports/obsidian-vault/mailing-list-archive/ and a
+# server-local cache beside it -- never here. Before these patterns nothing in this file
+# matched a corpus shape, so `messages.jsonl`, a merged corpus or an mbox dropped into the
+# repo would have been committable: verified 2026-09-27 with `git check-ignore`, which is
+# the check #45's third bullet asks for and it was not satisfied.
+#
+# Only a SYNTHETIC fixture belongs in git. If one ever needs to be tracked, name it
+# explicitly with a negation rather than widening these.
+*.mbox
+*.mbox.gz
+messages.jsonl
+merged*.jsonl
+*-topics.jsonl

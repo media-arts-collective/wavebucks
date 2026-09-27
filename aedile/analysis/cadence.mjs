@@ -12,6 +12,22 @@
  *   - messages-per-topic (touches per event)
  *   - operator announcements: new-subject thread-starters vs replies
  *
+ * WHICH TOOL TO QUOTE FOR "HOW MANY NOTICES DOES AN EVENT GET" (#72). Three tools in
+ * this directory answer that, over three different populations, and nothing used to say
+ * which one to cite. That cost a design: a two-beat bump schedule was filed on #68 off a
+ * marginal lead-time distribution while the event-level figure was already on hand twice.
+ *
+ *   when.mjs Sunday 1pm --sequences   81% of EVENTS get exactly one notice   <- QUOTE THIS
+ *   brunch.mjs                        69% for Sunday meetings, per event
+ *   cadence.mjs                       75% of TOPICS are single-message
+ *
+ * All three are correct about their own population; only the first is conditioned on the
+ * event and grouped by event, which is what "what does this gathering get" asks.
+ * `when.mjs --sequences` is the tool of record for that question. The other two keep
+ * their output because each measures something the first does not -- messages-per-topic
+ * is not notices-per-event, and a topic is not a gathering -- but neither is the figure
+ * to cite when deciding how many beats to schedule.
+ *
  * Reads the archive from $KREWE_VAULT/messages.jsonl (JSON lines:
  * {author,email,date,body,topic_url}). Default path is the (deprecating)
  * /srv location -- override with KREWE_VAULT when the corpus moves.

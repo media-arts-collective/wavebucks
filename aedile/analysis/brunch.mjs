@@ -17,6 +17,22 @@
  * address. Zach, 2026-09-26: "might not always be an exact string match, but
  * general sunday meetings are right."
  *
+ * WHICH TOOL TO QUOTE FOR "HOW MANY NOTICES DOES AN EVENT GET" (#72). Three tools in
+ * this directory answer that, over three different populations, and nothing used to say
+ * which one to cite. That cost a design: a two-beat bump schedule was filed on #68 off a
+ * marginal lead-time distribution while the event-level figure was already on hand twice.
+ *
+ *   when.mjs Sunday 1pm --sequences   81% of EVENTS get exactly one notice   <- QUOTE THIS
+ *   brunch.mjs                        69% for Sunday meetings, per event
+ *   cadence.mjs                       75% of TOPICS are single-message
+ *
+ * All three are correct about their own population; only the first is conditioned on the
+ * event and grouped by event, which is what "what does this gathering get" asks.
+ * `when.mjs --sequences` is the tool of record for that question. The other two keep
+ * their output because each measures something the first does not -- messages-per-topic
+ * is not notices-per-event, and a topic is not a gathering -- but neither is the figure
+ * to cite when deciding how many beats to schedule.
+ *
  * Recency: the archive spans 2019-2026 and the krewe's habits moved. Everything
  * is reported by era as well as pooled, so an older convention cannot quietly
  * outvote current practice on sample size alone. `--since` restricts the pool.

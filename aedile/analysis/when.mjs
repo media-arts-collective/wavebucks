@@ -9,6 +9,14 @@
  * Zach, 2026-09-26: "I want some kind of function that lets me pass in a day-of-week
  * and time and get out when the bumps historically came out."
  *
+ * THE TOOL OF RECORD for "how many notices does an event get" (#72). `cadence.mjs` and
+ * `brunch.mjs` also print a figure for it -- 75% of topics single-message, 69% for Sunday
+ * meetings -- over different populations, and both now say to cite this one instead. Use
+ * `--sequences`: it groups by EVENT, which is the only grouping that answers what a
+ * gathering gets. The marginal distribution this tool prints WITHOUT `--sequences` is a
+ * message-level figure and reading it as an event-level one is what filed a two-beat
+ * schedule on #68.
+ *
  * WHY THIS EXISTS RATHER THAN A REMEMBERED RULE. A general figure was quoted at him
  * four times tonight -- "morning-of, median 10h, 73% between 08:00 and 12:59, n=102" --
  * and it is a real measurement over the wrong population. Conditioned on a SUNDAY

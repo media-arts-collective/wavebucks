@@ -161,12 +161,29 @@ trait that lives late in a message. `isFullBody` in `analysis/corpus.mjs` exclud
 now, which raised the length target from 134 words to 173 and the exclamation rate from
 94% to 100%.
 
-**Re-deriving these rates from `messages.jsonl` will NOT correct them** -- the same pool
-reproduces the same bias. 148 of the 509 Abe-era operator messages are snippets and
-*none* is recoverable, because the Office mailbox holds no mail before 2025 and there is
-no second copy. The fix is an mbox from an account that spans 2019, which also gates
-every Abe-era subject and the size of this correction. Until then 173 is a floor and the
-true figure is above it by an unestimable amount.
+**Re-deriving these rates from the OLD `messages.jsonl` will NOT correct them** -- the
+same pool reproduces the same bias. The fix was never a second mailbox: it is reading the
+group's own topic pages, which `aedile/analysis/scrape-topics.py` now does
+(2026-09-27). A collapsed message on a topic page renders masked and truncated exactly
+like a list preview, so the scrape clicks `Expand all` first; see that file's header.
+
+**Partially corrected, and the direction was a surprise.** At 239 of 628 topics (38%
+coverage) the snippet band falls 343 -> 288 of 1171 rows, subjects go 0 -> 368, null
+addresses 325 -> 262 and ellipsized authors 802 -> 558. But the length target moved
+**DOWN**, 173 -> 164 words, with the lower quartile falling 96 -> 64. The prediction here
+was that 173 was a floor and the true figure was above it, on the argument that truncation
+is length-biased and the survivors are the short ones. That argument is sound and still
+produced the wrong direction, because replacing a snippet with its real body also admits
+genuinely SHORT announcements that `isFullBody` had been dropping. So 173 was not a floor.
+No property verdict changed, which is the reassuring half: the form conclusions survived a
+38% corpus change intact. **Nothing has been adopted from the new corpus** -- the rates in
+`devices.mjs` and `formBlock()` still read the vault copy, and moving them is a decision.
+
+Finishing the scrape is blocked on a live session, not on code: Google invalidated the
+exported container credential mid-run (every Google property bounced to the account
+chooser with all five auth cookies present and freshly re-exported), which on ~250
+headless page loads in 90 minutes reads as an anti-automation revocation. Re-signing the
+`kreweofvaporwave` Firefox container in restores it and the ledger resumes.
 
 Two rules the corpus turned out not to support, both deleted:
 
@@ -177,7 +194,21 @@ Two rules the corpus turned out not to support, both deleted:
   real subjects recovered from live Gmail, **0** begin `N. ` and 0 restate the body
   opening. The prompt rule and the `subject-body-mismatch` check are both gone, and
   `dealSubject` deals subject FEATURES at rates measured over those 31 -- successor-era
-  only, because Abe-era subjects exist in no store.
+  only, which was forced when Abe-era subjects existed in no store. **They exist now**:
+  the topic scrape put 186 Abe-era operator subjects in the corpus at 38% coverage, and
+  `subject-shapes.mjs` reads them (`corpusSubjects({ until: 2024 })`). `N. ` is 0 of 186,
+  so #30's deletion holds on a six-times-larger denominator spanning the era it was
+  missing.
+
+  **The weights `dealSubject` uses are drawn from the wrong era, and one is badly wrong.**
+  Same detectors, the 12 logistics-carrying subjects the weights come from against 112
+  Abe-era ones: `calDate` 58% -> **2%**, `bang` 8% -> 44%, `lowerOpen` 8% -> 29%,
+  `clockTime` 50% -> 26%, `dayWord` 75% -> 94%, carries-logistics 39% -> 60%. The
+  generator is taught to put an `M/D` in a subject at 58%, off roughly seven specimens,
+  against 2% of 112. Not yet changed -- re-weighting is Zach's call, and only the `<=2024`
+  slice is clean anyway (`isOperator` matches aedile's own sends and no `--mark-aedile`
+  pass runs behind that loader; aedile did not exist before 2026, so the Abe slice needs
+  no filter).
 
   **Do not build a generator on those 31.** They refute a rule; they are far too thin
   and too skewed to source one. Only 10 of 31 carry a day, time or date at all (32%,

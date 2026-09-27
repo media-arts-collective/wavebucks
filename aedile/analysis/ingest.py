@@ -160,6 +160,14 @@ WHAT IS WRONG WITH THE ARCHIVE THIS REPLACES
        Abe-era correction is not estimable from any source on this box; it
        needs pre-2025 ground truth, which means the mbox.
 
+       WHAT THE DEFECT DOES NOT TOUCH, so the blast radius has an edge: a
+       truncated body still carries a correct timestamp. Operator send-hour
+       profiles are the same for snippets and survivors -- median hour 11.0
+       against 12.0, quartiles 10-15 against 10-16 -- so anything measured
+       from `date` rather than from `body` is unaffected. Timing, cadence and
+       day-of-week results stand as published; length, structure, sign-off
+       and closing-content results do not.
+
        `--audit` prints the band and the cliff on every run.
 
 SOURCES, BEST FIRST

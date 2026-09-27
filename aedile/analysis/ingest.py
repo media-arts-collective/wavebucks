@@ -367,7 +367,14 @@ def on_the_list(msg, group):
     # the operator's PERSONAL address -- and so would have imported their
     # private mail out of a Takeout. The group only ever appears as
     # <group>@googlegroups.com or as <group>.googlegroups.com in a List-ID.
-    return f'{g}@googlegroups.com' in hay or f'{g}.googlegroups.com' in hay
+    # Anchored at the END of the domain. A bare `in` also matched
+    # `kreweofvaporwave@googlegroups.com.evil.test`, so mail addressed to a
+    # lookalike domain read as list traffic and would have entered the corpus out
+    # of a Takeout. Low severity -- it needs someone to have sent such mail to the
+    # account -- but this filter is the only thing between a whole personal mailbox
+    # and a corpus a model reads, so it gets the strict version.
+    return bool(re.search(
+        r'(?:^|[\s<,;:])' + re.escape(g) + r'(?:@|\.)googlegroups\.com(?=$|[\s>,;:])', hay))
 
 
 def from_mbox(path, group=GROUP):

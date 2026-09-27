@@ -67,6 +67,18 @@ are genuinely many items; a single-venue heads-up should not be numbered.
 - **lock-in**: carries the newly-firmed facts (place/time), a one-line intro if
   the venue is new, and an optional solicited question. Differs from the nudge by
   *framing and timing*, not structure, usually 1 to 2 lines more, not a list.
+**Length depends on the KIND of gathering, and this is the thing most easily got
+wrong.** Measured per event over 45 Sunday meetings in the archive: the last
+message before the event (lead 0 to 1 day, n=18) runs a **median 1024 characters /
+187 words**, restates the address 83% of the time, carries one clock time, and has
+an exclamation mark in **100%** of cases. Half of them are still numbered. A Sunday
+work meeting is a substantial message.
+
+The bar social is the opposite: the real Half Moon nudge is two lines and 120
+characters. So do not reach for the one-liner unless the gathering is that light.
+A build day with a brunch half and a work half gets the long form, and generating
+60 words for it is about five times too thin.
+
 - **nudge**: restates place + time compactly (short announcements state place 90%
   / time 95%, so the nudge does NOT omit logistics), present-tense/imperative, drops
   the intro and questions. Optionally ALL-CAPS one exhortation (`COME THROUGH`).

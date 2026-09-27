@@ -27,12 +27,41 @@ import { join } from 'node:path';
 
 const VAULT = process.env.KREWE_VAULT
   || '/srv/vaporwave-reports/obsidian-vault/mailing-list-archive';
-const KREWE = 'kreweofvaporwave@gmail.com';
+/** Whose messages count as the operator's.
+ *
+ *  NOT `email === 'kreweofvaporwave@gmail.com'`, which is what every other pool in
+ *  this repo uses and which silently drops 92 of them. `messages.jsonl` carries
+ *  BOTH `author` and `email`, and the scraper left `email: null` on 325 of 1099
+ *  rows while redacting `author` to an ellipsized form: 85 MS messages are stored
+ *  as `author: "kreweofv...@gmail.com", email: null`, and 7 more under the Office
+ *  address. The loss is not spread evenly. 2026 has 88 unattributed rows out of
+ *  116, so filtering on `email` throws away almost the whole recent era and makes
+ *  current practice look like a 3-event sample. Zach, 2026-09-26: "the 3 event
+ *  sample is obviously wrong. You've missed something."
+ *
+ *  Same class as #30 and #27: a scrape artifact shaping what the corpus appears to
+ *  say. style.mjs, devices.mjs and checks.mjs all still use the narrow filter, so
+ *  every rate they publish is measured on the old era. That is a bigger fix.
+ */
+const isKrewe = m => {
+  const who = String(m.email || m.author || '');
+  return who === 'kreweofvaporwave@gmail.com'
+    || who === 'kreweofvaporwave@kreweofvaporwave.com'
+    || /^kreweofv.*@gmail\.com$/.test(who)          // "kreweofv...@gmail.com", redacted
+    || /^kreweofv.*@kreweofvaporwave\.com$/.test(who);
+};
 const ALL = process.argv.includes('--all');
-const SINCE = (() => {
-  const i = process.argv.indexOf('--since');
+const argNum = name => {
+  const i = process.argv.indexOf(name);
   return i > -1 ? parseInt(process.argv[i + 1], 10) : null;
-})();
+};
+const SINCE = argNum('--since');
+// `--until` matters more than `--since` here. The operator account is ONE address
+// and TWO authors: Abe wrote it until he retired around 2025, and everything after
+// is a successor. Pooling 2019-2026 blends two voices under one sign-off, so any
+// rate quoted without an era is suspect. Zach, 2026-09-26: "I need pre 2025 data,
+// that's before abe retired."
+const UNTIL = argNum('--until');
 
 const MONTHS = { Jan:0, Feb:1, Mar:2, Apr:3, May:4, Jun:5, Jul:6, Aug:7, Sep:8, Oct:9, Nov:10, Dec:11 };
 const DOW_IDX = { sunday:0, monday:1, tuesday:2, wednesday:3, thursday:4, friday:5, saturday:6 };
@@ -107,11 +136,12 @@ function isAnnouncement(body) {
 
 const msgs = readFileSync(join(VAULT, 'messages.jsonl'), 'utf8').trim().split('\n')
   .map(l => JSON.parse(l))
-  .filter(m => m.email === KREWE && typeof m.body === 'string');
+  .filter(m => isKrewe(m) && typeof m.body === 'string');
 for (const m of msgs) m._d = parseDate(m.date);
 
 const candidates = msgs.filter(m => m._d && isAnnouncement(m.body) && SUBJECTY.test(m.body))
-  .filter(m => !SINCE || m._d.getUTCFullYear() >= SINCE);
+  .filter(m => (!SINCE || m._d.getUTCFullYear() >= SINCE)
+            && (!UNTIL || m._d.getUTCFullYear() <= UNTIL));
 
 // Group by the Sunday they point at.
 const events = new Map();
@@ -158,8 +188,8 @@ const med = a => { const s = [...a].sort((x, y) => x - y); const n = s.length;
 const rate = (list, k) => list.length ? Math.round(100 * list.filter(x => x[k]).length / list.length) : 0;
 
 const evList = [...events.entries()].sort((a, b) => a[0] - b[0]);
-p(`archive: ${msgs.length} MS messages   candidates: ${candidates.length}   SUNDAY events matched: ${evList.length}`);
-if (SINCE) p(`(restricted to ${SINCE}+)`);
+p(`archive: ${msgs.length} MS messages (narrow email-only filter would give 480)   candidates: ${candidates.length}   SUNDAY events matched: ${evList.length}`);
+if (SINCE || UNTIL) p(`(restricted to ${SINCE || 'start'}..${UNTIL || 'end'})`);
 p('');
 
 p('MESSAGES PER EVENT (how many bumps a Sunday meeting gets):');

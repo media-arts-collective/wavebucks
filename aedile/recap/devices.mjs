@@ -155,11 +155,12 @@ export function dealDevices(seed, genre, beat) {
  *  say are dropped: "no whole line in capitals" is noise, and a prompt that
  *  lists every device every time is teaching the model that every device is
  *  always in play, which is the habit being corrected. */
-export function devicesBlock(hand, flourish, typo, gap) {
+export function devicesBlock(hand, flourish, typo, gap, subject) {
   const lines = DEVICES
     .map(d => (hand[d.key] ? d.yes : d.no))
     .filter(Boolean)
     .map(s => `- ${s}`);
+  if (subject) lines.push(`- ${subject}`);
   if (gap) {
     lines.push(`- Separate paragraphs and items with ${gap} blank line${gap === 1 ? '' : 's'}`
       + ' as the default for this email, and vary off it in a place or two rather than'
@@ -308,6 +309,69 @@ export function dealGap(seed, genre) {
     r -= g.p;
   }
   return table[0].n;  // float slack at the tail lands on that register's usual gap
+}
+
+/** Subject shapes, drawn per email.
+ *
+ *  The archive cannot teach this. `messages.jsonl` has NO subject field: the
+ *  scraper built thread titles from body first lines (#30), so every "subject"
+ *  statistic derivable from the vault is measuring the scrape. The shapes below
+ *  come from REAL subjects in the live Sent folder, which is the only honest
+ *  source, and the sample is small: about seven event announcements. Treat the
+ *  weights as informed placeholders, not measurements, and re-derive them as the
+ *  Sent folder grows.
+ *
+ *  Verbatim, the ones these are drawn from:
+ *    Rapid Rewards Brunch. Sun. 1/4 @ 1pm, 920 St. Mary
+ *    Rapid Rewards Brunch: Today, Sun. 1/18 @1pm, Meeting @3pm
+ *    Content + Builds Tonight | 6 pm at NOLA Brewing
+ *    [Carnival26] Jumpsuit Dropoff 1/21 5-8pm
+ *    Wednesday: Half Moon
+ *    Wings tonight at Half Moon
+ *    long meeting / laser harps 2027 / clubhouse?
+ *
+ *  What every one of them does and aedile never has: names the THING, then the
+ *  when, then the where, with real punctuation between. What aedile produced
+ *  instead was `Hi friends!` (the body's opening, twice), `-1. THESE NOTES ARE
+ *  FROM MEMORY...`, and four bare descriptions with no time and no venue. The
+ *  slash form is attested as a human REWRITE: someone replaced a generated
+ *  `Hi friends!` with `long meeting / laser harps 2027 / clubhouse?` before
+ *  sending.
+ *
+ *  Zach, 2026-09-26: "we need a subject generator, and use the Nelson Street era
+ *  messages to define it with stochastic features."
+ */
+export const SUBJECT_SHAPES = [
+  { key: 'namedWhenWhere', p: 0.34,
+    say: 'SUBJECT: name the thing, then when, then where, the way the list already does it: '
+       + '`Rapid Rewards Brunch. Sun. 1/4 @ 1pm, 920 St. Mary`. Use a full stop or a colon '
+       + 'between the parts and `@` before a time. Carry the venue.' },
+  { key: 'todayFirst', p: 0.20,
+    say: 'SUBJECT: lead with the day word, then the rest of the logistics: '
+       + '`Rapid Rewards Brunch: Today, Sun. 1/18 @1pm, Meeting @3pm`. Both times if there are two.' },
+  { key: 'dayColonPlace', p: 0.16,
+    say: 'SUBJECT: just the day and the place, nothing else: `Wednesday: Half Moon`. Short is correct.' },
+  { key: 'thingAtPlace', p: 0.14,
+    say: 'SUBJECT: the thing, the day word, and the place, as a phrase: '
+       + '`Wings tonight at Half Moon`. No colon, no date.' },
+  { key: 'pipeOrSlash', p: 0.10,
+    say: 'SUBJECT: separate two or three parts with ` | ` or ` / `: '
+       + '`Content + Builds Tonight | 6 pm at NOLA Brewing`, `long meeting / laser harps 2027 / clubhouse?`.' },
+  { key: 'bracketTag', p: 0.06,
+    say: 'SUBJECT: open with a bracketed campaign tag, then the thing and its logistics: '
+       + '`[Carnival26] Jumpsuit Dropoff 1/21 5-8pm`. Only if the notes name a campaign.' },
+];
+
+/** Draw one subject shape. Seeded like the rest, with its own suffix so it varies
+ *  independently of the device hand. */
+export function dealSubject(seed) {
+  const rand = seed === undefined ? Math.random : rng(String(seed) + ':subject');
+  let r = rand();
+  for (const sh of SUBJECT_SHAPES) {
+    if (r < sh.p) return sh.say;
+    r -= sh.p;
+  }
+  return SUBJECT_SHAPES[0].say;  // float slack lands on the commonest shape
 }
 
 /** Deal at most one flourish. Same seeding contract as dealDevices. */

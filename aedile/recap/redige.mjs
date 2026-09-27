@@ -31,7 +31,7 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { callModel, parseDecision } from '../brain/model.mjs';
 import { runChecks, report } from './checks.mjs';
-import { dealDevices, dealFlourish, dealTypo, dealSignoff, dealGap, devicesBlock } from './devices.mjs';
+import { dealDevices, dealFlourish, dealTypo, dealSignoff, dealGap, dealSubject, devicesBlock } from './devices.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const AEDILE = join(HERE, '..');
@@ -393,16 +393,18 @@ async function main(argv) {
   const typo = dealTypo();
   const signoff = dealSignoff();
   const gap = dealGap(undefined, genre);
+  const subjectShape = dealSubject();
   const dealt = Object.entries(hand).filter(([, v]) => v).map(([k]) => k);
   console.error(`-- genre: ${genre}${beat ? ` (beat: ${beat})` : ''}`);
   console.error(`-- devices: ${dealt.join(', ') || 'none'}; gap ${gap}`);
+  console.error(`-- subject shape: ${subjectShape.slice(9, 60)}...`);
 
   const lead = leadTimeBlock(eventDate, beat, asOf);
   const leadDays = eventDate ? leadTimeBlock.days : undefined;
   const prompt = [
     buildSystemPrompt(vault, genre),
     lead,
-    devicesBlock(hand, [flourish, signoff].filter(Boolean).join('\n- '), typo, gap),
+    devicesBlock(hand, [flourish, signoff].filter(Boolean).join('\n- '), typo, gap, subjectShape),
   ].filter(Boolean).join('\n\n');
   let decision;
   try {

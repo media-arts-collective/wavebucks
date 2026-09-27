@@ -64,7 +64,30 @@ const MeetingRecap = (function () {
   function appendOpenQuestions(body, openQuestions) {
     if (!openQuestions || !openQuestions.length) return body;
     const items = openQuestions.map(q => `  - ${q}`).join('\n');
-    return `${body}\n\nStill open:\n${items}`;
+    const block = `Still open:\n${items}`;
+
+    // THE SIGN-OFF STAYS LAST (#23). This used to return `${body}\n\nStill open:...`,
+    // which put seven bullets AFTER `<3 SM` on every recap that surfaced open questions.
+    // All twelve human specimens on the duel page end with the sign-off and nothing
+    // follows it. `checks.mjs` grades the model's output and is positional about this, but
+    // it cannot see the defect because the append happens HERE, in Apps Script, after the
+    // JSON has crossed the wire -- nothing graded the artifact that is actually delivered.
+    // So the fix belongs at the sink, not in the check.
+    const SIGNOFF_LINE = /^(?:(?:<3[ \t]*)+|(?:<3[ \t]*)*SM)$/;
+    const lines = body.replace(/\s+$/, '').split('\n');
+    const signOff = [];
+    // The sign-off can be one line (`<3 SM`) or two (`<3` then `SM`), so take every
+    // trailing sign-off line rather than assuming one.
+    while (lines.length) {
+      const last = lines[lines.length - 1].trim();
+      if (last === '') { lines.pop(); continue; }
+      if (!SIGNOFF_LINE.test(last)) break;
+      signOff.unshift(last);
+      lines.pop();
+    }
+    // No sign-off to protect: append as before rather than inventing a position.
+    if (!signOff.length) return `${body}\n\n${block}`;
+    return `${lines.join('\n').replace(/\s+$/, '')}\n\n${block}\n\n${signOff.join('\n')}`;
   }
 
   /**
@@ -134,7 +157,9 @@ const MeetingRecap = (function () {
   // one draft sink, not one per tier. draftRecap below (the in-Apps-Script
   // transcript path) is untouched, and is what still uses appendOpenQuestions.
 
-  return { draftRecap, isEnabled };
+  // appendOpenQuestions is exposed only so aedile/recap/recap-assembly.test.mjs can
+  // grade the DELIVERED shape; nothing else calls it from outside (#23).
+  return { draftRecap, isEnabled, appendOpenQuestions };
 })();
 
 /**

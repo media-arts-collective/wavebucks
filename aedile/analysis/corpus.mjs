@@ -32,6 +32,27 @@ export const DOW_RE = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sund
  *  one sign-off, so callers measuring "the voice" should pass an era. */
 export const isOperator = m => /^kreweofv/.test(String(m.email || m.author || ''));
 
+// THE REDACTION SPLITS EVERY SENDER INTO TWO IDENTITIES, not just the operator.
+// Measured over the whole archive by first/last post:
+//
+//   kreweofvaporwave@gmail.com  480  2019-09..2026-01   kreweofv...@gmail.com  85
+//   thejakeman16@gmail.com       32  2019-09..2025-10   thejak...@gmail.com    32
+//   rlcolbert@gmail.com          25  2020-09..2026-02   rlco...@gmail.com      32
+//
+// So a per-author count is halved or doubled depending on which form it matches, and
+// a sender's span is truncated: rlcolbert's earliest post is 2019-09 under the masked
+// form and 2020-09 under the plain one. `isOperator` only papers over this for the
+// operator. Anything grouping by sender must fold the pairs first, and there is no
+// general rule for it -- some authors are display names ("Wbbales", "T83", "vip")
+// with no address at all.
+//
+// DO NOT INFER MEMBERSHIP DATES FROM THIS. Posting proves membership at that moment,
+// never joining, and a lurker who never posts receives the whole list and appears
+// nowhere. "A member since at least 2019 judging by the archive" was asserted in this
+// session off exactly this data, relayed to another session as fact, and falsified by
+// Zach: dangerpine@gmail.com is 11 messages, 2023-01 to 2026-06. Wrong by four years,
+// and neither session ran the one-line query first.
+
 /** The send timestamp. NOT UTC despite what the Date object implies: the archive
  *  stores the hour as WRITTEN in local time (only 0.8% of 1099 sends fall between
  *  1am and 5am; the curve peaks at 9-11am). So the UTC fields carry local numbers

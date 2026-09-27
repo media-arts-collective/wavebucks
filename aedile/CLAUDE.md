@@ -122,30 +122,66 @@ single-venue heads-up should not be numbered. **A spec no code reads is a
 document, not a rule.** Do not hand-write a body and post it: generate it, let the
 checks grade it, then post the saved decision.
 
-`checks.mjs` is **genre-gated** (`runChecks(d, notes, vault, { genre, beat })`) and
-defaults to `recap`. Every rate in it was measured on the 400-4000 char digest
-pool, and `headsup.md` says in its own text that those rates do not transfer: for
-a heads-up the sign-off drops to `warn` (the barest attested nudge is one unsigned
-line), numbering inverts to `numbered-headsup`, and the two spacing checks are
-skipped because a terse notice has no modal gap. What does NOT relax: invented
-names, invented figures, the em-dash, and never signing `MS`.
+`checks.mjs` is **genre-gated** (`runChecks(d, notes, vault, { genre, beat, leadDays,
+hand })`) and defaults to `recap`. For a heads-up the sign-off drops to `warn`, the two
+spacing checks are skipped, and the exclamation exemption applies only below 150
+characters. What does NOT relax: invented names, invented figures, invented **pronouns**
+(a gendered pronoun the input does not supply blocks, because guessing misgenders a
+member), the em-dash, `temporal-mismatch` (the day-word must match the computed lead
+time), `stub-items` (a numbered item under 5 words), and never signing `MS`.
 
-`devices.mjs` also deals by genre now: `GENRE_OFF.headsup` forces `numberedList`
-off, because 0.82 is the digest's rate and dealing it to a heads-up put the dealer
-and the checker in disagreement about the same draft.
+**A dealt device is not a checked property.** `numbered-headsup` and `no-caps` briefly
+lived in `checks.mjs` and warned at drafts whose own dealt hand had told them to number
+and to shout. Both are gone for this genre. Whatever `devices.mjs` deals, `checks.mjs`
+does not grade -- except `hand-ignored`, which checks the hand was *followed*, which is
+instruction-following rather than a rate.
 
-Two rules the corpus turned out not to support, both deleted the same day:
+**The heads-up form is computed, not written.** `analysis/headsup-form.mjs` measures it
+from the corpus every run and `redige.mjs` splices the result; `AEDILE_CONTEXT.headsup.md`
+keeps only the genre's purpose and the beats' functions. Its Form section was deleted
+because it was wrong twice in one session in the same direction (it called both beats
+"terse" against a 173-word median, and said numbering "is NOT a lock-in trait" against
+50%). Every rate is checked three ways before it may become an instruction -- target
+pool, a differently-drawn neighbour pool, and a Wilson interval -- and an interval
+spanning 50% is reported as undecidable rather than rounded into a rule.
 
-- The subject doctrine (#30). `messages.jsonl` has **no subject field**; the
-  scraper built thread titles from body first lines, so titles matched openings
-  382 times in 385 and the "habit" was the pipeline. 18 of 628 titles begin with
-  `N. ` (2.9%), and the real subjects are never numbered. The prompt rule and the
-  `subject-body-mismatch` check are gone; the traits in `recap.md` now come from
-  the live group listing.
-- The three-blank-line default (#27). Now a per-email draw (`dealGap`) at the
-  measured 54/34/11, not an instruction. Zach: *"defaulting to 3 spaces as a rule
-  is wrong, it should be stochastic."* The distribution itself stays UNVERIFIED as
-  a human habit; #27 has the 2020 regime change.
+Device rates for a heads-up are **pushed in** from `measuredRates()`, not tabulated.
+That table has been wrong three ways: first `GENRE_OFF`, devices forced to false on the
+strength of prose; then `GENRE_P`, the same rates as literals I typed after reading the
+report; now the measurement itself. Only the third survives a corpus change.
+
+**EVERY RATE IN THIS SECTION AND IN `devices.mjs` IS A LOWER BOUND.** 28% of
+`messages.jsonl` is a ~101-character Google Groups preview rather than a body, and the
+truncation is strongly length-biased: 62% of messages 111-1000 characters long were
+truncated, 75% at 1001-3000, 94% above 3001. A snippet is cut before the sign-off, the
+closing exclamation and the later numbered items, so it votes "trait absent" for every
+trait that lives late in a message. `isFullBody` in `analysis/corpus.mjs` excludes them
+now, which raised the length target from 134 words to 173 and the exclamation rate from
+94% to 100%.
+
+**Re-deriving these rates from `messages.jsonl` will NOT correct them** -- the same pool
+reproduces the same bias. 148 of the 509 Abe-era operator messages are snippets and
+*none* is recoverable, because the Office mailbox holds no mail before 2025 and there is
+no second copy. The fix is an mbox from an account that spans 2019, which also gates
+every Abe-era subject and the size of this correction. Until then 173 is a floor and the
+true figure is above it by an unestimable amount.
+
+Two rules the corpus turned out not to support, both deleted:
+
+- The subject doctrine (#30). `messages.jsonl` has **no subject field**; the scraper
+  built thread titles from body first lines, and 448 of 542 comparable titles are the
+  body opening verbatim with nearly all the rest differing only in apostrophes. They are
+  truncated at slug length too ("Bring bri" for "Bring brilliant, unwieldy ideas"). Of 31
+  real subjects recovered from live Gmail, **0** begin `N. ` and 0 restate the body
+  opening. The prompt rule and the `subject-body-mismatch` check are both gone, and
+  `dealSubject` deals subject FEATURES at rates measured over those 31 -- successor-era
+  only, because Abe-era subjects exist in no store.
+- The three-blank-line default (#27). Now a per-email draw (`dealGap`) at the measured
+  54/34/11 for a recap and 42/40/18 for a heads-up, not an instruction. Zach:
+  *"defaulting to 3 spaces as a rule is wrong, it should be stochastic."* The
+  distribution itself stays UNVERIFIED as a human habit; #27 has the 2020 regime change,
+  and a cross-source body comparison shows the two renderings diverge past 60 characters,
+  which is consistent with re-flow and does not establish it.
 
 **Before teaching the generator any new trait, check its provenance against a
 source outside the scrape.** Non-breaking spaces, gap sizes and subjects all read

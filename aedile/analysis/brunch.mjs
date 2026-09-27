@@ -24,6 +24,13 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+// The shared predicate, not a local one. This file carried its own THIRD variant
+// until 2026-09-26: it required a domain, so it took the 2 `kreweofvaporware@gmail.com`
+// rows and not the 5 bare `kreweofvaporware` ones, and reported 575 where 573 are the
+// operator's. corpus.mjs was introduced this session as "one loader, one sender
+// predicate" and was not wired to its first caller, so fixing the contamination there
+// did not reach here. Extracting a module is not adopting it.
+import { isOperator } from './corpus.mjs';
 
 const VAULT = process.env.KREWE_VAULT
   || '/srv/vaporwave-reports/obsidian-vault/mailing-list-archive';
@@ -43,13 +50,6 @@ const VAULT = process.env.KREWE_VAULT
  *  say. style.mjs, devices.mjs and checks.mjs all still use the narrow filter, so
  *  every rate they publish is measured on the old era. That is a bigger fix.
  */
-const isKrewe = m => {
-  const who = String(m.email || m.author || '');
-  return who === 'kreweofvaporwave@gmail.com'
-    || who === 'kreweofvaporwave@kreweofvaporwave.com'
-    || /^kreweofv.*@gmail\.com$/.test(who)          // "kreweofv...@gmail.com", redacted
-    || /^kreweofv.*@kreweofvaporwave\.com$/.test(who);
-};
 const ALL = process.argv.includes('--all');
 const argNum = name => {
   const i = process.argv.indexOf(name);
@@ -136,7 +136,7 @@ function isAnnouncement(body) {
 
 const msgs = readFileSync(join(VAULT, 'messages.jsonl'), 'utf8').trim().split('\n')
   .map(l => JSON.parse(l))
-  .filter(m => isKrewe(m) && typeof m.body === 'string');
+  .filter(m => isOperator(m) && typeof m.body === 'string');
 for (const m of msgs) m._d = parseDate(m.date);
 
 const candidates = msgs.filter(m => m._d && isAnnouncement(m.body) && SUBJECTY.test(m.body))
@@ -188,7 +188,7 @@ const med = a => { const s = [...a].sort((x, y) => x - y); const n = s.length;
 const rate = (list, k) => list.length ? Math.round(100 * list.filter(x => x[k]).length / list.length) : 0;
 
 const evList = [...events.entries()].sort((a, b) => a[0] - b[0]);
-p(`archive: ${msgs.length} MS messages (narrow email-only filter would give 480)   candidates: ${candidates.length}   SUNDAY events matched: ${evList.length}`);
+p(`archive: ${msgs.length} operator messages (a narrow email-only filter gives 480)   candidates: ${candidates.length}   SUNDAY events matched: ${evList.length}`);
 if (SINCE || UNTIL) p(`(restricted to ${SINCE || 'start'}..${UNTIL || 'end'})`);
 p('');
 

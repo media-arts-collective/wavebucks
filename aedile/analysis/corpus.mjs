@@ -2,10 +2,20 @@
  * corpus.mjs -- one loader, one sender predicate, one date parser.
  *
  * Extracted because the narrow sender filter `email === 'kreweofvaporwave@gmail.com'`
- * was copied into style.mjs, devices.mjs's comments, cadence.mjs and brunch.mjs, and
- * it is wrong in all of them: it drops 95 of the operator's 575 messages. Three
- * copies of a predicate is how one bug becomes four. Anything measuring the corpus
- * should import from here.
+ * was copied into style.mjs, cadence.mjs and brunch.mjs, and is wrong in all of them:
+ * it drops 93 of the operator's 573 messages.
+ *
+ * WHO ACTUALLY IMPORTS THIS, as of 2026-09-26: headsup-form.mjs and brunch.mjs.
+ * `recap/style.mjs` and `analysis/cadence.mjs` STILL carry their own narrow filter.
+ * The header of this file claimed to be the one loader everything routes through from
+ * the moment it was written, which was not true of a single existing caller, and
+ * brunch.mjs kept its own /^kreweofv/ copy for long enough that a contamination fix
+ * here did not reach it. Extracting a module is not the same as adopting it.
+ *
+ * Routing style.mjs and cadence.mjs through here is NOT a one-line change and is not
+ * done: every probability in devices.mjs's DEVICES table was measured by style.mjs on
+ * the 480-message pool, so widening the pool moves all of them at once. That needs a
+ * measured before/after, not a find-and-replace.
  */
 
 import { readFileSync } from 'node:fs';
@@ -26,11 +36,29 @@ export const DOW_RE = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sund
  *  `author: "kreweofv...@gmail.com", email: null`, and 7 more under the Office
  *  address. Matching `email` alone yields 480 messages where the true count is 575,
  *  and the loss is concentrated in recent years (2026: 88 unattributed of 116).
+ *  573 after excluding the vaporware member below; the docstring said 575 while the
+ *  regex took 580, and neither number was the operator's.
  *
  *  ONE ACCOUNT, TWO AUTHORS. Abe wrote this address until he retired around 2025;
  *  everything after is a successor. Pooling the whole range blends two voices under
  *  one sign-off, so callers measuring "the voice" should pass an era. */
-export const isOperator = m => /^kreweofv/.test(String(m.email || m.author || ''));
+export const isOperator = m => {
+  const who = String(m.email || m.author || '');
+  // `kreweofvaporwaRE@gmail.com` is a DIFFERENT MEMBER, not a typo of the account:
+  // "Do y'all mind if I add a second alternative email to the list?" (2025-11),
+  // "Sorry, didn't mean to cause trouble! We're just excited." (2026-02). A bare
+  // /^kreweofv/ took 580 rows and 7 of them are theirs, putting a stranger's messages
+  // in every operator pool through the one loader everything routes through. Found by
+  // the list-scrape session, 2026-09-26.
+  //
+  // The negative is on the `vaporware` spelling rather than a longer prefix because
+  // the masked form cuts at `kreweofv` and cannot distinguish the two. That leaves a
+  // bounded residue: of the 85 masked rows, only 2 are dated 2025-10 or later, which
+  // is when the vaporware spelling first appears, so at most 2 rows are unresolvable.
+  // A date rule would clear them and is deliberately not applied -- it would argue
+  // from the absence of earlier posts in a corpus that is itself redacted.
+  return /^kreweofv/.test(who) && !/vaporware/i.test(who);
+};
 
 // THE REDACTION SPLITS EVERY SENDER INTO TWO IDENTITIES, not just the operator.
 // Measured over the whole archive by first/last post:

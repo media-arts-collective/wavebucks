@@ -15,6 +15,28 @@
 # Stops when a pass banks nothing, which means the remainder is failing DETERMINISTICALLY
 # and another identical pass would only burn the session. Those topics are named in the
 # log; they are a finding, not something to loop on.
+# CHECK THE SESSION BEFORE A LONG RUN. One request, no browser:
+#
+#   curl -s -b /srv/vaporwave-reports/aedile/.groups-cookies.txt -o /dev/null \
+#        -w '%{url_effective}\n' -L https://groups.google.com/g/kreweofvaporwave
+#
+# A URL ending `/access-error` means the credential is not usable: re-export it
+# (container-cookies.py), and if it still says that, the container itself needs signing
+# back in. Doing this first costs one request instead of a pass of 15-second timeouts.
+#
+# IF IT GETS REVOKED AGAIN. On 2026-09-27 Google invalidated the exported session after
+# ~250 page loads in 90 minutes -- every Google property bounced to the account chooser
+# with all five auth cookies present and freshly re-exported. The CAUSE IS NOT ESTABLISHED:
+# that page rate is about 2.8/minute, which is not obviously abusive, so this may be a
+# device or fingerprint check on a copied session rather than a rate limit. No pacing knob
+# is added here because there is nothing measured to set it from. What IS known to work:
+# the ledger makes chunking free, so
+#
+#   bash aedile/analysis/scrape-all.sh out.mbox 1     # one pass, then stop
+#
+# run a few times with gaps costs nothing and rules the rate explanation in or out. If a
+# chunked run survives where a continuous one did not, that is the finding -- record it.
+
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 OUT=${1:?usage: scrape-all.sh <out.mbox> [max_passes]}

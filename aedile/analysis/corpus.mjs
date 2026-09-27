@@ -167,6 +167,30 @@ export const isOperator = m => {
  *  it is not only subjects and headers, it is a quarter of the bodies. */
 export const isFullBody = m => m.body.trim().length > 101;
 
+// WHAT THIS COSTS THE ABE-ERA ANALYSIS, which is every figure this repo publishes:
+//
+//   509 operator rows at until:2024, of which 148 are snippets (29%), leaving 361.
+//   By year: 2019:8  2020:34  2021:37  2022:41  2023:16  2024:12
+//
+// NONE of the 148 is repairable. A cross-source merge fixes 86 rows corpus-wide by
+// pulling the full body from Gmail, but the Office mailbox holds no mail before 2025,
+// so a pre-2025 snippet has no second copy anywhere. 212 rows corpus-wide are
+// unreachable without an mbox and all of them are Abe's era.
+//
+// AND THE LOSS MAY NOT BE RANDOM, which would matter more than its size. Three repaired
+// rows measured by the list-scrape session went 93c -> 5618c, 99c -> 6272c,
+// 91c -> 7211c: all far above the corpus median, all preserved at about 1.5% of their
+// real length. If truncation preferentially hit LONG messages, then the 361 survivors
+// under-represent long ones and the 173-word length target computed from them is still
+// biased down. That is answerable from the 86 repaired rows -- compare their true
+// lengths against the untruncated rows of the same era -- and it has not been answered.
+// Until it is, treat 173 words as a floor on the estimate rather than the estimate.
+//
+// Why this is a worse defect than the missing subjects, in the form the argument needs:
+// a missing Subject is a field nobody has and everybody can see is missing. A preview
+// snippet is a field everybody has and nobody can see is wrong. The row looks complete,
+// parses fine, and votes "no sign-off" in every rate computed over it.
+
 /** The send timestamp. NOT UTC despite what the Date object implies: the archive
  *  stores the hour as WRITTEN in local time (only 0.8% of 1099 sends fall between
  *  1am and 5am; the curve peaks at 9-11am). So the UTC fields carry local numbers

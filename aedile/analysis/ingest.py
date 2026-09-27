@@ -61,25 +61,77 @@ WHAT IS WRONG WITH THE ARCHIVE THIS REPLACES
        has other senders' mail for every month after that, so nothing was
        cut off. The address simply handed over:
 
-         year   kreweofvaporwave@gmail.com   kreweofvaporwave@krewe...com
-         2023              79                            0
-         2024              78                            0
-         2025              51                            2
-         2026               1                            6
+         year   kreweofvaporwave@   kreweofvaporwave@   msk@
+                gmail.com           kreweofvaporwave.com
+         2023          79                   0              0
+         2024          78                   0              0
+         2025          51                   2              2
+         2026           1                   6              2
 
-       The Office address first appears 2025-12 and carries the operator by
+       The Office domain first appears 2025-11 and carries the role by
        2026; aedile now runs as it, and --gmail shows it active through
-       2026-09-27. So the operator never went quiet. ONE ROLE, TWO
-       ADDRESSES, handing off inside the corpus -- alongside the one
-       account, two authors that corpus.mjs already documents. A sender
-       predicate matching only the gmail.com address loses the successor
-       era entirely and reads the loss as an archive that stops.
+       2026-09-27. So the operator never went quiet.
+
+       THREE ADDRESSES, NOT TWO, and the third is invisible to the obvious
+       predicate: `msk@kreweofvaporwave.com` does not start with `kreweofv`,
+       so `/^kreweofv/` misses all 4 of its rows. It is also a distinct
+       voice -- it signs MsK, opens "Hey y'all!!", and runs 96-260
+       characters where Abe runs 947 with numbered items -- and it sends
+       real announcements ("Last Call for sewing patches on jump suits!!!").
+
+       So the role is at least three voices across three addresses, on top
+       of the one account, two authors corpus.mjs already documents. A
+       sender predicate keyed to the gmail.com address loses the successor
+       era entirely and reads the loss as an archive that stops, which is
+       what happened here. Whether MsK counts as "the operator" is a
+       judgement about the role and not a regex fix; this file only records
+       that any predicate has to decide.
+
+       (1 of those 4 msk rows is itself a preview snippet -- see defect 6.
+       Truncation hits the smallest samples hardest, and MsK's whole
+       sample is 4.)
 
        The genuine holes are 2025-05, -06 and -08, empty of everyone.
 
     5. NO THREADING.   No Message-ID, In-Reply-To or References, so thread
        membership is inferred from a URL. 86 of its 628 topics have no
        thread file at all.
+    6. A QUARTER OF THE BODIES ARE PREVIEW SNIPPETS, NOT BODIES. Found by
+       generate-build-day-notice; verified here. The length histogram has a
+       cliff no prose produces:
+
+            80-89    46          exact   99c   27
+            90-99   236                 100c   30
+           100-109   68                 101c   31
+           110-119   12                 102c    0
+           120-129   11                 103c    1
+
+       343 rows land in 80..101 characters -- 31% of the file -- and only 9
+       rows land in 102..110. They end mid-sentence ("...Join us at 6pm
+       tonight at"). These are Google Groups' topic-list previews, captured
+       instead of the message.
+
+       It is worse than missing text because the loss is DIRECTIONAL. A body
+       cut at 101 characters is cut before the sign-off, before the closing
+       exclamation, before every numbered item after the first. So a snippet
+       reads as "trait absent" for every trait that lives late in a message,
+       and every rate measured over this pool is biased down. It moved a
+       figure already in the live generator: 134 words -> 173, sign-off
+       78% -> 88%, exclamation 94% -> 100%.
+
+       HOW MUCH IS RECOVERABLE. Merging the Gmail pull replaces 86 of the
+       343 with full bodies, and the scale of the loss shows there: 93
+       characters -> 5618, 99 -> 6272, 91 -> 7211. These were not short
+       messages. 257 rows stay truncated, 212 of them in 2019-2024, where
+       nothing but an mbox can reach them.
+
+       That makes this, not subjects, the strongest argument for the mbox.
+       A missing Subject header is a field nobody has. A preview snippet is
+       a field everybody has and nobody can tell is wrong -- the row looks
+       complete, parses fine, and quietly votes "no sign-off" in every
+       rate computed over it.
+
+       `--audit` prints the band and the cliff on every run.
 
 SOURCES, BEST FIRST
     --mbox FILE   An mbox from a mailbox that was subscribed to the list.
@@ -220,6 +272,16 @@ def merge_key(date, body, seq):
 
     An empty body gets a unique key from `seq` rather than colliding with
     every other empty body on its day (the legacy file has 25 of them).
+
+    60 ALSO HAPPENS TO SIT BELOW THE TRUNCATION POINT, and that was luck.
+    Defect 6 above: 343 rows are preview snippets cut at 101 characters, and
+    a snippet agrees with its full body on the first 60 characters by
+    construction -- 0 of the 343 are even shorter than the key. So the key
+    matches a snippet to its complete version and the merge repairs it. A
+    key at 120 characters, which the overlap-decay numbers alone would not
+    have ruled out strongly, would have failed on all 343. The knee was
+    chosen from the decay curve; it holds for two reasons and only one of
+    them was reasoned about.
     """
     text = re.sub(r'\s+', ' ', body or '').strip()[:PREFIX].lower()
     if not text:
@@ -543,6 +605,13 @@ def audit(path):
     print(f'gmail_id present       {sum(1 for r in rows if r.get("gmail_id"))}')
     print(f'date_iso present       {sum(1 for r in rows if r.get("date_iso"))}')
     print(f'body empty             {sum(1 for r in rows if not str(r.get("body") or "").strip())}')
+    lens = [len(str(r.get('body') or '')) for r in rows]
+    band = sum(1 for x in lens if 80 <= x <= 101)
+    past = sum(1 for x in lens if 102 <= x <= 110)
+    print(f'bodies 80-101 chars    {band}'
+          f'   ({100 * band // max(n, 1)}% -- Groups preview snippets look like this)')
+    print(f'bodies 102-110 chars   {past}'
+          f'   (if this is ~0 while the line above is large, they ARE snippets)')
     print(f'body-prefix collisions {n - len(set(prefixes))}   '
           f'(first {PREFIX} chars alone -- why the day is in the key)')
     print(f'merge-key collisions   {n - len(set(keys))}   '

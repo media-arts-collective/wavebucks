@@ -177,14 +177,41 @@ export const isFullBody = m => m.body.trim().length > 101;
 // so a pre-2025 snippet has no second copy anywhere. 212 rows corpus-wide are
 // unreachable without an mbox and all of them are Abe's era.
 //
-// AND THE LOSS MAY NOT BE RANDOM, which would matter more than its size. Three repaired
-// rows measured by the list-scrape session went 93c -> 5618c, 99c -> 6272c,
-// 91c -> 7211c: all far above the corpus median, all preserved at about 1.5% of their
-// real length. If truncation preferentially hit LONG messages, then the 361 survivors
-// under-represent long ones and the 173-word length target computed from them is still
-// biased down. That is answerable from the 86 repaired rows -- compare their true
-// lengths against the untruncated rows of the same era -- and it has not been answered.
-// Until it is, treat 173 words as a floor on the estimate rather than the estimate.
+// THE LOSS IS NOT RANDOM. It is strongly length-biased, tested on 99 matched pairs with
+// true length from Gmail, restricted to 2026 alone so it is not a year effect (n=83):
+//
+//     true length 111-1000 chars    62% truncated
+//     true length 1001-3000         75%
+//     true length 3001+             94%
+//
+// Median TRUE length of a pair that got truncated: 1002 words. Median of a pair that
+// survived intact: 111 words. The survivors are the short messages.
+//
+// SO 173 WORDS IS A FLOOR, NOT AN ESTIMATE, and it must not be replaced with a
+// corrected number. All the ground truth is 2026, and 2026 is the worst-hit year by a
+// wide margin. Operator rows by year, truncation rate and the share of SURVIVORS over
+// 800 characters:
+//
+//     year  trunc%  >800c      year  trunc%  >800c
+//     2019    26%    74%       2023    19%    52%
+//     2020    28%    58%       2024    15%    53%
+//     2021    39%    41%       2025    25%    46%
+//     2022    40%    41%       2026    89%   n=1
+//
+// The Abe era kept about half its long messages; 2026 kept almost none. Applying a
+// 2026-derived correction factor here would over-correct, and in the direction that
+// cannot be detected -- from too low straight past the truth to too high. The real
+// figure is above 173 by an amount not estimable from anything on this box.
+//
+// One trap in that test, recorded because it invalidates the obvious version: a message
+// whose true length is under ~101 characters cannot appear as an untruncated row in the
+// 80-101 band at all, so comparing "snippets" against "short survivors" proves the
+// conclusion by construction. It only works on pairs whose true length is known
+// independently.
+//
+// Note also that the operator's own 2026 pool is 9 rows with 1 survivor, so the
+// successor era is unmeasurable from this archive for a second reason on top of the
+// address handoff.
 //
 // Why this is a worse defect than the missing subjects, in the form the argument needs:
 // a missing Subject is a field nobody has and everybody can see is missing. A preview

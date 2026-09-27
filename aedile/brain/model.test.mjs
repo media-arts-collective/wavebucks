@@ -42,6 +42,28 @@ test('parseDecision: throws on empty string', () => {
   assert.throws(() => parseDecision(''), /not valid JSON/);
 });
 
+// The failure that cost 2 of 6 recap generations on 2026-09-27: the body arrives
+// with real line breaks where \n belongs. Recovered, with the breaks intact.
+test('parseDecision: recovers raw newlines inside a string literal', () => {
+  const d = parseDecision('{"subject":"wings 10/14","body":"Hi all,\n\n\n1. Wing Wednesday.\n"}');
+  assert.equal(d.subject, 'wings 10/14');
+  assert.equal(d.body, 'Hi all,\n\n\n1. Wing Wednesday.\n');
+});
+
+// The repair must not touch an already-escaped newline: a draft whose body is
+// legal JSON round-trips byte for byte.
+test('parseDecision: an already-escaped newline is untouched', () => {
+  const body = 'line one\nline two';
+  const d = parseDecision(JSON.stringify({ body }));
+  assert.equal(d.body, body);
+});
+
+// Still loud. The repair is one narrow rule, not a JSON fixer: a missing brace
+// is not recoverable and must not be silently invented.
+test('parseDecision: still throws on structurally broken JSON', () => {
+  assert.throws(() => parseDecision('{"subject":"a","body":"b"'), /not valid JSON/);
+});
+
 test('module exports the seam functions', () => {
   assert.equal(typeof getJsonDecision, 'function');
   assert.equal(typeof callModel, 'function');

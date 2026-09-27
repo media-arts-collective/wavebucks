@@ -51,8 +51,40 @@ export function parseDecision(text) {
   try {
     return JSON.parse(cleaned);
   } catch (err) {
-    throw new Error(`model response was not valid JSON.\n--- raw ---\n${raw.slice(0, 800)}`);
+    // ONE deterministic repair, and only after a strict parse has already failed:
+    // a literal newline inside a string literal. The model emits the body with
+    // real line breaks instead of \n, which is invalid JSON and lost 2 of 6
+    // recap generations on 2026-09-27 -- a third of the budget, each roll a
+    // paid call. A raw control character inside a JSON string is unambiguous:
+    // there is exactly one legal thing it could have meant, so escaping it
+    // recovers the message rather than guessing at it.
+    //
+    // Deliberately NOT a general-purpose JSON fixer. It touches nothing outside
+    // string literals, adds no missing braces, quotes or commas, and if the
+    // result still does not parse the original loud failure is what surfaces.
+    // Anything cleverer would start inventing structure the model did not send.
+    try {
+      return JSON.parse(escapeControlsInStrings(cleaned));
+    } catch {
+      throw new Error(`model response was not valid JSON.\n--- raw ---\n${raw.slice(0, 800)}`);
+    }
   }
+}
+
+/** Escape raw newlines/tabs/CRs that appear INSIDE a JSON string literal. Walks
+ *  the text tracking whether it is inside a string and whether the previous
+ *  character was a backslash, so an already-escaped \n and a control character
+ *  between tokens are both left exactly as they are. */
+function escapeControlsInStrings(src) {
+  const ESC = { '\n': '\\n', '\r': '\\r', '\t': '\\t' };
+  let out = '', inString = false, escaped = false;
+  for (const ch of src) {
+    if (escaped) { out += ch; escaped = false; continue; }
+    if (ch === '\\' && inString) { out += ch; escaped = true; continue; }
+    if (ch === '"') { inString = !inString; out += ch; continue; }
+    out += inString && ESC[ch] ? ESC[ch] : ch;
+  }
+  return out;
 }
 
 // Seam-compat with AnthropicClient.getJsonDecision(systemPrompt, userContent,

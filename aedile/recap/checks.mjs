@@ -153,6 +153,81 @@ export function runChecks(d, notes, vault, opts = {}) {
       `name(s) in the draft that are not in the input: ${invented.join(', ')}`);
   }
 
+  // 1a-bis. The diagnostic register: engineering-critic vocabulary used as wit.
+  //
+  // Zach named one sentence on 2026-09-27 -- "(The tang is load-bearing.)" -- with
+  // "instant fail on 'load-bearing'". Measured at STEM level over both populations,
+  // 480 operator messages and 628 thread files: `bearing` 0, `canonic` 0,
+  // `orthogonal` 0, `surface area` 0, `affordance` 0, `first-class` 0, `the point
+  // is` 0, `the question is` 0. That is 0 of 1,108 documents, and the stems are
+  // deliberately shorter than the phrases so the zero is not an artifact of the
+  // pattern (the trap this file has fallen into before: "no X required" measured 0
+  // only because the regex allowed one word before "required").
+  //
+  // NEAR-MISSES, which is why the list is stems and not phrases: `trivial` appears
+  // once, as "however trivially" -- an ordinary adverb, so the pattern requires the
+  // `non-` compound. `lot of work` appears twice and both are literal labour
+  // ("let's do a lot of work then!"), so the pattern requires the metaphor "doing a
+  // lot of work". Neither real instance fires.
+  //
+  // NOT a ban on the parenthetical aside, which is 62% of the archive and a dealt
+  // device. The archive's asides carry a NAME and an exclamation ("Joseph is on
+  // it!", "Koi fish building!") or a concrete consequence ("This is also how we
+  // will get everyone to leave."). What it never carries is commentary ABOUT the
+  // item in the vocabulary of someone reviewing it. Full-sentence capitalised
+  // parentheticals are 2% in both populations, so the FORM is fine and the
+  // CONTENTS were the finding. devices.mjs now says so in the instruction too.
+  const CRITIC = [
+    [/\bload[\s-]?bearing\b/i, 'load-bearing'],
+    [/\bnon[\s-]?trivial\b/i, 'non-trivial'],
+    [/\bcanonic(?:al|ally)?\b/i, 'canonical'],
+    [/\borthogonal\b/i, 'orthogonal'],
+    [/\bsurface area\b/i, 'surface area'],
+    [/\baffordance/i, 'affordance'],
+    [/\bfirst[\s-]class\b/i, 'first-class'],
+    [/\bdoing a lot of (?:the )?work\b/i, 'doing a lot of work'],
+    [/\bthe (?:real )?(?:point|question) is\b/i, 'the point/question is'],
+  ];
+  const critic = CRITIC.filter(([re]) => re.test(whole)).map(([, name]) => name);
+  if (critic.length) {
+    add('fail', 'critic-register',
+      `engineering-critic vocabulary used as wit: ${critic.join(', ')}. 0 occurrences in `
+      + '1,108 archived documents. An aside carries a name, an exclamation or a concrete '
+      + 'consequence, not a verdict on the item it follows');
+  }
+
+  // 1a-ter. Oversubdivision: more items, each thinner, than the archive writes.
+  //
+  // Fires only when the caller passes the measured shape (`opts.shape` from
+  // analysis/recap-form.mjs), the same way the day-word check fires only on
+  // `opts.leadDays` -- so this file still runs with no corpus on the box, which is
+  // what its own test suite does.
+  //
+  // WARN, not fail. A meeting really can have eight topics, and the archive's max
+  // is 12, so the count alone is not an error. What is measurable is the pair: the
+  // median recap is 5 items of 43 words, and a draft at 8 items of 31 is the same
+  // material cut finer to look thorough. Blocking it would make the generator
+  // merge items that do not belong together, which is worse prose than a long list.
+  //
+  // Wired on 2026-09-27 because the prompt block alone did not hold: with the
+  // measured form in front of it the very next generation came back at 8 items of
+  // 31 words. A rule with no backstop is a document.
+  if (opts.shape && opts.shape.items && opts.shape.wordsPerItem) {
+    const parts = body.split(/(?=(?:^|\n)\s*-?\d+(?:\.\d+)?[.)]\s)/)
+      .filter(t => /^\s*-?\d+(?:\.\d+)?[.)]\s/.test(t));
+    if (parts.length) {
+      const per = parts.reduce((n, t) => n + t.split(/\s+/).filter(Boolean).length, 0) / parts.length;
+      const tooMany = parts.length > opts.shape.items + 2;
+      const tooThin = per < opts.shape.wordsPerItem * 0.75;
+      if (tooMany && tooThin) {
+        add('warn', 'oversubdivided',
+          `${parts.length} items averaging ${Math.round(per)} words; the archive's median recap is `
+          + `${opts.shape.items} items of ${opts.shape.wordsPerItem}. Merge related items rather than `
+          + 'splitting the same material finer');
+      }
+    }
+  }
+
   // 1b. No invented pronouns. A gendered third-person pronoun the input does not
   // supply is an invented fact about a real member, and the failure is not a style
   // tell but misgendering someone on a 40-person list.

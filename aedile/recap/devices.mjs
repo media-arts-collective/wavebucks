@@ -56,7 +56,14 @@ export const DEVICES = [
   },
   {
     key: 'parenthetical', p: 0.62,
-    yes: 'Include a parenthetical aside, somewhere in the middle rather than at the end. This is where the archive puts its humour.',
+    // "This is where the archive puts its humour" produced "(The tang is
+    // load-bearing.)" on 2026-09-27, which Zach failed on sight. The archive's
+    // asides were then measured: 59% are 20 characters or less, and the
+    // full-sentence ones carry a name and an exclamation ("Joseph is on it!") or a
+    // concrete consequence ("This is also how we will get everyone to leave.").
+    // None is a verdict on the item it follows. An instruction that says only
+    // "humour" gets the register the model already has, so it says which humour.
+    yes: 'Include a parenthetical aside, somewhere in the middle rather than at the end. This is where the archive puts its humour -- and its humour is a name with an exclamation mark ("Joseph is on it!", "Koi fish building!"), or a concrete consequence of the plan ("This is also how we will get everyone to leave."), or three words ("tomorrow", "aka we walk"). Never a wry verdict ON an item: not "(the tang is load-bearing)", not "(this is doing a lot of work)". Nobody on this list reviews the agenda, they run it.',
     no: 'No parenthetical asides in this one.',
   },
   {

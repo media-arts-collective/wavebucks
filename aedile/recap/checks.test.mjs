@@ -81,10 +81,12 @@ function expectClean(label, d) {
 /** Warn-level findings. The spacing and caps checks are advisory -- they do not
  *  block a post -- so `ids()` above, which filters to level 'fail', cannot see
  *  them. */
-const warns = d => runChecks(d, NOTES, VAULT).filter(f => f.level === 'warn').map(f => f.id);
+const warns = (d, opts) => runChecks(d, NOTES, VAULT, opts).filter(f => f.level === 'warn').map(f => f.id);
 
-function expectWarn(label, d, wanted, present = true) {
-  const got = warns(d);
+// `opts` exists for the checks that only fire when the caller supplies a measured
+// figure (shape, leadDays): without it they are silent, which is itself a case.
+function expectWarn(label, d, wanted, present = true, opts = undefined) {
+  const got = warns(d, opts);
   const ok = got.includes(wanted) === present;
   if (ok) { passed++; console.log(`  ok   ${label}`); }
   else {
@@ -117,6 +119,39 @@ expectClean('a hyphenated compound off a known name', (() => {
 expectFinding('a hyphenated compound off an unknown name', d => {
   d.body = d.body.replace('meeting monthly.', 'meeting monthly, on a Costco-style model.');
 }, 'invented-name');
+
+// The named sentence: "(The tang is load-bearing.)", 2026-09-27. 0 of 1,108
+// archived documents use this vocabulary, so it blocks.
+expectFinding('an engineering-critic aside', d => {
+  d.body = d.body.replace('meeting monthly.', 'meeting monthly. (The relay question is load-bearing.)');
+}, 'critic-register');
+
+// The near-miss the stems were narrowed for: "however trivially" is the archive's
+// one real instance, an ordinary adverb, and it must not fire.
+expectClean("the archive's own adverb is not the critic register", (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('meeting monthly.', 'meeting monthly, and it differs however trivially.');
+  return d;
+})());
+
+// The form is fine and was never the finding: a parenthetical aside carrying a
+// name and an exclamation is 2% of the archive and passes.
+expectClean('a parenthetical aside in the archive\'s own shape', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('meeting monthly.', 'meeting monthly. (Tyler is on it!)');
+  return d;
+})());
+
+// Oversubdivision, warn-level, and only when the caller supplies the measured
+// shape. The fixture is short, so eight one-line items is the shape being caught.
+const SHAPE = { items: 5, wordsPerItem: 43 };
+{
+  const d = structuredClone(CLEAN);
+  d.body = '1. One thing.\n\n2. Two.\n\n3. Three.\n\n4. Four.\n\n5. Five.\n\n6. Six.\n\n7. Seven.\n\n8. Eight.\n\n<3 MS';
+  expectWarn('eight thin items against a median of five', d, 'oversubdivided', true, { shape: SHAPE });
+  // Same draft, no measured shape passed: silent, like every other corpus-gated check.
+  expectWarn('no shape supplied, nothing to compare against', d, 'oversubdivided', false);
+}
 
 // Deliberately placed in the SUBJECT: it is part of the draft, and an earlier
 // version of these checks read only the body and let this through.

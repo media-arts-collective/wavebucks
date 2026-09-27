@@ -32,6 +32,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { callModel, parseDecision } from '../brain/model.mjs';
 import { runChecks, report } from './checks.mjs';
 import { formBlock, measuredRates } from '../analysis/headsup-form.mjs';
+import { formBlock as recapFormBlock, form as recapForm } from '../analysis/recap-form.mjs';
 import { subjectWeights } from '../analysis/subject-shapes.mjs';
 import { dealDevices, dealFlourish, dealTypo, dealSignoff, dealGap, dealSubject, devicesBlock } from './devices.mjs';
 
@@ -185,17 +186,23 @@ export function buildSystemPrompt(vault, genre = 'recap') {
   // The genre file ENDS with its output contract, so it goes last: the two blocks
   // that are not the contract sit above it. A prompt whose final words are
   // anything other than "respond with only JSON" gets prose some of the time.
-  // The heads-up genre's form is COMPUTED, not quoted: headsup.md carries the
-  // genre's purpose and the beats' functions, and analysis/headsup-form.mjs
-  // measures the shape from the corpus every run. A figure in a prompt file is a
-  // snapshot, and both snapshots this file used to carry were falsified the first
-  // time anyone measured them.
+  // BOTH genres' form is COMPUTED, not quoted: the context file carries the
+  // genre's purpose and the beats' functions, and analysis/headsup-form.mjs or
+  // analysis/recap-form.mjs measures the shape from the corpus every run. A figure
+  // in a prompt file is a snapshot, and both snapshots this file used to carry were
+  // falsified the first time anyone measured them.
+  //
+  // The recap went two weeks longer than the heads-up with no measured block at
+  // all, which is how a draft carrying 7 items of 28 words each reached a human
+  // against a corpus median of 5 items of 43 (#49). Quoting two example recaps is
+  // not the same as stating their shape: the model had the examples in front of it
+  // both times.
   return [
     contextBody('AEDILE_CONTEXT.core.md'),
     `## Two real recaps from the archive\n\nMatch this register. Do not copy their content.\n\n${examples}`,
     closed,
     contextBody(g.context),
-    genre === 'headsup' ? formBlock() : '',
+    genre === 'headsup' ? formBlock() : recapFormBlock(),
   ].filter(Boolean).join('\n\n');
 }
 
@@ -370,7 +377,7 @@ async function main(argv) {
     if (!saved.body || !saved.subject) die(`${input} has no subject/body -- not a saved decision`, 3);
     if (!saved._notes) die(`${input} has no _notes -- regenerate it with this version, which saves them`, 3);
     leadTimeBlock(eventDate, beat, asOf);  // recompute leadTimeBlock.days for the check
-    const findings = runChecks(saved, saved._notes + '\n' + (eventDate || ''), readVault(), { genre, beat, leadDays: eventDate ? leadTimeBlock.days : undefined });
+    const findings = runChecks(saved, saved._notes + '\n' + (eventDate || ''), readVault(), { genre, beat, leadDays: eventDate ? leadTimeBlock.days : undefined, shape: genre === 'recap' ? recapForm() : undefined });
     report(findings);
     console.log(render(saved));
     const blocked = findings.filter(f => f.level === 'fail');
@@ -423,7 +430,7 @@ async function main(argv) {
     die(String(err.message || err), 5);
   }
 
-  const findings = runChecks(decision, notes + '\n' + (eventDate || ''), vault, { genre, beat, leadDays, hand });
+  const findings = runChecks(decision, notes + '\n' + (eventDate || ''), vault, { genre, beat, leadDays, hand, shape: genre === 'recap' ? recapForm() : undefined });
 
   writeFileSync(out, JSON.stringify({ ...decision, _checks: findings, _notes: notes }, null, 2));
   console.error(`-- wrote ${out}`);

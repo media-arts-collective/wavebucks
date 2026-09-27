@@ -105,6 +105,19 @@ expectFinding('a name not in the notes', d => {
   d.body = d.body.replace('meeting monthly.', 'meeting monthly, and Beatrice is getting the tires.');
 }, 'invented-name');
 
+// A hyphenated compound whose head is in the notes is grounded; the adjective
+// after the hyphen is not a name. "Tyler" is in the fixture, "-shaped" is not.
+expectClean('a hyphenated compound off a known name', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('meeting monthly.', 'meeting monthly, on a Tyler-shaped schedule.');
+  return d;
+})());
+
+// The head still has to be there. Nothing in the fixture says Costco.
+expectFinding('a hyphenated compound off an unknown name', d => {
+  d.body = d.body.replace('meeting monthly.', 'meeting monthly, on a Costco-style model.');
+}, 'invented-name');
+
 // Deliberately placed in the SUBJECT: it is part of the draft, and an earlier
 // version of these checks read only the body and let this through.
 expectFinding('a date not in the notes, in the subject', d => {

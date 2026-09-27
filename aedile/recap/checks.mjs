@@ -139,7 +139,14 @@ export function runChecks(d, notes, vault, opts = {}) {
 
   // 1. No invented people. Every name in the draft must be in the input.
   const known = vocabulary(notes);
-  const inInput = w => known.has(w) || known.has(w.replace(/s$/, '')) || known.has(w + 's');
+  // A hyphenated compound is grounded by its HEAD, not by the whole string.
+  // Notes reading "Costco model for membership" and "Tang themed cocktail"
+  // blocked two of three generations on 2026-09-27 as the invented names
+  // `costco-style` and `tang-themed`: the proper noun was in the input and the
+  // ordinary adjective after the hyphen never would be. This check exists to
+  // catch a hallucinated PERSON, and no person is hiding in `-style`.
+  const plain = w => known.has(w) || known.has(w.replace(/s$/, '')) || known.has(w + 's');
+  const inInput = w => plain(w) || (w.includes('-') && plain(w.split('-')[0]));
   const invented = [...nameCandidates(whole)].filter(w => !inInput(w));
   if (invented.length) {
     add('fail', 'invented-name',

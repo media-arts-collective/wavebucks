@@ -170,8 +170,17 @@ MSG_SEL = 'section[aria-expanded]'
 # in one run reported "no messages parsed" in 2-3s each while interleaved topics
 # succeeded. A message section carries a timestamp whether it is collapsed or expanded,
 # so that is the signal.
+TIME_RE = re.compile(r'\d{1,2}:\d{2}:\d{2}')
+
 READY_JS = ("() => [...document.querySelectorAll('section[aria-expanded]')]"
             ".some(s => /\\d{1,2}:\\d{2}:\\d{2}/.test(s.innerText))")
+
+
+def section_texts(page):
+    """Every message-shaped section's rendered text, icons stripped."""
+    return [t for t in (PUA_RE.sub('', el.inner_text())
+                        for el in page.query_selector_all(MSG_SEL))
+            if TIME_RE.search(t)]
 
 
 def expand_all(page):
@@ -179,28 +188,29 @@ def expand_all(page):
 
     THIS IS THE WHOLE SCRAPE. A COLLAPSED message renders its sender MASKED with no
     address at all (`mburns70124`) and its body TRUNCATED mid-sentence ("ESPECIALLY if
-    you have a") -- which is the same ~101-character preview defect this file exists to
-    eliminate, reappearing one page deeper than the list view where it was first found.
-    Google expands only the LAST message of a topic by default, so reading the page as
-    rendered silently keeps single-message topics and drops every discussion: 27 topics
-    banked, all of them `1 msg`, while every multi-message topic "parsed to zero".
+    you have a") -- the same ~101-character preview defect this file exists to eliminate,
+    reappearing one page deeper than the list view where it was first found. Google
+    expands only the LAST message of a topic, so reading the page as rendered keeps
+    single-message topics and drops every discussion: 27 topics banked, all `1 msg`, while
+    every multi-message topic "parsed to zero". Measured on `TqKFCHIWJEw`: `mburns70124`
+    becomes `mburns70124<mburns70124@gmail.com>` and the three bodies come out 308, 846
+    and 493 characters instead of one preview.
 
-    Clicking `Expand all` fixes both halves at once. Measured on topic `TqKFCHIWJEw`:
-    `mburns70124` becomes `mburns70124<mburns70124@gmail.com>` and the three bodies come
-    out 308, 846 and 493 characters instead of one preview.
+    THE EXPAND BUTTON IS WAITED FOR ONLY WHEN SOMETHING IS ACTUALLY COLLAPSED. An earlier
+    version asked `is_visible()` and returned early if the button had not rendered yet,
+    which turned a slow render into a silently dropped topic -- 32 of 47 topics in one
+    pass failed that way in 2-3 seconds each. But waiting for a button unconditionally
+    costs 15s on every single-message topic, and those are the majority. A collapsed
+    message is detectable directly: its section carries a timestamp but no address for
+    HEADER_RE to match. So that is the test, and the wait is paid only when it is owed.
 
     `Show trimmed content` is deliberately NOT clicked -- that expands the quoted reply
     trail, which is not the message and which `normalizeBody` strips everywhere else.
     """
-    btn = page.query_selector('[aria-label="Expand all"]')
-    if not btn or not btn.is_visible():
-        # A single-message topic arrives expanded. Some render the button anyway but
-        # HIDDEN, and clicking a hidden element fails actionability with "Element is not
-        # visible" -- which cost two topics per pass until this checked. Skipping it is
-        # safe only because of the section-count invariant in the caller: if messages are
-        # in fact still collapsed, they parse to nothing and the topic fails loudly
-        # rather than being banked short.
-        return
+    if all(HEADER_RE.match(t) for t in section_texts(page)):
+        return  # nothing collapsed: a single-message topic arrives expanded
+    btn = page.wait_for_selector('[aria-label="Expand all"]', state='visible',
+                                 timeout=15000)
     try:
         btn.click(timeout=10000)
     except Exception:
@@ -218,9 +228,6 @@ def expand_all(page):
         timeout=20000)
 
 
-TIME_RE = re.compile(r'\d{1,2}:\d{2}:\d{2}')
-
-
 def messages_on_page(page, subject):
     """One record per message, read from its own section element.
 
@@ -230,9 +237,7 @@ def messages_on_page(page, subject):
     handle than `[data-message-id]`, which matches three menu buttons here, all carrying
     the same id, with bodies of "Delete" and "Copy link".
     """
-    texts = [t for t in (PUA_RE.sub('', el.inner_text())
-                         for el in page.query_selector_all(MSG_SEL))
-             if TIME_RE.search(t)]
+    texts = section_texts(page)
     out = []
     for t in texts:
         m = HEADER_RE.match(t)

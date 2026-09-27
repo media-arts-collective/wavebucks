@@ -1,17 +1,33 @@
-<!-- Per-project "what's live right now" marker -- aedile's Tier 2
-     nightly-batch job reads this FIRST. Registered with the scheduler
-     2026-07-20. Moved here from aedile/.claude/FOCUS.md 2026-07-21 --
-     that path was gitignored (.claude/ = "per-developer local state" by
-     repo convention), so NO unattended run ever actually saw this file:
-     a fresh clone never had it (never committed), and even the old
-     worktree-based wrapper didn't inherit it (git worktrees don't
-     inherit ignored/untracked files from another worktree either).
-     Confirmed by tonight's real run's own report: "aedile/.claude/
-     FOCUS.md was missing." This location is now tracked/committed
-     normally, matching the scheduler's own already-proven
-     SCHEDULER_SUBDIR pattern (outside .claude/, both git-trackable and
-     exempt from the harness's .claude/-write block -- QUESTIONS.md
-     writes were ALSO failing for that second reason, now fixed too). -->
+<!-- RETIRED SURFACE. NOTHING READS THIS FILE. Verified 2026-09-27, twice:
+
+     1. `hf7y/scheduler`'s own `examples/schedule-entry.conf.template:38-42`
+        on SCHEDULER_SUBDIR: "Retired surface: the FOCUS.md/QUESTIONS.md
+        channel it named was sunset by #66/#234 and the queue is the repo's
+        GitHub issues. Kept only so an old conf still parses."
+
+     2. `bin/enrole-selfdev.sh:122-124` is a PRECEDENCE, not a list: a root
+        `CLAUDE.md` is chosen first ("the live convention"), and only a repo
+        WITHOUT one falls back to `.scheduler/FOCUS.md`. This repo has a root
+        CLAUDE.md, so this file is never the brief -- not "read second",
+        never reached.
+
+     The header this replaces claimed the Tier 2 nightly-batch job "reads
+     this FIRST". That was true when it was written (2026-07-21) and was
+     retired 2026-08-07, seventeen days later. It then sat here asserting the
+     opposite for seven weeks, and on 2026-09-26 a session wrote its entire
+     handoff into this file on the strength of it -- into a dead letter box.
+     That is the cost of a stale claim about who reads a file, and it is why
+     this comment is the loud kind.
+
+     WHERE THINGS ACTUALLY GO NOW:
+       - durable project context  -> `aedile/CLAUDE.md` (the brief that IS read)
+       - work, and anything a run should pick up -> GitHub issues, milestoned
+       - a session handoff -> an issue, or a report under `~/reports/wavebucks/`
+
+     This file is NOT yet reaped only because 26 KB of it has never been
+     audited for facts that are still true and have no issue; that is
+     media-arts-collective/wavebucks#24's remaining scope. Do not add to it.
+     Nothing below is guaranteed current. -->
 
 ## Handoff 2026-09-26 (interactive session, Zach AFK at the end)
 

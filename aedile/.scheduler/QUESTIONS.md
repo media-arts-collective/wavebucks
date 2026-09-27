@@ -1,3 +1,10 @@
+<!-- RETIRED SURFACE. NOTHING READS THIS FILE. Same verification as
+     .scheduler/FOCUS.md's header: the FOCUS.md/QUESTIONS.md channel was sunset
+     by hf7y/scheduler#66/#234 and the queue is this repo's GitHub issues. A
+     question parked here reaches nobody -- file it as an issue whose title is
+     the question. Kept unreaped only because media-arts-collective/wavebucks#24
+     still owes an audit of what in here is true and unfiled. Do not add to it. -->
+
 # Questions for the user
 
 Running log, appended to (never overwritten or trimmed) by aedile's

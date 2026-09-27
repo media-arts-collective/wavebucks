@@ -164,6 +164,15 @@ def clean_body(raw):
 
 MSG_SEL = 'section[aria-expanded]'
 
+# READINESS IS A CONTENT TEST, NOT A SELECTOR TEST. `section[aria-expanded]` alone is
+# matched by non-message chrome that renders BEFORE the conversation does, so waiting on
+# the selector returned after ~2 seconds on a page with no messages in it yet: 111 topics
+# in one run reported "no messages parsed" in 2-3s each while interleaved topics
+# succeeded. A message section carries a timestamp whether it is collapsed or expanded,
+# so that is the signal.
+READY_JS = ("() => [...document.querySelectorAll('section[aria-expanded]')]"
+            ".some(s => /\\d{1,2}:\\d{2}:\\d{2}/.test(s.innerText))")
+
 
 def expand_all(page):
     """Expand every message in the topic before reading it.
@@ -186,7 +195,14 @@ def expand_all(page):
     btn = page.query_selector('[aria-label="Expand all"]')
     if not btn:
         return  # a single-message topic arrives expanded and has no such button
-    btn.click()
+    try:
+        btn.click(timeout=10000)
+    except Exception:
+        # An obscured or shifting button fails Playwright's actionability checks rather
+        # than the click itself. `force` skips those checks; if the click genuinely does
+        # nothing, the all-expanded wait below still fails and the topic is still lost
+        # loudly, so this cannot quietly bank a truncated message.
+        btn.click(force=True, timeout=10000)
     # Waiting on the attribute, not a guessed sleep: the sections expand asynchronously
     # and a fixed delay reads some of them still masked and truncated, which is the
     # failure mode above wearing a smaller number.
@@ -284,7 +300,7 @@ def scrape(limit=None, out_path=None, verbose=False, headless=True):
                         # 26-second budget on every multi-message topic and then reported
                         # zero messages.
                         try:
-                            page.wait_for_selector(MSG_SEL, timeout=25000)
+                            page.wait_for_function(READY_JS, timeout=25000)
                         except PWTimeout:
                             pass
                         text = page.inner_text('body')

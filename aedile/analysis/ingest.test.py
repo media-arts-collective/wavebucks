@@ -198,6 +198,33 @@ check('marker: older than the Log is None, NOT False',
 check('marker: a no_action row is not evidence of authorship',
       mark(row(KV, '2026-08-01T00:00:30+00:00', 'Something a human wrote')), False)
 
+
+# --- unmask -----------------------------------------------------------------
+# The ambiguous case is the one that matters and it is real: in the archive
+# `kreweofv...@gmail.com` matches the operator AND kreweofvaporware@gmail.com,
+# a different member, so 85 rows must stay null rather than be attributed.
+UNMASK = [
+    {'author': 'rlco...@gmail.com', 'email': None, 'body': 'a'},
+    {'author': 'r c', 'email': 'rlcolbert@gmail.com', 'body': 'b'},
+    {'author': 'kreweofv...@gmail.com', 'email': None, 'body': 'c'},
+    {'author': 'ops', 'email': 'kreweofvaporwave@gmail.com', 'body': 'd'},
+    {'author': 'someone else', 'email': 'kreweofvaporware@gmail.com', 'body': 'e'},
+    {'author': 'nobody...@gmail.com', 'email': None, 'body': 'f'},
+    # Already has an address; unmask must not touch it or claim it inferred.
+    {'author': 'thejak...@gmail.com', 'email': 'thejakeman16@gmail.com', 'body': 'g'},
+]
+ingest.unmask(UNMASK)
+by = {r['body']: r for r in UNMASK}
+
+check('unmask: one candidate resolves', by['a']['email'], 'rlcolbert@gmail.com')
+check('unmask: and is marked inferred', by['a']['email_inferred'], True)
+check('unmask: two candidates stay null', by['c']['email'], None)
+check('unmask: no candidate stays null', by['f']['email'], None)
+check('unmask: an address already present is untouched',
+      by['g']['email'], 'thejakeman16@gmail.com')
+check('unmask: and is not claimed as inferred',
+      by['g'].get('email_inferred'), None)
+
 print('\n'.join(f'FAIL {f}' for f in fails) if fails
       else 'ingest.test.py: all cases pass')
 sys.exit(1 if fails else 0)

@@ -95,9 +95,9 @@ CALL_SH = 'aedile/recap/call.sh'
 # not what the sender wrote. Sharing one field between them would make a join
 # across the two sources return zero rows and look like an empty overlap
 # rather than a category error.
-FIELDS = ['author', 'email', 'date', 'date_iso', 'subject', 'message_id',
-          'gmail_id', 'in_reply_to', 'references', 'to', 'cc', 'body',
-          'topic_url', 'source', 'aedile_authored']
+FIELDS = ['author', 'email', 'email_inferred', 'date', 'date_iso', 'subject',
+          'message_id', 'gmail_id', 'in_reply_to', 'references', 'to', 'cc',
+          'body', 'topic_url', 'source', 'aedile_authored']
 
 # Addresses aedile can send under. A message from any other address is
 # nobody's ambiguity -- a human wrote it.
@@ -210,6 +210,71 @@ def from_mbox(path):
             'topic_url': None,
             'source': 'mbox',
         }
+
+
+ELLIPSIS = re.compile(r'^(.*?)\.\.\.@(.+)$')
+
+
+def unmask(rows):
+    """Fill `email` where Google Groups ellipsized it, using only the corpus.
+
+    `thejak...@gmail.com` is a prefix and a domain. If exactly one address
+    already present in the data starts with that prefix and ends with that
+    domain, that is a resolution and not a guess; anything else is left null.
+    Measured over the 1099-row legacy file: 12 masked forms, 8 resolve
+    uniquely (230 rows), and 109 of the 325 email-null rows get an address.
+
+    This matters beyond tidiness, because the mask splits one sender into two
+    identities and BOTH the count and the span move:
+
+      rlcolbert@gmail.com   25 msgs  2020-09..2026-02   (plain)
+      rlco...@gmail.com     32 msgs  2019-09..2026-02   (masked)
+
+    folding to 57 messages from 2019-09. Reading either form alone understates
+    him by more than half and puts his first post a year late. I published
+    that 57 by summing two rows of a printed table by eye, which is exactly
+    the step that belongs in a function.
+
+    WHAT IT REFUSES TO RESOLVE, and why it is the interesting one:
+    `kreweofv...@gmail.com` matches TWO addresses that differ one character
+    past where the ellipsis cuts --
+
+      kreweofvaporwave@gmail.com   480 msgs  2019-09..2026-01   the operator
+      kreweofvaporware@gmail.com     7 msgs  2025-10..2026-02   someone else
+
+    -- and the second is a different human, not a typo of the account: their
+    messages include "Do y'all mind if I add a second alternative email to
+    the list? I actually prefer to receive...". So 85 masked rows cannot be
+    attributed from the prefix, and they are left null.
+
+    A date rule would resolve most of them (the vaporware spelling appears
+    only from 2025-10), and it is deliberately not applied: it argues from
+    the absence of earlier posts in a corpus that is itself redacted, which
+    is the kind of inference this file exists to stop.
+    """
+    plain = {(r.get('email') or '').lower() for r in rows if r.get('email')}
+    plain.discard('')
+    forms, filled, ambiguous = {}, 0, {}
+    for r in rows:
+        m = ELLIPSIS.match(str(r.get('author') or '').lower())
+        if not m or r.get('email'):
+            continue
+        form = m.group(0)
+        if form not in forms:
+            pre, dom = m.groups()
+            hits = [a for a in plain if a.endswith('@' + dom) and a.startswith(pre)]
+            forms[form] = hits[0] if len(hits) == 1 else None
+            if len(hits) != 1:
+                ambiguous[form] = hits
+        if forms[form]:
+            r['email'], r['email_inferred'] = forms[form], True
+            filled += 1
+    print(f'ingest: unmasked {filled} rows across '
+          f'{sum(1 for v in forms.values() if v)} sender forms', file=sys.stderr)
+    for form, hits in ambiguous.items():
+        print(f'ingest: {form} left null -- {len(hits)} candidates {hits}',
+              file=sys.stderr)
+    return rows
 
 
 def call_get(scope, **params):
@@ -407,6 +472,8 @@ def audit(path):
                   if (m := re.search(r', (\d{4}),', str(r.get('date', ''))))})
     print(f'rows                   {n}')
     print(f'email null             {sum(1 for r in rows if not r.get("email"))}')
+    print(f'email inferred         {sum(1 for r in rows if r.get("email_inferred"))}'
+          f'   (unmasked, not read from the source)')
     print(f'author ellipsized      {sum(1 for r in rows if "..." in str(r.get("author", "")))}')
     print(f'subject present        {sum(1 for r in rows if r.get("subject"))}')
     print(f'message_id present     {sum(1 for r in rows if r.get("message_id"))}'
@@ -427,6 +494,9 @@ def main():
     p.add_argument('--mbox', action='append', default=[], metavar='FILE')
     p.add_argument('--jsonl', action='append', default=[], metavar='FILE')
     p.add_argument('--gmail', action='store_true')
+    p.add_argument('--unmask', action='store_true',
+                   help='fill `email` where the scrape ellipsized it, when '
+                        'exactly one address in the corpus matches. See unmask().')
     p.add_argument('--mark-aedile', action='store_true',
                    help="set aedile_authored by cross-referencing aedile's Log; "
                         'costs one read call. See aedile_marker().')
@@ -453,6 +523,8 @@ def main():
             yield from from_jsonl(f)
 
     rows = merge(streams())
+    if a.unmask:
+        unmask(rows)
     if a.mark_aedile:
         mark = aedile_marker(call_get('log', limit=500)['rows'])
         for r in rows:

@@ -37,3 +37,14 @@ aedile/recap/.duel-used.json
 # Python bytecode. ingest.test.py imports ingest.py by path, which writes it.
 __pycache__/
 *.pyc
+
+# Browser session exports. `aedile/analysis/container-cookies.py` writes a Netscape
+# cookies.txt for the `kreweofvaporwave` Firefox container so `gggd` can scrape the group
+# as its owner. That file is a LIVE CREDENTIAL for the krewe's Google account.
+#
+# It is written to /srv/vaporwave-reports/aedile/ by default, outside the repo, for exactly
+# this reason. These patterns are the second line: before them, a cookie file dropped in
+# the repo would have been committed, because nothing here matched a secret shape.
+*cookies*.txt
+*.cookies
+cookies.sqlite

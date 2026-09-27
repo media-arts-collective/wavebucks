@@ -110,13 +110,47 @@ function rng(seed) {
   };
 }
 
+/** Rates that do not survive a change of genre.
+ *
+ *  Every `p` above was measured on the 400-4000 char digest pool, and
+ *  AEDILE_CONTEXT.headsup.md says so in its own text: those rates "do NOT
+ *  transfer to the terse heads-up register." Numbering is the one that bites,
+ *  because it is dealt at 0.82 and the same spec says numbering "is NOT a
+ *  lock-in trait... a single-venue heads-up should not be numbered" (it scales
+ *  with length: 14% / 50% / 93% for short / mid / long). Dealing the digest's
+ *  hand to a heads-up produced a numbered three-item notice on the genre's first
+ *  real run, which `checks.mjs` then warned at: the dealer and the checker
+ *  disagreeing about the same genre.
+ *
+ *  A forced `false` here, rather than a second probability, because these are
+ *  not "rarer in this genre", they are wrong in it. The per-beat rates that ARE
+ *  probabilities are still hand-set placeholders and stay open in #49. */
+/** Per-genre probability overrides come from the CALLER, measured, not from a
+ *  table here.
+ *
+ *  This was `GENRE_OFF`, devices forced to false on the authority of
+ *  AEDILE_CONTEXT.headsup.md's prose. Measured against the 18 day-before Sunday
+ *  messages the operator actually sent, that prose was wrong twice:
+ *
+ *    numbering   headsup.md: "NOT a lock-in trait"        measured 44%  CI[25,66]
+ *    questions   the nudge "drops questions"              measured 33%  CI[16,56]
+ *
+ *  It then became `GENRE_P`, the same four rates as literals typed in here. Also
+ *  wrong in kind: a snapshot of a measurement is a snapshot. So `dealDevices` now
+ *  takes the rates, `analysis/headsup-form.mjs` computes them, and this file holds
+ *  no genre table at all. devices.mjs keeps no corpus dependency either, which is
+ *  why the rates are pushed in rather than imported.
+ */
+
 /** Deal one email its hand. `seed` makes it reproducible; omit for a real
- *  recap, where each one should simply differ from the last. */
-export function dealDevices(seed) {
+ *  recap, where each one should simply differ from the last. `genre` suppresses
+ *  devices that belong to another register. */
+export function dealDevices(seed, genre, beat, over = {}) {
   const rand = seed === undefined ? Math.random : rng(seed);
   const hand = {};
   for (const d of DEVICES) {
-    hand[d.key] = d.requires && !hand[d.requires] ? false : rand() < d.p;
+    const p = over[d.key] ?? d.p;
+    hand[d.key] = d.requires && !hand[d.requires] ? false : rand() < p;
   }
   return hand;
 }
@@ -125,11 +159,17 @@ export function dealDevices(seed) {
  *  say are dropped: "no whole line in capitals" is noise, and a prompt that
  *  lists every device every time is teaching the model that every device is
  *  always in play, which is the habit being corrected. */
-export function devicesBlock(hand, flourish, typo) {
+export function devicesBlock(hand, flourish, typo, gap, subject) {
   const lines = DEVICES
     .map(d => (hand[d.key] ? d.yes : d.no))
     .filter(Boolean)
     .map(s => `- ${s}`);
+  if (subject) lines.push(`- ${subject}`);
+  if (gap) {
+    lines.push(`- Separate paragraphs and items with ${gap} blank line${gap === 1 ? '' : 's'}`
+      + ' as the default for this email, and vary off it in a place or two rather than'
+      + ' spacing the whole message identically.');
+  }
   if (flourish) lines.push(`- ${flourish}`);
   if (typo) lines.push(`- ${typo.replace(/\n/g, '\n  ')}`);
   if (!lines.length) return '';
@@ -223,6 +263,104 @@ export function dealSignoff(seed) {
     r -= s.p;
   }
   return null;  // float slack at the tail lands on the common case
+}
+
+/** Blank-line gap size, drawn per email.
+ *
+ *  This was the last measured distribution shipped as a fixed instruction:
+ *  AEDILE_CONTEXT.recap.md told the generator "THREE blank lines between items,
+ *  most of the time", which is the failure this whole file exists to fix. An
+ *  instruction that names a default produces it ~100% of the time; a frequency is
+ *  a fact about a corpus, so it has to be drawn. Zach, 2026-09-26, on reading a
+ *  draft spaced three throughout: "defaulting to 3 spaces as a rule is wrong, it
+ *  should be stochastic."
+ *
+ *  Weights are the archive's measured gaps: 3 at 54%, 2 at 34%, 1 at 11%.
+ *
+ *  UNVERIFIED that the distribution is a person. #27 measures a step change in
+ *  2020 that then held for six years, 97% of gaps quantized to 2/3/4, and gap-4
+ *  correlating with what FOLLOWS it -- all of which a compose client or an export
+ *  pipeline does and a typist does not. So this reproduces a measured frequency
+ *  and asserts nothing about who or what produced it. If #27 resolves against
+ *  Abe, the weights change here and nowhere else, which is the point of putting
+ *  them in one draw instead of in prose. */
+/** Gap size scales with LENGTH, so it is per genre. Modal gap by message size,
+ *  MS-authored, measured 2026-09-26:
+ *
+ *    0-250    n=160   gap1 42%  gap0 34%  gap2 17%  gap3  8%
+ *    250-400  n= 50   gap1 42%  gap2 40%  gap3 18%
+ *    400-1000 n= 85   gap3 49%  gap2 27%  gap1 24%
+ *    1000-2000 n= 98  gap3 58%  gap2 34%  gap1  8%
+ *    2000-4000 n= 72  gap3 76%  gap2 18%  gap1  6%
+ *
+ *  Monotonic, no discontinuity: the 54/34/11 that AEDILE_CONTEXT.recap.md used to
+ *  state as a house default is the 400-4000 DIGEST rate, and it is simply wrong
+ *  for a terse notice. 42% of that length band is single-spaced.
+ *
+ *  A previous version of this comment cited "the hand-written Half Moon heads-up
+ *  (2026-09-14, 230 chars)" as the specimen. It was not hand-written: the Log carries
+ *  five recap_draft_posted rows for that pair at 2026-09-14T02:29-02:35Z, and this
+ *  session had read them before quoting the message as human. Corroborating a dealt
+ *  rate with the generator's own output is the loop these rates exist to avoid, so the
+ *  specimen is struck and the band statistic, which is measured over the archive,
+ *  stands on its own. Dealing 3 to a
+ *  heads-up is the numberedList mistake again: a digest rate applied to a register
+ *  that does not share it. */
+export const GAPS = {
+  recap:   [{ p: 0.54, n: 3 }, { p: 0.34, n: 2 }, { p: 0.11, n: 1 }],
+  headsup: [{ p: 0.42, n: 1 }, { p: 0.40, n: 2 }, { p: 0.18, n: 3 }],
+};
+
+export function dealGap(seed, genre) {
+  const table = GAPS[genre] || GAPS.recap;
+  const rand = seed === undefined ? Math.random : rng(String(seed) + ':gap');
+  let r = rand();
+  for (const g of table) {
+    if (r < g.p) return g.n;
+    r -= g.p;
+  }
+  return table[0].n;  // float slack at the tail lands on that register's usual gap
+}
+
+/** The subject, dealt as FEATURES at measured rates.
+ *
+ *  Three versions of this existed before the right one. First six shape templates
+ *  with p values I assigned by hand (0.34/0.20/0.16/0.14/0.10/0.06) off seven
+ *  subjects picked out of the mailbox because they looked event-shaped. Then the same
+ *  templates with a caveat telling the model not to copy their words, added because
+ *  the generator lifted "Rapid Rewards Brunch" onto a laser harp build day. Now:
+ *  independent draws at rates measured over 33 real human subjects
+ *  (analysis/subject-shapes.mjs), with no example text to lift at all.
+ *
+ *  What the larger sample changed, all against the hand-picked seven:
+ *    only 42% of real subjects carry any day/time/date
+ *    among those: day word 79%, calendar date 50%, clock time 43%, venue 29%
+ *    median length 26 characters, range 8 to 63
+ *    0 of 33 begin "N. "
+ *  The full "name. Sun. 1/4 @ 1pm, venue" form I had weighted heaviest is 2 of 14.
+ *
+ *  ERA: those 33 are the successor era. Abe-era subjects exist in no store, because
+ *  the scraper discarded Subject: headers (#30) and the Office mailbox holds no mail
+ *  before 2025. So this is the one dealer NOT calibrated on the voice the rest of
+ *  this file imitates, and it says so rather than pretending otherwise.
+ */
+export function dealSubject(seed, w) {
+  if (!w) return '';   // no measured weights pushed in: say nothing about the subject
+  const rand = seed === undefined ? Math.random : rng(String(seed) + ':subject');
+  const take = p => rand() < p;
+  const parts = [];
+  if (take(w.dayWord)) parts.push('the day word (a weekday name, or today/tomorrow/tonight)');
+  if (take(w.calDate)) parts.push('the calendar date as M/D');
+  if (take(w.clockTime)) parts.push('the start time');
+  if (take(w.venue)) parts.push('the venue');
+  const punct = take(w.colon) ? 'a colon' : take(w.fullStop ?? 0.21) ? 'a full stop' : 'no separator at all';
+  const lines = [`SUBJECT: about ${w.medianChars} characters. Name the thing, and include `
+    + (parts.length ? parts.join(', ') + '.' : 'no date, time or venue at all: just the thing.')];
+  lines.push(`Separate the parts with ${punct}. Never number the subject and never make it`
+    + ' the body\'s first line.');
+  if (take(w.allCaps)) lines.push('Put one word of the subject in ALL-CAPS.');
+  if (take(w.lowerOpen)) lines.push('Start the subject with a lowercase letter.');
+  return lines.join(' ');
 }
 
 /** Deal at most one flourish. Same seeding contract as dealDevices. */

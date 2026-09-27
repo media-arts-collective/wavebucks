@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Aedile brain: Node model client driving Claude via the local subscription-authenticated `claude` CLI. Node-only; excluded from clasp push.",
   "scripts": {
-    "test": "node --test brain/",
+    "test": "node --test brain/*.test.mjs recap/*.test.mjs",
     "smoke": "node brain/model.mjs --smoke"
   },
   "dependencies": {

@@ -246,7 +246,12 @@ for (const [name, file] of [['AEDILE_CONTEXT_CORE', 'AEDILE_CONTEXT.core.md'],
 // The prompt may not itself do the thing it forbids. It carried 24 em-dashes
 // while telling the generator never to write one, and the examples it holds up
 // as exemplary contain none at all.
-for (const file of ['AEDILE_CONTEXT.core.md', 'AEDILE_CONTEXT.recap.md']) {
+// headsup.md joins this list but NOT the byte-identical list above: it has no
+// Context.js mirror by design, since that genre is Node-only and never ran in
+// Apps Script. It went on the read path on 2026-09-26 carrying eleven em-dashes
+// while instructing the generator that the corpus never writes one.
+for (const file of ['AEDILE_CONTEXT.core.md', 'AEDILE_CONTEXT.recap.md',
+                    'AEDILE_CONTEXT.headsup.md']) {
   const t = bodyOf(file);
   check(`${file} contains no em-dash`, /[\u2014\u2013]/.test(t), false);
   check(`${file} contains no spaced --`, /(?:^|\s)--(?:\s|$)/.test(t), false);

@@ -218,11 +218,26 @@ import is ever needed again (a new spreadsheet, the tab gets wiped, etc.)
 — it'll need a new export and `MessageLog.migrateMessagesFromDriveId`'s
 Drive-file approach still works, just starting from scratch:
 
-1. Get a JSONL export of the mailing list (one row per message: `email`,
-   `date`, `body`, optionally `topic_url`) onto Drive under the krewe's own
-   account (`kreweofvaporwave@kreweofvaporwave.com`) — not a director's
-   personal Drive, per the ownership guardrail in `CLAUDE.md`. Note its
-   file ID.
+1. Build the JSONL with `aedile/analysis/ingest.py` — that is the
+   replacement for the vanished `scrape_google_group.py`, and it emits a
+   superset of the old shape (`email`, `date`, `body`, `topic_url`, plus
+   `subject`, `message_id`, `in_reply_to`, `references`, `date_iso`, `to`,
+   `cc`, `source`). Read its module docstring first: it lists what the lost
+   scraper got wrong, each with the `--audit` number behind it.
+
+       python3 aedile/analysis/ingest.py \
+         --jsonl /srv/vaporwave-reports/obsidian-vault/mailing-list-archive/messages.jsonl \
+         --gmail --years 2025:2026 -o merged.jsonl
+
+   **The `Messages` tab inherited the defect.** Of the 500 newest rows the
+   ReadApi will return, 489 came from that legacy import and **0 of them
+   have a Subject** — only the 10 rows Aedile triaged live from Gmail do.
+   So re-importing is not cosmetic: it is how subjects and real addresses
+   reach the tab at all.
+
+   Put the result on Drive under the krewe's own account
+   (`kreweofvaporwave@kreweofvaporwave.com`) — not a director's personal
+   Drive, per the ownership guardrail in `CLAUDE.md`. Note its file ID.
 2. `clasp open`, then in Project Settings > Script Properties add
    `MIGRATION_DRIVE_FILE_ID` = that file ID.
 3. Select `migrateMessages` from the function dropdown and click Run.

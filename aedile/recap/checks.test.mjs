@@ -33,8 +33,12 @@ Attendees: Me, Tyler, Zach, Adam, Alex.
 // two em-dashes, which is to say it was written the way the generator writes
 // rather than the way the list does; adding the em-dash check failed it, which
 // is the check doing its job on the first draft it ever saw.
+// The subject used to be the body's opening, numbered: `0. THIS RECAP IS
+// RECONSTRUCTED. The recording failed. 1. LASER HARP...`. That was the shape the
+// deleted doctrine prescribed and the scraper invented (#30). A real one is
+// short, crafted, and never numbered.
 const CLEAN = {
-  subject: '0. THIS RECAP IS RECONSTRUCTED. The recording failed. 1. LASER HARP by next month.',
+  subject: 'reconstructed notes: the recording failed',
   body: 'Hi friends!\n\n' +
     '0. THIS RECAP IS RECONSTRUCTED FROM MEMORY. The recording failed. Correct it on-list.\n\n' +
     '1. LASER HARP. Working group is Tyler, Zach and Adam, meeting monthly. The relays and their 100ms delay get settled then.\n\n' +
@@ -104,7 +108,7 @@ expectFinding('a name not in the notes', d => {
 // Deliberately placed in the SUBJECT: it is part of the draft, and an earlier
 // version of these checks read only the body and let this through.
 expectFinding('a date not in the notes, in the subject', d => {
-  d.subject = d.subject.replace('by next month', 'on March 14 2027');
+  d.subject += ', March 14 2027';
 }, 'invented-figure');
 
 expectFinding('a date not in the notes, in the body', d => {
@@ -127,9 +131,36 @@ expectFinding('missing sign-off', d => { d.body = d.body.replace('<3 SM', ''); }
 expectFinding('borrowing the MS figure', d => {
   d.body = d.body.replace('<3 SM', '<3 MS');
 }, 'signed-as-ms');
-expectFinding('subject numbers an item the body does not', d => {
-  d.subject += ' 7. Send us venues.';
-}, 'subject-body-mismatch');
+// subject-body-mismatch is GONE (#30): it enforced the scrape's artifact, so a
+// crafted subject failed and an artifact-shaped one passed. What replaces it is
+// the absence of a rule, which only a passing case can show.
+expectClean('a crafted subject that is not the body\'s opening', (() => {
+  const d = structuredClone(CLEAN);
+  d.subject = 'Someone bring a floor jack!';
+  return d;
+})());
+expectClean('a subject carrying a figure the body does not', (() => {
+  const d = structuredClone(CLEAN);
+  d.subject = 'the relays: 100ms or pivot';
+  d.body = d.body.replace(' and their 100ms delay', '');
+  return d;
+})());
+
+// Both holes in `figures()`, with the exact strings that exposed them in a real
+// draft. An invented date or time is the one thing this file most has to stop.
+expectFinding('an ordinal date not in the notes', d => {
+  d.body = d.body.replace('meeting monthly', 'meeting monthly, next on the 27th');
+}, 'invented-figure');
+expectFinding('a spaced time not in the notes', d => {
+  d.body = d.body.replace('on Wednesdays', 'on Wednesdays, 7 pm');
+}, 'invented-figure');
+
+// itemNumbers had no line anchor, so prose ending in a digit read as an item.
+expectWarn('prose ending in a digit is not a numbered item', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = 'Hi friends!\n\nDoors at 8, show at 9. See you there!\n\n<3 SM';
+  return d;
+})(), 'no-numbering', true);
 
 console.log('\nthings that must NOT be flagged');
 // Every one of these was a real false positive on the first run.
@@ -145,7 +176,10 @@ expectClean('a list ordinal followed by a capitalised word', (() => {
   // the sign-off check searched the whole body; it now reads the last line, so
   // an item pasted below the initials is a draft that does not end in a
   // sign-off -- which is the thing being checked, not what this case is about.
-  d.body = d.body.replace('\n\n<3 SM', '\n\n4. Someone should follow up.\n\n<3 SM');
+  // The item is deliberately over ten words: `stub-items` fails a numbered item
+  // shorter than that, and this case is about Nobody-after-an-ordinal, not length.
+  d.body = d.body.replace('\n\n<3 SM',
+    '\n\n4. Someone should follow up with Nobody about the venue, since the cost is still unknown.\n\n<3 SM');
   return d;
 })());
 
@@ -217,6 +251,158 @@ expectWarn('ragged spacing is not flagged', (() => {
   d.body = d.body.replace(/\n\n/g, '\n\n\n');
   return d;
 })(), 'uniform-spacing', false);
+
+// A gendered pronoun the notes never supply is an invented fact about a person.
+expectFinding('a gendered pronoun the input does not supply', d => {
+  d.body = d.body.replace('Tyler knows of', 'Tyler knows of, at his place,');
+}, 'invented-pronoun');
+expectClean('they/them needs no support from the notes', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('Cost unknown.', 'Tyler will say what they think of it.');
+  return d;
+})());
+
+// A notice that names the wrong day is the worst thing this file can pass.
+{
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('Hi friends!', 'Hi friends! Build day is TOMORROW.');
+  const got = runChecks(d, NOTES, VAULT, { leadDays: 0 }).filter(f => f.level === 'fail').map(f => f.id);
+  const ok = got.includes('temporal-mismatch');
+  if (ok) { passed++; console.log('  ok   lead 0 rejects "tomorrow"'); }
+  else { failed++; console.log(`  FAIL lead 0 rejects "tomorrow" -- got [${got}]`); }
+}
+{
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('Hi friends!', 'Hi friends! Build day is TOMORROW.');
+  const got = runChecks(d, NOTES, VAULT, { leadDays: 1 }).map(f => f.id);
+  const ok = !got.includes('temporal-mismatch');
+  if (ok) { passed++; console.log('  ok   lead 1 accepts "tomorrow"'); }
+  else { failed++; console.log(`  FAIL lead 1 accepts "tomorrow" -- got [${got}]`); }
+}
+
+console.log('\ntells a human named, then measured');
+// Zach, 2026-09-26, on a posted draft: "still sounds slightly AI... especially
+// corny". Both of these came out of one sentence pair in it.
+expectFinding('three clauses opening with the same word', d => {
+  d.body = d.body.replace('Cost unknown.',
+    'Tell us what feels wrong, what lags, what you expected to happen and did not.');
+}, 'parallel-clauses');
+expectWarn('reassurance that nothing is needed', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('Cost unknown.', 'No tools and no skills needed for that part.');
+  return d;
+})(), 'unasked-reassurance');
+// The archive's own analogue must survive both: same template, concrete nouns.
+expectClean('the archive\'s concrete version is not flagged', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('Cost unknown.', 'No tent, no HDMI grabs. Just projectors and speakers.');
+  return d;
+})());
+// Two parallel clauses are ordinary English; only three trip it.
+expectClean('two parallel clauses are fine', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('Cost unknown.', 'Say what lags and what feels wrong.');
+  return d;
+})());
+
+// A short heads-up is not warned for lacking `!`: among the operator's day-before
+// announcements the rate is 93-95% above 150 chars but 60% below it, on n=5 with a CI
+// of [23,88] -- a sample that cannot resolve anything, so the exemption is the
+// honest reading. (This case was originally justified by "the real Half Moon nudge
+// carries no `!`". That message was aedile's own output, per five
+// recap_draft_posted Log rows, so it proved nothing about the list. The body below
+// is kept as a plausible short notice, not as a quoted specimen.)
+{
+  const nudge = { subject: 'Half Moon tonight',
+    body: 'Half Moon tonight, kitchen opens at 5: wings, pizza, skeeball.\n\nBring a buddy',
+    confidence: 'high' };
+  const notes = 'Half Moon tonight, kitchen opens at 5. Wings, pizza, skeeball. Bring a buddy.';
+  const asHeadsup = runChecks(nudge, notes, VAULT, { genre: 'headsup' }).map(f => f.id);
+  const asRecap = runChecks(nudge, notes, VAULT, {}).map(f => f.id);
+  const ok = !asHeadsup.includes('no-exclamation') && asRecap.includes('no-exclamation');
+  if (ok) { passed++; console.log('  ok   a short nudge is not warned for having no exclamation mark'); }
+  else {
+    failed++;
+    console.log('  FAIL a short nudge is not warned for having no exclamation mark');
+    console.log(`       headsup=[${asHeadsup}] recap=[${asRecap}]`);
+  }
+}
+
+console.log('\nthe heads-up genre is graded by its own form rules');
+// AEDILE_CONTEXT.headsup.md: the terse register signs ~47% of the time and "the
+// barest form is a single unsigned line". This file used to FAIL that at blocking
+// level, so the archetypal nudge could not be posted. The asymmetry is the point,
+// so both directions are asserted.
+const NUDGE = { subject: '1pm tomorrow!', body: '1pm tomorrow! 920 St. Mary',
+                confidence: 'high' };
+const NUDGE_NOTES = 'Build day 1pm tomorrow at 920 St. Mary. Zach confirmed.';
+const levelsOf = (d, opts) => runChecks(d, NUDGE_NOTES, VAULT, opts)
+  .filter(f => f.id === 'sign-off').map(f => f.level);
+
+{
+  const asRecap = levelsOf(NUDGE, {});
+  const asHeadsup = levelsOf(NUDGE, { genre: 'headsup' });
+  const ok = asRecap[0] === 'fail' && asHeadsup[0] === 'warn';
+  if (ok) { passed++; console.log('  ok   an unsigned nudge blocks as a recap and only warns as a heads-up'); }
+  else {
+    failed++;
+    console.log('  FAIL an unsigned nudge blocks as a recap and only warns as a heads-up');
+    console.log(`       recap=[${asRecap}] headsup=[${asHeadsup}]`);
+  }
+}
+
+// Numbering is NOT graded for a heads-up, in either direction. It measures 44% of
+// the operator's day-before Sunday messages, CI [25, 66], and devices.mjs deals it
+// at that rate. A `numbered-headsup` warn used to live here, written off prose that
+// said a single-venue heads-up "should not be numbered", and it fired on drafts
+// whose own dealt hand had told them to number. Whatever the dealer owns, this file
+// does not grade.
+{
+  const numbered = { subject: 'build day tomorrow',
+    body: '1. BUILD DAY IS TOMORROW. 920 St. Mary, 1pm!\n\n<3\nSM', confidence: 'high' };
+  const plain = { subject: 'build day tomorrow',
+    body: 'Build day tomorrow. 920 St. Mary, 1pm!\n\n<3\nSM', confidence: 'high' };
+  const ids = d => runChecks(d, NUDGE_NOTES, VAULT, { genre: 'headsup' }).map(f => f.id);
+  const a = ids(numbered), b = ids(plain);
+  const ok = !a.includes('numbered-headsup') && !a.includes('no-numbering')
+          && !b.includes('numbered-headsup') && !b.includes('no-numbering');
+  if (ok) { passed++; console.log('  ok   numbering is not graded either way for a heads-up'); }
+  else {
+    failed++;
+    console.log('  FAIL numbering is not graded either way for a heads-up');
+    console.log(`       numbered=[${a}] plain=[${b}]`);
+  }
+  // A recap still gets the warn: that population really does number almost everything.
+  const asRecap = runChecks(plain, NUDGE_NOTES, VAULT, {}).map(f => f.id);
+  if (asRecap.includes('no-numbering')) { passed++; console.log('  ok   a recap is still warned for not numbering'); }
+  else { failed++; console.log(`  FAIL a recap is still warned for not numbering -- got [${asRecap}]`); }
+}
+
+// Spacing is skipped rather than passed: a two-line notice has no modal gap.
+{
+  const got = runChecks(NUDGE, NUDGE_NOTES, VAULT, { genre: 'headsup' }).map(f => f.id);
+  const ok = !got.includes('uniform-spacing') && !got.includes('tight-default-spacing');
+  if (ok) { passed++; console.log('  ok   digest spacing rules are not applied to a terse notice'); }
+  else {
+    failed++;
+    console.log('  FAIL digest spacing rules are not applied to a terse notice');
+    console.log(`       got [${got.join(', ')}]`);
+  }
+}
+
+// What does NOT relax. An invented figure and the em-dash are genre-neutral.
+{
+  const bad = { ...NUDGE, body: '2pm tomorrow! 920 St. Mary, bring a soldering iron \u2014 or a friend' };
+  const got = runChecks(bad, NUDGE_NOTES, VAULT, { genre: 'headsup' })
+    .filter(f => f.level === 'fail').map(f => f.id);
+  const ok = got.includes('invented-figure') && got.includes('em-dash');
+  if (ok) { passed++; console.log('  ok   invented figures and em-dashes still block a heads-up'); }
+  else {
+    failed++;
+    console.log('  FAIL invented figures and em-dashes still block a heads-up');
+    console.log(`       got [${got.join(', ') || 'none'}]`);
+  }
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

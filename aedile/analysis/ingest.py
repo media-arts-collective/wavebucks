@@ -131,6 +131,35 @@ WHAT IS WRONG WITH THE ARCHIVE THIS REPLACES
        complete, parses fine, and quietly votes "no sign-off" in every
        rate computed over it.
 
+       TRUNCATION IS LENGTH-BIASED, which makes it worse again. Among the
+       99 matched pairs, where the true length is known from Gmail and
+       truncation is known from the legacy copy, P(truncated) climbs with
+       length, and it climbs WITHIN a single year so it is not a year
+       effect (2026, n=83):
+
+           true 111-1000 chars   62% truncated
+           true 1001-3000        75%
+           true 3001+            94%
+
+       The survivors are the short messages. Matched pairs truncated in the
+       legacy copy have a true median of 1002 words; those that survived
+       intact have a median of 111. So any length, sign-off or
+       closing-structure rate computed over survivors is biased down, and
+       the longer the real message the likelier it is simply absent.
+
+       DO NOT EXTRAPOLATE THAT SEVERITY BACKWARDS. All the ground truth is
+       2026, the worst-hit year, and the snippet rate is wildly uneven:
+
+           2019 29%   2021 31%   2023 11%   2025 23%
+           2020 34%   2022 37%   2024 10%   2026 74%
+
+       The Abe era's survivor pool is far less denuded than 2026's -- 58%
+       of 2019 survivors and 50% of 2020 survivors are over 800 characters,
+       against 6% in 2026. So an Abe-era rate is biased down, but correcting
+       it by the 2026 factor would over-correct badly. The size of the
+       Abe-era correction is not estimable from any source on this box; it
+       needs pre-2025 ground truth, which means the mbox.
+
        `--audit` prints the band and the cliff on every run.
 
 SOURCES, BEST FIRST

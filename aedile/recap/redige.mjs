@@ -31,7 +31,7 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { callModel, parseDecision } from '../brain/model.mjs';
 import { runChecks, report } from './checks.mjs';
-import { formBlock } from '../analysis/headsup-form.mjs';
+import { formBlock, measuredRates } from '../analysis/headsup-form.mjs';
 import { dealDevices, dealFlourish, dealTypo, dealSignoff, dealGap, dealSubject, devicesBlock } from './devices.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -395,7 +395,9 @@ async function main(argv) {
   // Which optional devices this recap gets. Presentation only -- it never
   // touches what the recap SAYS. A single generation cannot reproduce a
   // corpus frequency on its own, so the caller rolls and tells it.
-  const hand = dealDevices(undefined, genre, beat);
+  // The dealt rates for a heads-up are measured, not tabulated: see
+  // analysis/headsup-form.mjs. A recap keeps devices.mjs's own pool rates.
+  const hand = dealDevices(undefined, genre, beat, genre === 'headsup' ? measuredRates() : {});
   const flourish = dealFlourish();
   const typo = dealTypo();
   const signoff = dealSignoff();

@@ -125,34 +125,28 @@ function rng(seed) {
  *  A forced `false` here, rather than a second probability, because these are
  *  not "rarer in this genre", they are wrong in it. The per-beat rates that ARE
  *  probabilities are still hand-set placeholders and stay open in #49. */
-/** Per-genre probability overrides, measured -- not suppressions.
+/** Per-genre probability overrides come from the CALLER, measured, not from a
+ *  table here.
  *
- *  This started as GENRE_OFF, a list of devices forced to `false` for a heads-up on
- *  the authority of AEDILE_CONTEXT.headsup.md's prose. Measured against the 18
- *  day-before/day-of Sunday-gathering messages Abe actually sent (pre-2025, see
- *  analysis/headsup-form.mjs), that prose was wrong in both places:
+ *  This was `GENRE_OFF`, devices forced to false on the authority of
+ *  AEDILE_CONTEXT.headsup.md's prose. Measured against the 18 day-before Sunday
+ *  messages the operator actually sent, that prose was wrong twice:
  *
  *    numbering   headsup.md: "NOT a lock-in trait"        measured 44%  CI[25,66]
- *    questions   headsup.md: the nudge "drops questions"  measured 33%  CI[16,56]
+ *    questions   the nudge "drops questions"              measured 33%  CI[16,56]
  *
- *  Forcing either to zero reproduces a rule nobody follows. Both are genuinely
- *  coin-flips, which is precisely what a dealt probability is for and precisely what
- *  an instruction cannot express. Zach, 2026-09-26: "we're going to fix heads up
- *  today using actual statistical measures, triple checked, three different ways."
- *
- *  Only rates re-measured on that subpool appear here; the rest keep the 400-4000
- *  char pool's values, which is a known approximation rather than a silent one.
+ *  It then became `GENRE_P`, the same four rates as literals typed in here. Also
+ *  wrong in kind: a snapshot of a measurement is a snapshot. So `dealDevices` now
+ *  takes the rates, `analysis/headsup-form.mjs` computes them, and this file holds
+ *  no genre table at all. devices.mjs keeps no corpus dependency either, which is
+ *  why the rates are pushed in rather than imported.
  */
-const GENRE_P = {
-  headsup: { greeting: 0.67, numberedList: 0.44, allCaps: 0.44, question: 0.33 },
-};
 
 /** Deal one email its hand. `seed` makes it reproducible; omit for a real
  *  recap, where each one should simply differ from the last. `genre` suppresses
  *  devices that belong to another register. */
-export function dealDevices(seed, genre, beat) {
+export function dealDevices(seed, genre, beat, over = {}) {
   const rand = seed === undefined ? Math.random : rng(seed);
-  const over = GENRE_P[`${genre}:${beat}`] || GENRE_P[genre] || {};
   const hand = {};
   for (const d of DEVICES) {
     const p = over[d.key] ?? d.p;

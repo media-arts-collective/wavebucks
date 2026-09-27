@@ -128,6 +128,29 @@ if (!process.argv.includes('--block')) {
   console.log('UNDERPOWERED ones belong in devices.mjs as a dealt probability, or nowhere.');
 }
 
+/** The device rates for this genre, measured. Exported so devices.mjs does not have
+ *  to carry them as literals.
+ *
+ *  They WERE literals: `GENRE_P = { greeting: 0.67, numberedList: 0.44, ... }`, typed
+ *  into devices.mjs by reading this file's output and rounding. Correct on the day
+ *  and a snapshot forever after -- the same defect as a prose prompt, one indirection
+ *  removed. A re-scrape of the corpus is in progress in another worktree, and it
+ *  would have updated formBlock() while leaving those four numbers frozen and
+ *  nothing would have failed.
+ *
+ *  Only rates that were re-measured on this subpool are returned. A device absent
+ *  here keeps the 400-4000 char pool's value in devices.mjs, which is a known
+ *  approximation rather than a silent one. */
+export function measuredRates() {
+  const get = n => rows.find(r => r.name === n);
+  return {
+    greeting: get('greeting').A.p,
+    numberedList: get('numbered').A.p,
+    allCaps: get('allCaps').A.p,
+    question: wilson(POOL.filter(x => /\?/.test(x.m.body)).length, POOL.length).p,
+  };
+}
+
 // --- the emitted prompt block ----------------------------------------------
 
 /** The form section, computed. This replaces the hand-written Form rules in

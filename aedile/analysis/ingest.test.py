@@ -49,6 +49,16 @@ Content-Type: text/html; charset="iso-8859-1"
 
 <div>I have the caf table.</div>
 --b1--
+
+From bank@example.com Tue Jan 30 08:00:00 2024
+Message-ID: <personal@mail.gmail.com>
+Date: Tue, 30 Jan 2024 08:00:00 -0600
+From: Example Bank <no-reply@bank.example.com>
+To: kreweofvaporwave@gmail.com
+Subject: Your January statement is ready
+Content-Type: text/plain; charset="utf-8"
+
+Your statement is available. Do not reply.
 '''
 
 LEGACY = [
@@ -96,7 +106,12 @@ with tempfile.TemporaryDirectory() as d:
             f.write(json.dumps(r) + '\n')
 
     rows = run('--mbox', mb)
-    check('mbox row count', len(rows), 2)
+    # A Takeout mbox is the WHOLE ACCOUNT. The bank statement is addressed to
+    # the operator personally, not to the group, and must never reach a krewe
+    # corpus that gets read back to a model and quoted in reports.
+    check('mbox row count, personal mail excluded', len(rows), 2)
+    check('no non-list message survives',
+          [r for r in rows if 'statement' in str(r['subject']).lower()], [])
     root, reply = rows[0], rows[1]
 
     check('subject survives', root['subject'], 'Tuesday throws at 8640 Nelson')
@@ -224,6 +239,36 @@ check('unmask: an address already present is untouched',
       by['g']['email'], 'thejakeman16@gmail.com')
 check('unmask: and is not claimed as inferred',
       by['g'].get('email_inferred'), None)
+
+
+# --- on_the_list ------------------------------------------------------------
+# The filter is the difference between importing a mailing list and importing
+# someone's mail, so both directions get a case.
+import email.message
+import email.policy as _pol
+
+
+def msg(**headers):
+    m = email.message.EmailMessage(policy=_pol.default)
+    for k, v in headers.items():
+        m[k.replace('_', '-')] = v
+    return m
+
+
+check('list: List-ID header',
+      ingest.on_the_list(msg(List_ID='<kreweofvaporwave.googlegroups.com>',
+                             To='someone@example.com'), 'kreweofvaporwave'), True)
+check('list: group in To',
+      ingest.on_the_list(msg(To='kreweofvaporwave@googlegroups.com'),
+                         'kreweofvaporwave'), True)
+check('list: group in Cc',
+      ingest.on_the_list(msg(To='a@b.com', Cc='kreweofvaporwave@googlegroups.com'),
+                         'kreweofvaporwave'), True)
+check('NOT list: personal mail to the operator',
+      ingest.on_the_list(msg(To='kreweofvaporwave@gmail.com',
+                             Subject='Your statement'), 'kreweofvaporwave'), False)
+check('NOT list: unrelated mail entirely',
+      ingest.on_the_list(msg(To='someone@example.com'), 'kreweofvaporwave'), False)
 
 print('\n'.join(f'FAIL {f}' for f in fails) if fails
       else 'ingest.test.py: all cases pass')

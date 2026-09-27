@@ -172,6 +172,9 @@ WHAT IS WRONG WITH THE ARCHIVE THIS REPLACES
 
 SOURCES, BEST FIRST
     --mbox FILE   An mbox from a mailbox that was subscribed to the list.
+                  FILTERED to the group by default: a Takeout mbox is the
+                  whole account, and the rest of it is nobody's business.
+                  See `on_the_list`.
                   This is the one that actually fixes 1, 3 and 5 at once,
                   because those are headers and a DOM scrape cannot
                   reconstruct them. Google Takeout emits mbox; for a
@@ -336,12 +339,48 @@ def plain_body(msg):
     return msg.get_content(), msg.get_content_type()
 
 
-def from_mbox(path):
+GROUP = 'kreweofvaporwave'
+
+
+def on_the_list(msg, group):
+    """Is this message list traffic, or just mail in the same mailbox?
+
+    THIS IS NOT AN OPTIMISATION. A Takeout mbox is the WHOLE ACCOUNT --
+    every personal thread, receipt and password reset the mailbox holds.
+    Ingesting it unfiltered would put all of that into a krewe corpus that
+    gets read back to a model and quoted in reports. The filter is the
+    difference between importing a mailing list and importing someone's
+    mail.
+
+    Google Groups stamps `List-ID: <group.googlegroups.com>` on delivered
+    copies. Older mail and direct sends may not carry it, so the group
+    address anywhere in To/Cc counts too -- that is the other way a list
+    message looks like one. Both are properties of the message, not
+    guesses about it.
+    """
+    hay = ' '.join(str(msg[h] or '') for h in
+                   ('List-ID', 'List-Id', 'X-Google-Group-Id', 'To', 'Cc',
+                    'Delivered-To')).lower()
+    g = group.lower()
+    # Match the group as an ADDRESS, never as a bare name. The first version
+    # tested `group in hay`, which is True for `kreweofvaporwave@gmail.com` --
+    # the operator's PERSONAL address -- and so would have imported their
+    # private mail out of a Takeout. The group only ever appears as
+    # <group>@googlegroups.com or as <group>.googlegroups.com in a List-ID.
+    return f'{g}@googlegroups.com' in hay or f'{g}.googlegroups.com' in hay
+
+
+def from_mbox(path, group=GROUP):
+    kept = dropped = 0
     for msg in mailbox.mbox(path, factory=lambda f: email.message_from_binary_file(
             f, policy=email.policy.default)):
+        if group and not on_the_list(msg, group):
+            dropped += 1
+            continue
         dt = email.utils.parsedate_to_datetime(msg['Date']) if msg['Date'] else None
         if not dt:
             continue
+        kept += 1
         name, addr = email.utils.parseaddr(str(msg['From'] or ''))
         try:
             body, _ = plain_body(msg)
@@ -364,6 +403,8 @@ def from_mbox(path):
             'topic_url': None,
             'source': 'mbox',
         }
+    print(f'ingest: mbox {path}: kept {kept} list messages, '
+          f'skipped {dropped} not addressed to {group!r}', file=sys.stderr)
 
 
 ELLIPSIS = re.compile(r'^(.*?)\.\.\.@(.+)$')
@@ -681,6 +722,11 @@ def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--mbox', action='append', default=[], metavar='FILE')
+    p.add_argument('--group', default=GROUP,
+                   help='keep only mbox messages addressed to this group '
+                        f'(default {GROUP!r}). Empty string keeps EVERYTHING, '
+                        'including the account\'s personal mail -- see '
+                        'on_the_list().')
     p.add_argument('--jsonl', action='append', default=[], metavar='FILE')
     p.add_argument('--gmail', action='store_true')
     p.add_argument('--unmask', action='store_true',
@@ -707,7 +753,7 @@ def main():
 
     def streams():
         for f in a.mbox:
-            yield from from_mbox(f)
+            yield from from_mbox(f, a.group)
         if a.gmail:
             lo, hi = (int(x) for x in a.years.split(':'))
             yield from from_gmail(a.query, lo, hi)

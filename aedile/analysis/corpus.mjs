@@ -81,6 +81,36 @@ export const isOperator = m => {
 // Zach: dangerpine@gmail.com is 11 messages, 2023-01 to 2026-06. Wrong by four years,
 // and neither session ran the one-line query first.
 
+// THE CORPUS'S REACH, measured with the stranger excluded (2026-09-26):
+//
+//   573 operator rows, 2019-09-02 .. 2026-01-24
+//
+// `2026-02-19` was published as that cutoff earlier in this session, in a message that
+// another session then wrote into its own docs. It is the vaporwaRE member's last
+// message: exactly what /^kreweofv/ returns before the exclusion above. The cutoff
+// documented in the tooling that found the contamination was produced BY the
+// contamination, through two hops and no query.
+//
+// OPERATOR-authored mail by month, against all senders, because "the corpus stops" is
+// a different claim depending on whose mail you mean:
+//
+//   month     all senders   operator
+//   2025-04        9            2
+//   2025-05        0            0
+//   2025-06        0            0
+//   2025-07        1            0      <- CLAUDE.md:179: July is historically silent,
+//   2025-08        0            0         so this one is the krewe's rhythm, not a defect
+//   2025-09       14            0
+//   2025-10       27            1
+//
+// So May-Sep 2025 is five operator-silent months and three corpus-empty ones. Both
+// were asserted tonight as corrections of each other and both are right about
+// different populations -- the third time in one session that a disagreement resolved
+// that way, after the exclamation rate (49% over all messages vs 93% over
+// announcements) and the subject denominators (12/31 vs 10/31 on two regexes). When
+// two measurements of "the same thing" disagree here, check the population before
+// arguing about the number.
+
 /** The send timestamp. NOT UTC despite what the Date object implies: the archive
  *  stores the hour as WRITTEN in local time (only 0.8% of 1099 sends fall between
  *  1am and 5am; the curve peaks at 9-11am). So the UTC fields carry local numbers

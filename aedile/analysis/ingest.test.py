@@ -134,6 +134,66 @@ with tempfile.TemporaryDirectory() as d:
           sorted(r['message_id'] or r['body'] for r in other),
           sorted(r['message_id'] or r['body'] for r in merged))
 
+
+# --- aedile_marker ----------------------------------------------------------
+# Imported rather than driven through the CLI: the real marker reads the Log
+# over the network, and these cases are about the matching, not the fetch.
+import importlib.util
+
+spec = importlib.util.spec_from_file_location('ingest', INGEST)
+ingest = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(ingest)
+
+LOG = [
+    # A real pair, verbatim from the Log: the send is 0.854s BEFORE its own
+    # log row, and the two are written in different offsets. Compared as
+    # strings that is False; they are the same instant.
+    {'Timestamp': '2026-09-27T00:34:12.854Z', 'Action': 'headsup_draft_posted',
+     'Subject': 'Laser harp build day. Sun 9/27 @ 1pm, 920 St. Mary'},
+    # Drafted on the 14th, sent by a human on the 16th. A symmetric 36h
+    # window called this one False, which was a miss and not skew.
+    {'Timestamp': '2026-09-14T02:30:47.232Z', 'Action': 'recap_draft_posted',
+     'Subject': 'Wings tonight at Half Moon'},
+    {'Timestamp': '2026-07-22T05:44:00.000Z', 'Action': 'bump_auto_reply',
+     'Subject': 'Vaporwave Ideas - Notes (Tyler & Zach)'},
+    # Must be ignored: it names no outbound text.
+    {'Timestamp': '2026-07-01T00:00:00.000Z', 'Action': 'no_action',
+     'Subject': 'Something a human wrote'},
+]
+mark = ingest.aedile_marker(LOG)
+KV = 'kreweofvaporwave@kreweofvaporwave.com'
+
+
+def row(email, iso, subject):
+    return {'email': email, 'date_iso': iso, 'subject': subject}
+
+
+check('marker: same instant, different offsets, 0.854s early',
+      mark(row(KV, '2026-09-26T19:34:12-05:00',
+               'Laser harp build day. Sun 9/27 @ 1pm, 920 St. Mary')), True)
+check('marker: drafted, sent 2.5 days later',
+      mark(row(KV, '2026-09-16T09:47:00-05:00', 'Wings tonight at Half Moon')), True)
+check('marker: a bump goes out as "Re: <logged subject>"',
+      mark(row(KV, '2026-07-22T05:45:00+00:00',
+               'Re: Vaporwave Ideas - Notes (Tyler & Zach)')), True)
+check('marker: same subject 20 days later is not that draft',
+      mark(row(KV, '2026-10-04T09:47:00-05:00', 'Wings tonight at Half Moon')), False)
+check('marker: a message cannot precede its draft by an hour',
+      mark(row(KV, '2026-09-13T20:30:47-05:00', 'Wings tonight at Half Moon')), False)
+check('marker: not a krewe address, so not ambiguous at all',
+      mark(row('dangerpine@gmail.com', '2026-09-16T09:47:00-05:00',
+               'Wings tonight at Half Moon')), False)
+check('marker: krewe address, no matching row -- the alias-ambiguity case',
+      mark(row(KV, '2026-09-08T10:02:00-05:00',
+               'long meeting / laser harps 2027')), False)
+check('marker: older than the Log is None, NOT False',
+      mark(row(KV, '2024-01-29T14:48:24-06:00', 'Tuesday throws')), None)
+# Dated after the earliest OUTBOUND row, so this is a real False and not an
+# out-of-window None: the no_action row is ignored, so it neither marks the
+# message nor lowers the floor.
+check('marker: a no_action row is not evidence of authorship',
+      mark(row(KV, '2026-08-01T00:00:30+00:00', 'Something a human wrote')), False)
+
 print('\n'.join(f'FAIL {f}' for f in fails) if fails
       else 'ingest.test.py: all cases pass')
 sys.exit(1 if fails else 0)

@@ -145,12 +145,23 @@ Two rules the corpus turned out not to support, both deleted the same day:
 
   **Settled 2026-09-26 against real `Subject:` headers**, which is the outside
   source this file asks for two paragraphs down. `aedile/analysis/ingest.py
-  --gmail` pulled 157 messages out of the krewe mailbox with their headers
-  intact; 35 are thread-starters (no `Re:`/`Fwd:`). **0 of 35 restate the body
-  opening, and 0 of 35 begin `N. `.** Real ones look like `Rapid Rewards Brunch.
-  Sun. 1/4 @ 1pm, 920 St. Mary`, `2026 patch`, `[Carnival26] Jumpsuit Dropoff
-  1/21 5-8pm` — a standing headline, not the first sentence. The scrape's
-  382/385 was the pipeline end to end.
+  --gmail --mark-aedile` pulled 157 messages out of the krewe mailbox with
+  their headers intact; 35 are thread-starters (no `Re:`/`Fwd:`), and **4 of
+  those 35 are aedile's own drafts**, so the human set is 31. **0 of 31 restate
+  the body opening, and 0 of 31 begin `N. `.** Real ones look like `Rapid
+  Rewards Brunch. Sun. 1/4 @ 1pm, 920 St. Mary`, `2026 patch`, `[Carnival26]
+  Jumpsuit Dropoff 1/21 5-8pm` — a standing headline, not the first sentence.
+  The scrape's 382/385 was the pipeline end to end.
+
+  **Do not build a generator on these 31.** They refute a rule; they are far
+  too thin and too skewed to source one. All 31 are the successor era — Abe
+  wrote the address until around 2025 and no Abe-era subject exists anywhere
+  yet. They are also announcement-heavy: only 10 of 31 carry a day, time or
+  date at all (32%; counting `\b(mon|tues|...)day\b`, a clock time, `tonight`
+  or `today`, or `M/D`/`Nth` in the subject), median length 28 characters,
+  range 8-63. Reading event-shaped specimens out of a mailbox by eye
+  overstated exactly this, twice, on 2026-09-26. If a rate off this set goes
+  anywhere, carry the denominator and the definition with it.
 - The three-blank-line default (#27). Now a per-email draw (`dealGap`) at the
   measured 54/34/11, not an instruction. Zach: *"defaulting to 3 spaces as a rule
   is wrong, it should be stochastic."* The distribution itself stays UNVERIFIED as

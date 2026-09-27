@@ -88,7 +88,13 @@ VAULT_JSONL = '/srv/vaporwave-reports/obsidian-vault/mailing-list-archive/messag
 CALL_SH = 'aedile/recap/call.sh'
 
 FIELDS = ['author', 'email', 'date', 'date_iso', 'subject', 'message_id',
-          'in_reply_to', 'references', 'to', 'cc', 'body', 'topic_url', 'source']
+          'in_reply_to', 'references', 'to', 'cc', 'body', 'topic_url', 'source',
+          'aedile_authored']
+
+# Addresses aedile can send under. A message from any other address is
+# nobody's ambiguity -- a human wrote it.
+KREWE = ('kreweofvaporwave@kreweofvaporwave.com', 'kreweofvaporwave@gmail.com',
+         'kreweofvaporwave@googlegroups.com')
 
 
 def legacy_date(dt):
@@ -100,6 +106,20 @@ def legacy_date(dt):
 
 
 PREFIX = 60   # characters of body in the merge key; see merge_key()
+# How long after aedile logs a draft its message may appear, and how long
+# before. Asymmetric because the two directions are different events:
+# forward is a human getting round to sending the draft, which took 2.5 days
+# in the one observed case; backward is only clock skew between Gmail's
+# second-truncated send time and the Log write, observed at -0.854s.
+SENT_AFTER_LOG_MAX = 14 * 86400
+SENT_BEFORE_LOG_MAX = 300
+
+
+def instant(iso):
+    """An aware datetime out of either clock's spelling, or None."""
+    if not iso:
+        return None
+    return datetime.fromisoformat(str(iso).replace('Z', '+00:00'))
 
 
 def calendar_day(date):
@@ -181,6 +201,91 @@ def from_mbox(path):
             'topic_url': None,
             'source': 'mbox',
         }
+
+
+def call_get(scope, **params):
+    args = [CALL_SH, 'get', scope] + [f'{k}={v}' for k, v in params.items()]
+    out = subprocess.run(args, capture_output=True, text=True, timeout=180)
+    if out.returncode:
+        raise SystemExit(f'ingest: get {scope} failed rc={out.returncode}: '
+                         f'{out.stderr.strip()}')
+    return json.loads(out.stdout)
+
+
+def aedile_marker(log_rows):
+    """Return `row -> True | False | None`, answering "did aedile write this".
+
+    THIS EXISTS BECAUSE MEASURING AEDILE'S OWN OUTPUT CLOSES A LOOP. Two of
+    the 35 subjects this tool first pulled were drafts aedile posted the same
+    afternoon, one of them an hour before the pull. Feed those into a rate and
+    aedile's habits become the corpus's habits, and the drift is invisible
+    because it looks like agreement.
+
+    `From` alone cannot answer it -- aedile/CLAUDE.md has this open since
+    2026-07-22: a director replying from the shared kreweofvaporwave@ alias is
+    indistinguishable in the archive from aedile replying. The Log is the
+    second signal, and this is the cross-reference that file proposes.
+
+    Not the Log's MessageID, though, which is a trap: on `draft_reply` and
+    `bump_auto_reply` rows it is the id of the message aedile was REPLYING TO,
+    so joining on it marks the human's message as aedile's. Only the outbound
+    rows' Subject describes aedile's own text.
+
+    Tri-state on purpose, because "unknown" and "no" are different claims:
+      True   an outbound Log row carries this exact subject, close enough in
+             time (see SENT_AFTER_LOG_MAX / SENT_BEFORE_LOG_MAX)
+      False  aedile did not write it -- either not from a krewe address at
+             all, or from one inside the Log's window with no matching row,
+             which is the alias-ambiguity case and is now countable
+      None   from a krewe address but older than the Log's earliest row, so
+             there is no evidence either way. Do not read it as False.
+
+    Times are compared as INSTANTS, not as strings. The Log writes UTC with
+    a Z and the corpus writes -05:00, so `'2026-09-26T19:34:12-05:00' >=
+    '2026-09-27T00:34:12Z'` is False lexically and True in fact -- which is
+    how the first version of this missed both of the rows it was written to
+    catch.
+
+    The window is asymmetric, which the second version got wrong: a
+    symmetric 36h missed `Wings tonight at Half Moon`, logged 2026-09-14 and
+    sent 2026-09-16. That is not skew, it is the guardrail working -- aedile
+    drafts and a human sends when they get to it, so the forward gap is
+    human-paced and measured in days. Backward, a message can only precede
+    its own Log row by clock skew; the observed case is -0.854s, because
+    Gmail truncates the send to the second and the Log row is written just
+    after.
+    """
+    out = [r for r in log_rows
+           if any(w in str(r['Action']) for w in ('draft', 'reply', 'send'))]
+    if not out:
+        print('ingest: Log has no outbound rows; nothing can be marked',
+              file=sys.stderr)
+        return lambda row: None
+    floor = min(instant(r['Timestamp']) for r in out)
+    seen = {}                       # subject -> every log instant carrying it
+    for r in out:
+        subj = str(r['Subject']).strip().lower()
+        if subj:
+            seen.setdefault(subj, []).append(instant(r['Timestamp']))
+    print(f'ingest: {len(out)} outbound Log rows, {len(seen)} distinct subjects, '
+          f'earliest {floor.date()}', file=sys.stderr)
+
+    def mark(row):
+        if (row.get('email') or '').lower() not in KREWE:
+            return False
+        when = instant(row.get('date_iso'))
+        if when is None or when < floor:
+            return None                     # predates the evidence
+        subj = str(row.get('subject') or '').strip().lower()
+        # A bump goes out as "Re: <what was logged>", so try both spellings.
+        for cand in (subj, re.sub(r'^re:\s*', '', subj)):
+            for logged in seen.get(cand, ()):
+                gap = (when - logged).total_seconds()
+                if -SENT_BEFORE_LOG_MAX <= gap <= SENT_AFTER_LOG_MAX:
+                    return True
+        return False
+
+    return mark
 
 
 def call(action, **params):
@@ -278,6 +383,9 @@ def main():
     p.add_argument('--mbox', action='append', default=[], metavar='FILE')
     p.add_argument('--jsonl', action='append', default=[], metavar='FILE')
     p.add_argument('--gmail', action='store_true')
+    p.add_argument('--mark-aedile', action='store_true',
+                   help="set aedile_authored by cross-referencing aedile's Log; "
+                        'costs one read call. See aedile_marker().')
     p.add_argument('--query', default='list:kreweofvaporwave.googlegroups.com')
     p.add_argument('--years', default='2019:2026', metavar='FROM:TO')
     p.add_argument('--audit', metavar='FILE',
@@ -301,6 +409,14 @@ def main():
             yield from from_jsonl(f)
 
     rows = merge(streams())
+    if a.mark_aedile:
+        mark = aedile_marker(call_get('log', limit=500)['rows'])
+        for r in rows:
+            r['aedile_authored'] = mark(r)
+        yes = sum(1 for r in rows if r['aedile_authored'] is True)
+        unk = sum(1 for r in rows if r['aedile_authored'] is None)
+        print(f'ingest: {yes} rows marked aedile-authored, {unk} undeterminable',
+              file=sys.stderr)
     rows.sort(key=lambda r: r.get('date_iso') or '')
     fh = open(a.out, 'w') if a.out else sys.stdout
     for r in rows:

@@ -276,9 +276,7 @@ export function runChecks(d, notes, vault, opts = {}) {
   // logistics note can legitimately have none.
   // Also a length rate, not a house rule. Measured MS-authored: 49% at <=150
   // chars, 69% at 150-300, 82% at 400-1000, 97% at 1000-2000. The 92% below is
-  // the digest band. The real Half Moon nudge ("Half Moon tonight, kitchen opens
-  // at 5... Bring a buddy") has no `!` at all, so warning on a two-line notice
-  // reports the length difference as a voice problem. Fourth instance of a digest
+  // the digest band. Fourth instance of a digest
   // rate applied to the terse register, after numberedList, the blank-line gap and
   // the spacing checks.
   // The population matters more than the length. Among ANNOUNCEMENTS at lead 0-1
@@ -288,6 +286,11 @@ export function runChecks(d, notes, vault, opts = {}) {
   // earlier 49%-at-150-chars figure was measured over ALL operator messages of any
   // kind, which is the wrong population: a two-line "the door code is 1234" is not
   // an announcement. So the exemption is now 150 chars, not 300.
+  //
+  // This comment used to justify the exemption with "the real Half Moon nudge has no
+  // `!` at all". That message was aedile's own (five recap_draft_posted Log rows,
+  // 2026-09-14T02:29-02:35Z), so it is evidence about the generator and not about the
+  // list. The rates above are measured over the archive and do not depend on it.
   if (!/!/.test(body) && !(headsup && body.length <= 150)) {
     add('warn', 'no-exclamation',
       'no exclamation mark; 93-95% of the operator\'s day-before announcements carry at least one');

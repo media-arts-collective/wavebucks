@@ -295,8 +295,15 @@ export function dealSignoff(seed) {
  *
  *  Monotonic, no discontinuity: the 54/34/11 that AEDILE_CONTEXT.recap.md used to
  *  state as a house default is the 400-4000 DIGEST rate, and it is simply wrong
- *  for a terse notice. The hand-written Half Moon heads-up (2026-09-14, 230 chars)
- *  is single-spaced throughout, and so is 42% of its length band. Dealing 3 to a
+ *  for a terse notice. 42% of that length band is single-spaced.
+ *
+ *  A previous version of this comment cited "the hand-written Half Moon heads-up
+ *  (2026-09-14, 230 chars)" as the specimen. It was not hand-written: the Log carries
+ *  five recap_draft_posted rows for that pair at 2026-09-14T02:29-02:35Z, and this
+ *  session had read them before quoting the message as human. Corroborating a dealt
+ *  rate with the generator's own output is the loop these rates exist to avoid, so the
+ *  specimen is struck and the band statistic, which is measured over the archive,
+ *  stands on its own. Dealing 3 to a
  *  heads-up is the numberedList mistake again: a digest rate applied to a register
  *  that does not share it. */
 export const GAPS = {

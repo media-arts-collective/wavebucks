@@ -40,7 +40,11 @@ const F = {
   dayWord:   s => /\b(sun|mon|tues|wednes|thurs|fri|satur)(day|\.)?\b|\b(today|tonight|tomorrow|weekend)\b/i.test(s),
   clockTime: s => /\b\d{1,2}(?::\d{2})?\s?(?:am|pm)\b|@\s?\d{1,2}|\b\d{1,2}\s?-\s?\d{1,2}\b/i.test(s),
   calDate:   s => /\b\d{1,2}\/\d{1,2}\b/.test(s),
-  venue:     s => /\bat [A-Z]|\b\d{3,5}\s+[A-Z][a-z]|St\.? Mary|Half Moon|NOLA Brewing/.test(s),
+  // Generic only. This used to name `Half Moon` and `NOLA Brewing` as venue
+  // literals, and Half Moon reached the list from aedile's OWN subjects -- a detector
+  // taught to recognise the generator's vocabulary and then used to measure the
+  // humans. `at X` and a street number are shape, not vocabulary.
+  venue:     s => /\bat [A-Z]|\b\d{3,5}\s+[A-Z][a-z]|\bSt\.? Mary\b/.test(s),
   bracket:   s => /^\[[^\]]+\]/.test(s),
   allCaps:   s => /\b[A-Z]{3,}\b/.test(s),
   bang:      s => /!/.test(s),

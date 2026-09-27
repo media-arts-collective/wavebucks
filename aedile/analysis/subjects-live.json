@@ -13,8 +13,14 @@
     "corpus teaches.",
     "",
     "aedile:true marks subjects this project generated. They are excluded from every",
-    "rate: training a subject generator on its own output is a feedback loop, and two of",
-    "the thirty-five are drafts from the session that then wanted to measure them."
+    "rate: training a subject generator on its own output is a feedback loop.",
+    "",
+    "FOUR are aedile's, not two. The Half Moon pair was marked on 2026-09-26 after",
+    "the list-scrape session built a Log-based detector. This session had ALREADY READ",
+    "the Log rows -- five recap_draft_posted rows for those two subjects at",
+    "2026-09-14T02:29-02:35Z -- reported them, and then spent an hour citing Half Moon",
+    "as the human exemplar of the genre, once in writing as hand-written. Nothing in",
+    "the message says aedile wrote it; only the Log does, and the Log had been read."
   ],
   "source": "live Gmail, kreweofvaporwave@kreweofvaporwave.com, thread-starters",
   "recovered": "2026-09-26",
@@ -50,9 +56,9 @@
     { "date": "2026-08-16", "subject": "Krewe of Vaporwave - Brunch & Brainstorm, Sun 8/30" },
     { "date": "2026-08-26", "subject": "video toaster 4000" },
     { "date": "2026-09-08", "subject": "long meeting / laser harps 2027 / clubhouse?",
-      "note": "a human replaced aedile's generated `Hi friends!` with this before sending -- the one direct human-edit datapoint on subject generation" },
-    { "date": "2026-09-13", "subject": "Wednesday: Half Moon" },
-    { "date": "2026-09-16", "subject": "Wings tonight at Half Moon" },
+      "note": "CANDIDATE human rewrite of aedile's generated `Hi friends!`, not established. It is the single alias-ambiguity row inside the Log's window: from the krewe address with no outbound Log row behind it, which is equally what a director sending under the alias looks like (the open From-ambiguity bug, 2026-07-22). The Log has recap rows either side of that date whose subject a human could have rewritten before sending." },
+    { "date": "2026-09-13", "subject": "Wednesday: Half Moon", "aedile": true },
+    { "date": "2026-09-16", "subject": "Wings tonight at Half Moon", "aedile": true },
     { "date": "2026-09-26", "subject": "Laser harp build day. Sun 9/27 @ 1pm, 920 St. Mary", "aedile": true },
     { "date": "2026-09-26", "subject": "Laser harp build day today at 920 St. Mary", "aedile": true }
   ]

@@ -305,8 +305,13 @@ expectClean('two parallel clauses are fine', (() => {
   return d;
 })());
 
-// The real Half Moon nudge carries no `!`, so a short heads-up must not be warned
-// at for lacking one: 49% at <=150 chars against 97% in the digest band.
+// A short heads-up is not warned for lacking `!`: among the operator's day-before
+// announcements the rate is 93-95% above 150 chars but 60% below it, on n=5 with a CI
+// of [23,88] -- a sample that cannot resolve anything, so the exemption is the
+// honest reading. (This case was originally justified by "the real Half Moon nudge
+// carries no `!`". That message was aedile's own output, per five
+// recap_draft_posted Log rows, so it proved nothing about the list. The body below
+// is kept as a plausible short notice, not as a quoted specimen.)
 {
   const nudge = { subject: 'Half Moon tonight',
     body: 'Half Moon tonight, kitchen opens at 5: wings, pizza, skeeball.\n\nBring a buddy',

@@ -30,7 +30,7 @@ import { join } from 'node:path';
 // operator's. corpus.mjs was introduced this session as "one loader, one sender
 // predicate" and was not wired to its first caller, so fixing the contamination there
 // did not reach here. Extracting a module is not adopting it.
-import { isOperator } from './corpus.mjs';
+import { isOperator, isFullBody } from './corpus.mjs';
 
 const VAULT = process.env.KREWE_VAULT
   || '/srv/vaporwave-reports/obsidian-vault/mailing-list-archive';
@@ -136,7 +136,10 @@ function isAnnouncement(body) {
 
 const msgs = readFileSync(join(VAULT, 'messages.jsonl'), 'utf8').trim().split('\n')
   .map(l => JSON.parse(l))
-  .filter(m => isOperator(m) && typeof m.body === 'string');
+  // Snippets excluded; see isFullBody in corpus.mjs. 28% of the corpus is a
+  // ~101-char preview and they bias every length statistic downward.
+  .filter(m => isOperator(m) && typeof m.body === 'string')
+  .filter(isFullBody);
 for (const m of msgs) m._d = parseDate(m.date);
 
 const candidates = msgs.filter(m => m._d && isAnnouncement(m.body) && SUBJECTY.test(m.body))

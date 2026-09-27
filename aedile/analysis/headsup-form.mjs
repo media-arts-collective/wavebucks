@@ -40,13 +40,17 @@
 
 import {
   load, isAnnouncement, eventDay, dayNum, localHour, median, wilson, ADDRESS_RE,
+  isFullBody,
 } from './corpus.mjs';
 
 const ERA_UNTIL = 2024;   // Abe. See corpus.mjs: one account, two authors.
 
 // --- the three pools --------------------------------------------------------
 
-const all = load({ until: ERA_UNTIL });
+// Snippets excluded: 28% of the corpus is a ~101-char Google Groups preview, and two
+// of them were in this pool, holding the length target at 134 words when the full
+// bodies give 173. See isFullBody in corpus.mjs for the histogram.
+const all = load({ until: ERA_UNTIL }).filter(isFullBody);
 const anns = all.filter(m => isAnnouncement(m.body));
 
 /** lead in days from send to the event this message points at, or null. */
@@ -175,6 +179,10 @@ export function formBlock() {
   const itemLens = POOL.flatMap(x => x.m.body.split(/(?=(?:^|\n)\s*-?\d+\.\s)/)
     .filter(t => /^\s*-?\d+\.\s/.test(t)).map(t => words(t)));
   const paras = POOL.map(x => x.m.body.split(/\n\s*\n/).filter(t => t.trim()).length);
+  // Computed, not typed. "Only 3 of 18 first lines contain a number" was a literal in
+  // this function -- a hand-copied count inside the very block written to stop numbers
+  // being hand-copied, and it went stale the moment the pool changed size.
+  const digitsFirst = POOL.filter(x => /\d/.test(x.m.body.trim().split('\n')[0])).length;
   say.push(`- **Write about ${median(wA)} words.** That is the target, not a floor. Half of these`,
     `  messages fall between ${q1} and ${q3} words, but aim at ${median(wA)}: a draft near the bottom of`,
     '  that range is thin, not concise.',
@@ -183,8 +191,8 @@ export function formBlock() {
     `  and not one of the ${itemLens.length} items in the corpus is under 10.** Numbering a bare clock`,
     '  time ("1. 1pm: sausages") is not what the list does; an item explains the thing.',
     '  If you have nothing to say about an item, it is not an item.',
-    '- **Do not open with digits.** Only 3 of 18 first lines contain a number. The',
-    '  opening is a greeting or a short framing line; logistics come after it.');
+    `- **Do not open with digits.** Only ${digitsFirst} of ${POOL.length} first lines contain a`,
+    '  number. The opening is a greeting or a short framing line; logistics follow it.');
 
   // Phrasing follows the RATE, not the verdict. A well-established 6% is still a
   // reason NOT to do something, and an earlier version of this function printed

@@ -135,6 +135,38 @@ export const isOperator = m => {
 // parties measuring different sets on purpose and then comparing the outputs as if they
 // were the same quantity. Ship the definition attached to the rate.
 
+/** Is this row a full body, or a Google Groups PREVIEW SNIPPET?
+ *
+ *  28% of the corpus is snippets. The length histogram has a cliff that cannot be
+ *  anything else -- 10-char bins over the whole file:
+ *
+ *      80-89   46        exact lengths:  96c  36
+ *      90-99  236                        97c  44
+ *    100-109   68                        99c  27
+ *    110-119   12                       100c  30
+ *    120-129   11                       101c  31
+ *                                       103c   1   <- cliff
+ *                                       104c   1
+ *
+ *  236 rows in one 10-char bin against 11-13 in its neighbours, 31 at exactly 101
+ *  characters, and then nothing. Every one of them ends mid-sentence: "...is debuting
+ *  a new generation", "...Join us at 6pm tonight at", "...Meeting @ 3pm Topics: Theme
+ *  team (". They are list previews, not messages.
+ *
+ *  THIS CONTAMINATED A PUBLISHED FIGURE. Two of the 18 day-before Sunday messages in
+ *  headsup-form.mjs's pool are snippets, and excluding them moves the length target
+ *  from 134 words to 173 -- a figure that had already been written into the generator's
+ *  prompt as "write about 134 words". A snippet is short by construction, so any median
+ *  length computed over a pool containing them is biased down, and the bias is
+ *  invisible because a short message is not obviously a truncated one.
+ *
+ *  The test is length alone, because the cliff is sharp enough to carry it. That will
+ *  misclassify a genuinely 96-character note as a snippet; there are few of those and
+ *  the alternative, testing for a clean ending, flags 571 of 1099 rows and is useless.
+ *  An mbox would end the guessing, which is the strongest argument for that path yet:
+ *  it is not only subjects and headers, it is a quarter of the bodies. */
+export const isFullBody = m => m.body.trim().length > 101;
+
 /** The send timestamp. NOT UTC despite what the Date object implies: the archive
  *  stores the hour as WRITTEN in local time (only 0.8% of 1099 sends fall between
  *  1am and 5am; the curve peaks at 9-11am). So the UTC fields carry local numbers

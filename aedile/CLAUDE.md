@@ -151,7 +151,9 @@ strength of prose; then `GENRE_P`, the same rates as literals I typed after read
 report; now the measurement itself. Only the third survives a corpus change.
 
 **EVERY RATE IN THIS SECTION AND IN `devices.mjs` IS A LOWER BOUND.** 28% of
-`messages.jsonl` is a ~101-character Google Groups preview rather than a body, and the
+`messages.jsonl` is a ~101-character Google Groups preview rather than a body (31% if
+the band is drawn at 80-101 characters, as `ingest.py --audit` draws it -- same pool,
+different edge, and the conclusion holds either way), and the
 truncation is strongly length-biased: 62% of messages 111-1000 characters long were
 truncated, 75% at 1001-3000, 94% above 3001. A snippet is cut before the sign-off, the
 closing exclamation and the later numbered items, so it votes "trait absent" for every
@@ -176,6 +178,20 @@ Two rules the corpus turned out not to support, both deleted:
   opening. The prompt rule and the `subject-body-mismatch` check are both gone, and
   `dealSubject` deals subject FEATURES at rates measured over those 31 -- successor-era
   only, because Abe-era subjects exist in no store.
+
+  **Do not build a generator on those 31.** They refute a rule; they are far too thin
+  and too skewed to source one. Only 10 of 31 carry a day, time or date at all (32%,
+  counting a day word, a clock time, `tonight`/`today`, or `M/D`/`Nth`; a looser regex
+  scores 12 of 31, and both definitions are in the code beside their numbers). Median
+  length 28 characters, range 8-63. Reading event-shaped specimens out of a mailbox by
+  eye overstated exactly this, twice, in one session. If a rate off this set travels,
+  the denominator and the definition travel with it.
+
+  Two of the 35 raw thread-starters were unsent DRAFTS, not list mail -- Gmail's
+  `list:` operator matches drafts addressed to the group, so `--gmail` ingested text
+  nobody had read. `ingest.py` excludes them at the source now. It is the same error as
+  counting aedile's own sent mail, one step earlier and worse in kind, because a draft
+  may never go out at all.
 - The three-blank-line default (#27). Now a per-email draw (`dealGap`) at the measured
   54/34/11 for a recap and 42/40/18 for a heads-up, not an instruction. Zach:
   *"defaulting to 3 spaces as a rule is wrong, it should be stochastic."* The
@@ -275,8 +291,12 @@ with `AEDILE_CONTEXT.consolidation.md`. It was replaced by:
   not auto-applied) — not part of the runtime path, and not a reason to
   reconsider the two points above.
 - The historical archive has already been imported into the `Messages`
-  tab (the local `messages.jsonl` export and the scraper that produced it
-  are gone now that migration's done — see `README.md`'s "Historical
+  tab, **defect and all** — measured 2026-09-26, 489 of the 500 newest rows
+  are legacy-imported and 0 of those carry a Subject. `aedile/analysis/
+  ingest.py` is the replacement for the scraper that vanished; it merges
+  sources rather than replacing, and `--audit` reprints every number this
+  file quotes. The original `messages.jsonl` export and the scraper that
+  produced it are gone (migration's done — see `README.md`'s "Historical
   archive import" section for what re-running this would take). The
   `Personality`/`Threads`/`Shards`/`ConsolidationLog` sheet tabs themselves
   are left in place (orphaned, not auto-deleted) since they hold historical data a

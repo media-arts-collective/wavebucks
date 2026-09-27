@@ -40,13 +40,17 @@
 
 import {
   load, isAnnouncement, eventDay, dayNum, localHour, median, wilson, ADDRESS_RE,
+  isFullBody,
 } from './corpus.mjs';
 
 const ERA_UNTIL = 2024;   // Abe. See corpus.mjs: one account, two authors.
 
 // --- the three pools --------------------------------------------------------
 
-const all = load({ until: ERA_UNTIL });
+// Snippets excluded: 28% of the corpus is a ~101-char Google Groups preview, and two
+// of them were in this pool, holding the length target at 134 words when the full
+// bodies give 173. See isFullBody in corpus.mjs for the histogram.
+const all = load({ until: ERA_UNTIL }).filter(isFullBody);
 const anns = all.filter(m => isAnnouncement(m.body));
 
 /** lead in days from send to the event this message points at, or null. */
@@ -128,6 +132,29 @@ if (!process.argv.includes('--block')) {
   console.log('UNDERPOWERED ones belong in devices.mjs as a dealt probability, or nowhere.');
 }
 
+/** The device rates for this genre, measured. Exported so devices.mjs does not have
+ *  to carry them as literals.
+ *
+ *  They WERE literals: `GENRE_P = { greeting: 0.67, numberedList: 0.44, ... }`, typed
+ *  into devices.mjs by reading this file's output and rounding. Correct on the day
+ *  and a snapshot forever after -- the same defect as a prose prompt, one indirection
+ *  removed. A re-scrape of the corpus is in progress in another worktree, and it
+ *  would have updated formBlock() while leaving those four numbers frozen and
+ *  nothing would have failed.
+ *
+ *  Only rates that were re-measured on this subpool are returned. A device absent
+ *  here keeps the 400-4000 char pool's value in devices.mjs, which is a known
+ *  approximation rather than a silent one. */
+export function measuredRates() {
+  const get = n => rows.find(r => r.name === n);
+  return {
+    greeting: get('greeting').A.p,
+    numberedList: get('numbered').A.p,
+    allCaps: get('allCaps').A.p,
+    question: wilson(POOL.filter(x => /\?/.test(x.m.body)).length, POOL.length).p,
+  };
+}
+
 // --- the emitted prompt block ----------------------------------------------
 
 /** The form section, computed. This replaces the hand-written Form rules in
@@ -146,9 +173,33 @@ export function formBlock() {
     `about a Sunday gathering, up to ${ERA_UNTIL}. Percentages are of those messages.`,
     '');
 
-  say.push(`- **Length: around ${median(wA)} words.** The middle half runs ${q1} to ${q3}, so there is`,
-    '  real latitude, but this is not a one-line nudge: a Sunday gathering with an eat',
-    '  half and a work half gets a message with body to it.');
+  // The median is the TARGET. An earlier version of this block offered the
+  // interquartile range as "real latitude", which is how a 55-word draft got
+  // written and posted against a 134-word norm: a spread quoted as permission.
+  const itemLens = POOL.flatMap(x => x.m.body.split(/(?=(?:^|\n)\s*-?\d+\.\s)/)
+    .filter(t => /^\s*-?\d+\.\s/.test(t)).map(t => words(t)));
+  const paras = POOL.map(x => x.m.body.split(/\n\s*\n/).filter(t => t.trim()).length);
+  // Computed, not typed. "Only 3 of 18 first lines contain a number" was a literal in
+  // this function -- a hand-copied count inside the very block written to stop numbers
+  // being hand-copied, and it went stale the moment the pool changed size.
+  const digitsFirst = POOL.filter(x => /\d/.test(x.m.body.trim().split('\n')[0])).length;
+  // Both directions matter and they were in tension. "The target, not a floor" was
+  // written to stop 55-word drafts; then the truncation turned out to be strongly
+  // length-biased, which makes the measured median a LOWER BOUND on the real one. So
+  // the instruction is now: at least this, and the truth is higher. Saying only
+  // "target" would have capped the generator at a figure known to be too low.
+  say.push(`- **Write at least ${median(wA)} words, and longer is closer to right.** Half of these`,
+    `  messages fall between ${q1} and ${q3} words. ${median(wA)} is a FLOOR, not a centre: about`,
+    '  a third of the archive survives only as ~100-character previews, the truncation hit',
+    '  long messages hardest, and the messages that survived are therefore the short ones.',
+    '  A draft near the bottom of that range is thin, not concise.',
+    `- **About ${median(paras)} paragraph blocks.**`,
+    `- **If you number items, each item is a TOPIC with real content: median ${median(itemLens)} words,`,
+    `  and not one of the ${itemLens.length} items in the corpus is under 10.** Numbering a bare clock`,
+    '  time ("1. 1pm: sausages") is not what the list does; an item explains the thing.',
+    '  If you have nothing to say about an item, it is not an item.',
+    `- **Do not open with digits.** Only ${digitsFirst} of ${POOL.length} first lines contain a`,
+    '  number. The opening is a greeting or a short framing line; logistics follow it.');
 
   // Phrasing follows the RATE, not the verdict. A well-established 6% is still a
   // reason NOT to do something, and an earlier version of this function printed

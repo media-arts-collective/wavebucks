@@ -122,71 +122,82 @@ single-venue heads-up should not be numbered. **A spec no code reads is a
 document, not a rule.** Do not hand-write a body and post it: generate it, let the
 checks grade it, then post the saved decision.
 
-`checks.mjs` is **genre-gated** (`runChecks(d, notes, vault, { genre, beat })`) and
-defaults to `recap`. Every rate in it was measured on the 400-4000 char digest
-pool, and `headsup.md` says in its own text that those rates do not transfer: for
-a heads-up the sign-off drops to `warn` (the barest attested nudge is one unsigned
-line), numbering inverts to `numbered-headsup`, and the two spacing checks are
-skipped because a terse notice has no modal gap. What does NOT relax: invented
-names, invented figures, the em-dash, and never signing `MS`.
+`checks.mjs` is **genre-gated** (`runChecks(d, notes, vault, { genre, beat, leadDays,
+hand })`) and defaults to `recap`. For a heads-up the sign-off drops to `warn`, the two
+spacing checks are skipped, and the exclamation exemption applies only below 150
+characters. What does NOT relax: invented names, invented figures, invented **pronouns**
+(a gendered pronoun the input does not supply blocks, because guessing misgenders a
+member), the em-dash, `temporal-mismatch` (the day-word must match the computed lead
+time), `stub-items` (a numbered item under 5 words), and never signing `MS`.
 
-`devices.mjs` also deals by genre now: `GENRE_OFF.headsup` forces `numberedList`
-off, because 0.82 is the digest's rate and dealing it to a heads-up put the dealer
-and the checker in disagreement about the same draft.
+**A dealt device is not a checked property.** `numbered-headsup` and `no-caps` briefly
+lived in `checks.mjs` and warned at drafts whose own dealt hand had told them to number
+and to shout. Both are gone for this genre. Whatever `devices.mjs` deals, `checks.mjs`
+does not grade -- except `hand-ignored`, which checks the hand was *followed*, which is
+instruction-following rather than a rate.
 
-Two rules the corpus turned out not to support, both deleted the same day:
+**The heads-up form is computed, not written.** `analysis/headsup-form.mjs` measures it
+from the corpus every run and `redige.mjs` splices the result; `AEDILE_CONTEXT.headsup.md`
+keeps only the genre's purpose and the beats' functions. Its Form section was deleted
+because it was wrong twice in one session in the same direction (it called both beats
+"terse" against a 173-word median, and said numbering "is NOT a lock-in trait" against
+50%). Every rate is checked three ways before it may become an instruction -- target
+pool, a differently-drawn neighbour pool, and a Wilson interval -- and an interval
+spanning 50% is reported as undecidable rather than rounded into a rule.
 
-- The subject doctrine (#30). `messages.jsonl` has **no subject field**; the
-  scraper built thread titles from body first lines, so titles matched openings
-  382 times in 385 and the "habit" was the pipeline. 18 of 628 titles begin with
-  `N. ` (2.9%), and the real subjects are never numbered. The prompt rule and the
-  `subject-body-mismatch` check are gone; the traits in `recap.md` now come from
-  the live group listing.
+Device rates for a heads-up are **pushed in** from `measuredRates()`, not tabulated.
+That table has been wrong three ways: first `GENRE_OFF`, devices forced to false on the
+strength of prose; then `GENRE_P`, the same rates as literals I typed after reading the
+report; now the measurement itself. Only the third survives a corpus change.
 
-  **Settled 2026-09-26 against real `Subject:` headers**, which is the outside
-  source this file asks for two paragraphs down. `aedile/analysis/ingest.py
-  --gmail --mark-aedile` pulled 157 messages out of the krewe mailbox with
-  their headers intact; 35 are thread-starters (no `Re:`/`Fwd:`), and **4 of
-  those 35 are aedile's own drafts**, so the human set is 31. **0 of 31 restate
-  the body opening, and 0 of 31 begin `N. `.** Real ones look like `Rapid
-  Rewards Brunch. Sun. 1/4 @ 1pm, 920 St. Mary`, `2026 patch`, `[Carnival26]
-  Jumpsuit Dropoff 1/21 5-8pm` — a standing headline, not the first sentence.
-  The scrape's 382/385 was the pipeline end to end.
+**EVERY RATE IN THIS SECTION AND IN `devices.mjs` IS A LOWER BOUND.** 28% of
+`messages.jsonl` is a ~101-character Google Groups preview rather than a body (31% if
+the band is drawn at 80-101 characters, as `ingest.py --audit` draws it -- same pool,
+different edge, and the conclusion holds either way), and the
+truncation is strongly length-biased: 62% of messages 111-1000 characters long were
+truncated, 75% at 1001-3000, 94% above 3001. A snippet is cut before the sign-off, the
+closing exclamation and the later numbered items, so it votes "trait absent" for every
+trait that lives late in a message. `isFullBody` in `analysis/corpus.mjs` excludes them
+now, which raised the length target from 134 words to 173 and the exclamation rate from
+94% to 100%.
 
-  **Do not build a generator on these 31.** They refute a rule; they are far
-  too thin and too skewed to source one. All 31 are the successor era — Abe
-  wrote the address until around 2025 and no Abe-era subject exists anywhere
-  yet. They are also announcement-heavy: only 10 of 31 carry a day, time or
-  date at all (32%; counting `\b(mon|tues|...)day\b`, a clock time, `tonight`
-  or `today`, or `M/D`/`Nth` in the subject), median length 28 characters,
-  range 8-63. Reading event-shaped specimens out of a mailbox by eye
-  overstated exactly this, twice, on 2026-09-26. If a rate off this set goes
-  anywhere, carry the denominator and the definition with it.
-- The three-blank-line default (#27). Now a per-email draw (`dealGap`) at the
-  measured 54/34/11, not an instruction. Zach: *"defaulting to 3 spaces as a rule
-  is wrong, it should be stochastic."* The distribution itself stays UNVERIFIED as
-  a human habit; #27 has the 2020 regime change.
+**Re-deriving these rates from `messages.jsonl` will NOT correct them** -- the same pool
+reproduces the same bias. 148 of the 509 Abe-era operator messages are snippets and
+*none* is recoverable, because the Office mailbox holds no mail before 2025 and there is
+no second copy. The fix is an mbox from an account that spans 2019, which also gates
+every Abe-era subject and the size of this correction. Until then 173 is a floor and the
+true figure is above it by an unestimable amount.
 
-**Every rate above is computed over a pool where 31% of the bodies are
-preview snippets, and the truncation is length-biased (2026-09-26).**
-`messages.jsonl` holds 343 rows of 80-101 characters against 9 rows of
-102-110 — Google Groups topic-list previews captured instead of messages,
-ending mid-sentence. The loss is directional: a body cut at 101 characters
-is cut before the sign-off, before the closing exclamation, and before every
-numbered item after the first, so a snippet votes "trait absent" for every
-trait that lives late in a message. Measured on 99 matched pairs where the
-true length is known, P(truncated) runs 62% / 75% / 94% as true length rises
-past 1000 / 3000 characters, and the operator is hit hardest because they
-write longest (median 113 words against 36 for everyone else).
+Two rules the corpus turned out not to support, both deleted:
 
-So `numberedList` 0.82, the 54/34/11 and 42/40/18 gap draws, the sign-off and
-exclamation rates and the length targets are all LOWER BOUNDS, not estimates.
-Do not re-derive them from `messages.jsonl` and expect a correction — the
-same pool produces the same bias. `aedile/analysis/ingest.py --audit` prints
-the snippet bands for any file; its module docstring has the full measurement
-and the reason the Abe-era correction is not estimable from anything on this
-box. It needs pre-2025 ground truth, which means an mbox from a mailbox
-subscribed before 2025.
+- The subject doctrine (#30). `messages.jsonl` has **no subject field**; the scraper
+  built thread titles from body first lines, and 448 of 542 comparable titles are the
+  body opening verbatim with nearly all the rest differing only in apostrophes. They are
+  truncated at slug length too ("Bring bri" for "Bring brilliant, unwieldy ideas"). Of 31
+  real subjects recovered from live Gmail, **0** begin `N. ` and 0 restate the body
+  opening. The prompt rule and the `subject-body-mismatch` check are both gone, and
+  `dealSubject` deals subject FEATURES at rates measured over those 31 -- successor-era
+  only, because Abe-era subjects exist in no store.
+
+  **Do not build a generator on those 31.** They refute a rule; they are far too thin
+  and too skewed to source one. Only 10 of 31 carry a day, time or date at all (32%,
+  counting a day word, a clock time, `tonight`/`today`, or `M/D`/`Nth`; a looser regex
+  scores 12 of 31, and both definitions are in the code beside their numbers). Median
+  length 28 characters, range 8-63. Reading event-shaped specimens out of a mailbox by
+  eye overstated exactly this, twice, in one session. If a rate off this set travels,
+  the denominator and the definition travel with it.
+
+  Two of the 35 raw thread-starters were unsent DRAFTS, not list mail -- Gmail's
+  `list:` operator matches drafts addressed to the group, so `--gmail` ingested text
+  nobody had read. `ingest.py` excludes them at the source now. It is the same error as
+  counting aedile's own sent mail, one step earlier and worse in kind, because a draft
+  may never go out at all.
+- The three-blank-line default (#27). Now a per-email draw (`dealGap`) at the measured
+  54/34/11 for a recap and 42/40/18 for a heads-up, not an instruction. Zach:
+  *"defaulting to 3 spaces as a rule is wrong, it should be stochastic."* The
+  distribution itself stays UNVERIFIED as a human habit; #27 has the 2020 regime change,
+  and a cross-source body comparison shows the two renderings diverge past 60 characters,
+  which is consistent with re-flow and does not establish it.
 
 **Before teaching the generator any new trait, check its provenance against a
 source outside the scrape.** Non-breaking spaces, gap sizes and subjects all read

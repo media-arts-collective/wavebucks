@@ -125,34 +125,28 @@ function rng(seed) {
  *  A forced `false` here, rather than a second probability, because these are
  *  not "rarer in this genre", they are wrong in it. The per-beat rates that ARE
  *  probabilities are still hand-set placeholders and stay open in #49. */
-/** Per-genre probability overrides, measured -- not suppressions.
+/** Per-genre probability overrides come from the CALLER, measured, not from a
+ *  table here.
  *
- *  This started as GENRE_OFF, a list of devices forced to `false` for a heads-up on
- *  the authority of AEDILE_CONTEXT.headsup.md's prose. Measured against the 18
- *  day-before/day-of Sunday-gathering messages Abe actually sent (pre-2025, see
- *  analysis/headsup-form.mjs), that prose was wrong in both places:
+ *  This was `GENRE_OFF`, devices forced to false on the authority of
+ *  AEDILE_CONTEXT.headsup.md's prose. Measured against the 18 day-before Sunday
+ *  messages the operator actually sent, that prose was wrong twice:
  *
  *    numbering   headsup.md: "NOT a lock-in trait"        measured 44%  CI[25,66]
- *    questions   headsup.md: the nudge "drops questions"  measured 33%  CI[16,56]
+ *    questions   the nudge "drops questions"              measured 33%  CI[16,56]
  *
- *  Forcing either to zero reproduces a rule nobody follows. Both are genuinely
- *  coin-flips, which is precisely what a dealt probability is for and precisely what
- *  an instruction cannot express. Zach, 2026-09-26: "we're going to fix heads up
- *  today using actual statistical measures, triple checked, three different ways."
- *
- *  Only rates re-measured on that subpool appear here; the rest keep the 400-4000
- *  char pool's values, which is a known approximation rather than a silent one.
+ *  It then became `GENRE_P`, the same four rates as literals typed in here. Also
+ *  wrong in kind: a snapshot of a measurement is a snapshot. So `dealDevices` now
+ *  takes the rates, `analysis/headsup-form.mjs` computes them, and this file holds
+ *  no genre table at all. devices.mjs keeps no corpus dependency either, which is
+ *  why the rates are pushed in rather than imported.
  */
-const GENRE_P = {
-  headsup: { greeting: 0.67, numberedList: 0.44, allCaps: 0.44, question: 0.33 },
-};
 
 /** Deal one email its hand. `seed` makes it reproducible; omit for a real
  *  recap, where each one should simply differ from the last. `genre` suppresses
  *  devices that belong to another register. */
-export function dealDevices(seed, genre, beat) {
+export function dealDevices(seed, genre, beat, over = {}) {
   const rand = seed === undefined ? Math.random : rng(seed);
-  const over = GENRE_P[`${genre}:${beat}`] || GENRE_P[genre] || {};
   const hand = {};
   for (const d of DEVICES) {
     const p = over[d.key] ?? d.p;
@@ -301,8 +295,15 @@ export function dealSignoff(seed) {
  *
  *  Monotonic, no discontinuity: the 54/34/11 that AEDILE_CONTEXT.recap.md used to
  *  state as a house default is the 400-4000 DIGEST rate, and it is simply wrong
- *  for a terse notice. The hand-written Half Moon heads-up (2026-09-14, 230 chars)
- *  is single-spaced throughout, and so is 42% of its length band. Dealing 3 to a
+ *  for a terse notice. 42% of that length band is single-spaced.
+ *
+ *  A previous version of this comment cited "the hand-written Half Moon heads-up
+ *  (2026-09-14, 230 chars)" as the specimen. It was not hand-written: the Log carries
+ *  five recap_draft_posted rows for that pair at 2026-09-14T02:29-02:35Z, and this
+ *  session had read them before quoting the message as human. Corroborating a dealt
+ *  rate with the generator's own output is the loop these rates exist to avoid, so the
+ *  specimen is struck and the band statistic, which is measured over the archive,
+ *  stands on its own. Dealing 3 to a
  *  heads-up is the numberedList mistake again: a digest rate applied to a register
  *  that does not share it. */
 export const GAPS = {
@@ -321,74 +322,45 @@ export function dealGap(seed, genre) {
   return table[0].n;  // float slack at the tail lands on that register's usual gap
 }
 
-/** Subject shapes, drawn per email.
+/** The subject, dealt as FEATURES at measured rates.
  *
- *  The archive cannot teach this. `messages.jsonl` has NO subject field: the
- *  scraper built thread titles from body first lines (#30), so every "subject"
- *  statistic derivable from the vault is measuring the scrape. The shapes below
- *  come from REAL subjects in the live Sent folder, which is the only honest
- *  source, and the sample is small: about seven event announcements. Treat the
- *  weights as informed placeholders, not measurements, and re-derive them as the
- *  Sent folder grows.
+ *  Three versions of this existed before the right one. First six shape templates
+ *  with p values I assigned by hand (0.34/0.20/0.16/0.14/0.10/0.06) off seven
+ *  subjects picked out of the mailbox because they looked event-shaped. Then the same
+ *  templates with a caveat telling the model not to copy their words, added because
+ *  the generator lifted "Rapid Rewards Brunch" onto a laser harp build day. Now:
+ *  independent draws at rates measured over 33 real human subjects
+ *  (analysis/subject-shapes.mjs), with no example text to lift at all.
  *
- *  Verbatim, the ones these are drawn from:
- *    Rapid Rewards Brunch. Sun. 1/4 @ 1pm, 920 St. Mary
- *    Rapid Rewards Brunch: Today, Sun. 1/18 @1pm, Meeting @3pm
- *    Content + Builds Tonight | 6 pm at NOLA Brewing
- *    [Carnival26] Jumpsuit Dropoff 1/21 5-8pm
- *    Wednesday: Half Moon
- *    Wings tonight at Half Moon
- *    long meeting / laser harps 2027 / clubhouse?
+ *  What the larger sample changed, all against the hand-picked seven:
+ *    only 42% of real subjects carry any day/time/date
+ *    among those: day word 79%, calendar date 50%, clock time 43%, venue 29%
+ *    median length 26 characters, range 8 to 63
+ *    0 of 33 begin "N. "
+ *  The full "name. Sun. 1/4 @ 1pm, venue" form I had weighted heaviest is 2 of 14.
  *
- *  What every one of them does and aedile never has: names the THING, then the
- *  when, then the where, with real punctuation between. What aedile produced
- *  instead was `Hi friends!` (the body's opening, twice), `-1. THESE NOTES ARE
- *  FROM MEMORY...`, and four bare descriptions with no time and no venue. The
- *  slash form is attested as a human REWRITE: someone replaced a generated
- *  `Hi friends!` with `long meeting / laser harps 2027 / clubhouse?` before
- *  sending.
- *
- *  Zach, 2026-09-26: "we need a subject generator, and use the Nelson Street era
- *  messages to define it with stochastic features."
+ *  ERA: those 33 are the successor era. Abe-era subjects exist in no store, because
+ *  the scraper discarded Subject: headers (#30) and the Office mailbox holds no mail
+ *  before 2025. So this is the one dealer NOT calibrated on the voice the rest of
+ *  this file imitates, and it says so rather than pretending otherwise.
  */
-export const SUBJECT_SHAPES = [
-  { key: 'namedWhenWhere', p: 0.34,
-    say: 'SUBJECT: name the thing, then when, then where, the way the list already does it: '
-       + '`Rapid Rewards Brunch. Sun. 1/4 @ 1pm, 920 St. Mary`. Use a full stop or a colon '
-       + 'between the parts and `@` before a time. Carry the venue.' },
-  { key: 'todayFirst', p: 0.20,
-    say: 'SUBJECT: lead with the day word, then the rest of the logistics: '
-       + '`Rapid Rewards Brunch: Today, Sun. 1/18 @1pm, Meeting @3pm`. Both times if there are two.' },
-  { key: 'dayColonPlace', p: 0.16,
-    say: 'SUBJECT: just the day and the place, nothing else: `Wednesday: Half Moon`. Short is correct.' },
-  { key: 'thingAtPlace', p: 0.14,
-    say: 'SUBJECT: the thing, the day word, and the place, as a phrase: '
-       + '`Wings tonight at Half Moon`. No colon, no date.' },
-  { key: 'pipeOrSlash', p: 0.10,
-    say: 'SUBJECT: separate two or three parts with ` | ` or ` / `: '
-       + '`Content + Builds Tonight | 6 pm at NOLA Brewing`, `long meeting / laser harps 2027 / clubhouse?`.' },
-  { key: 'bracketTag', p: 0.06,
-    say: 'SUBJECT: open with a bracketed campaign tag, then the thing and its logistics: '
-       + '`[Carnival26] Jumpsuit Dropoff 1/21 5-8pm`. Only if the notes name a campaign.' },
-];
-
-/** Draw one subject shape. Seeded like the rest, with its own suffix so it varies
- *  independently of the device hand. */
-/** The examples in SUBJECT_SHAPES are SHAPES, not text to reuse. The generator's
- *  first run with them lifted "Rapid Rewards Brunch" wholesale onto a laser harp
- *  build day; `invented-name` blocked it, which is the right outcome and the wrong
- *  reason to need it. This warning rides along with whichever shape is drawn. */
-const SUBJECT_CAVEAT = ' The example is the SHAPE only: do not reuse any of its'
-  + ' words, names or venues, only its arrangement and punctuation.';
-
-export function dealSubject(seed) {
+export function dealSubject(seed, w) {
+  if (!w) return '';   // no measured weights pushed in: say nothing about the subject
   const rand = seed === undefined ? Math.random : rng(String(seed) + ':subject');
-  let r = rand();
-  for (const sh of SUBJECT_SHAPES) {
-    if (r < sh.p) return sh.say + SUBJECT_CAVEAT;
-    r -= sh.p;
-  }
-  return SUBJECT_SHAPES[0].say + SUBJECT_CAVEAT;  // float slack -> commonest shape
+  const take = p => rand() < p;
+  const parts = [];
+  if (take(w.dayWord)) parts.push('the day word (a weekday name, or today/tomorrow/tonight)');
+  if (take(w.calDate)) parts.push('the calendar date as M/D');
+  if (take(w.clockTime)) parts.push('the start time');
+  if (take(w.venue)) parts.push('the venue');
+  const punct = take(w.colon) ? 'a colon' : take(w.fullStop ?? 0.21) ? 'a full stop' : 'no separator at all';
+  const lines = [`SUBJECT: about ${w.medianChars} characters. Name the thing, and include `
+    + (parts.length ? parts.join(', ') + '.' : 'no date, time or venue at all: just the thing.')];
+  lines.push(`Separate the parts with ${punct}. Never number the subject and never make it`
+    + ' the body\'s first line.');
+  if (take(w.allCaps)) lines.push('Put one word of the subject in ALL-CAPS.');
+  if (take(w.lowerOpen)) lines.push('Start the subject with a lowercase letter.');
+  return lines.join(' ');
 }
 
 /** Deal at most one flourish. Same seeding contract as dealDevices. */

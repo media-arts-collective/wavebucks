@@ -31,7 +31,8 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { callModel, parseDecision } from '../brain/model.mjs';
 import { runChecks, report } from './checks.mjs';
-import { formBlock } from '../analysis/headsup-form.mjs';
+import { formBlock, measuredRates } from '../analysis/headsup-form.mjs';
+import { subjectWeights } from '../analysis/subject-shapes.mjs';
 import { dealDevices, dealFlourish, dealTypo, dealSignoff, dealGap, dealSubject, devicesBlock } from './devices.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -395,16 +396,18 @@ async function main(argv) {
   // Which optional devices this recap gets. Presentation only -- it never
   // touches what the recap SAYS. A single generation cannot reproduce a
   // corpus frequency on its own, so the caller rolls and tells it.
-  const hand = dealDevices(undefined, genre, beat);
+  // The dealt rates for a heads-up are measured, not tabulated: see
+  // analysis/headsup-form.mjs. A recap keeps devices.mjs's own pool rates.
+  const hand = dealDevices(undefined, genre, beat, genre === 'headsup' ? measuredRates() : {});
   const flourish = dealFlourish();
   const typo = dealTypo();
   const signoff = dealSignoff();
   const gap = dealGap(undefined, genre);
-  const subjectShape = dealSubject();
+  const subjectShape = dealSubject(undefined, subjectWeights());
   const dealt = Object.entries(hand).filter(([, v]) => v).map(([k]) => k);
   console.error(`-- genre: ${genre}${beat ? ` (beat: ${beat})` : ''}`);
   console.error(`-- devices: ${dealt.join(', ') || 'none'}; gap ${gap}`);
-  console.error(`-- subject shape: ${subjectShape.slice(9, 60)}...`);
+  console.error(`-- subject: ${subjectShape.slice(9, 96)}`);
 
   const lead = leadTimeBlock(eventDate, beat, asOf);
   const leadDays = eventDate ? leadTimeBlock.days : undefined;
@@ -420,7 +423,7 @@ async function main(argv) {
     die(String(err.message || err), 5);
   }
 
-  const findings = runChecks(decision, notes + '\n' + (eventDate || ''), vault, { genre, beat, leadDays });
+  const findings = runChecks(decision, notes + '\n' + (eventDate || ''), vault, { genre, beat, leadDays, hand });
 
   writeFileSync(out, JSON.stringify({ ...decision, _checks: findings, _notes: notes }, null, 2));
   console.error(`-- wrote ${out}`);

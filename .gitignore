@@ -33,3 +33,7 @@ aedile/recap/*.page.html
 # Per-machine play state: sha1s of archived message bodies. No reason to publish
 # which of a private list's messages have been used.
 aedile/recap/.duel-used.json
+
+# Python bytecode. ingest.test.py imports ingest.py by path, which writes it.
+__pycache__/
+*.pyc

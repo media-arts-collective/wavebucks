@@ -183,9 +183,16 @@ export function formBlock() {
   // this function -- a hand-copied count inside the very block written to stop numbers
   // being hand-copied, and it went stale the moment the pool changed size.
   const digitsFirst = POOL.filter(x => /\d/.test(x.m.body.trim().split('\n')[0])).length;
-  say.push(`- **Write about ${median(wA)} words.** That is the target, not a floor. Half of these`,
-    `  messages fall between ${q1} and ${q3} words, but aim at ${median(wA)}: a draft near the bottom of`,
-    '  that range is thin, not concise.',
+  // Both directions matter and they were in tension. "The target, not a floor" was
+  // written to stop 55-word drafts; then the truncation turned out to be strongly
+  // length-biased, which makes the measured median a LOWER BOUND on the real one. So
+  // the instruction is now: at least this, and the truth is higher. Saying only
+  // "target" would have capped the generator at a figure known to be too low.
+  say.push(`- **Write at least ${median(wA)} words, and longer is closer to right.** Half of these`,
+    `  messages fall between ${q1} and ${q3} words. ${median(wA)} is a FLOOR, not a centre: about`,
+    '  a third of the archive survives only as ~100-character previews, the truncation hit',
+    '  long messages hardest, and the messages that survived are therefore the short ones.',
+    '  A draft near the bottom of that range is thin, not concise.',
     `- **About ${median(paras)} paragraph blocks.**`,
     `- **If you number items, each item is a TOPIC with real content: median ${median(itemLens)} words,`,
     `  and not one of the ${itemLens.length} items in the corpus is under 10.** Numbering a bare clock`,

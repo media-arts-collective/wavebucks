@@ -193,8 +193,14 @@ def expand_all(page):
     trail, which is not the message and which `normalizeBody` strips everywhere else.
     """
     btn = page.query_selector('[aria-label="Expand all"]')
-    if not btn:
-        return  # a single-message topic arrives expanded and has no such button
+    if not btn or not btn.is_visible():
+        # A single-message topic arrives expanded. Some render the button anyway but
+        # HIDDEN, and clicking a hidden element fails actionability with "Element is not
+        # visible" -- which cost two topics per pass until this checked. Skipping it is
+        # safe only because of the section-count invariant in the caller: if messages are
+        # in fact still collapsed, they parse to nothing and the topic fails loudly
+        # rather than being banked short.
+        return
     try:
         btn.click(timeout=10000)
     except Exception:
@@ -212,6 +218,9 @@ def expand_all(page):
         timeout=20000)
 
 
+TIME_RE = re.compile(r'\d{1,2}:\d{2}:\d{2}')
+
+
 def messages_on_page(page, subject):
     """One record per message, read from its own section element.
 
@@ -221,9 +230,11 @@ def messages_on_page(page, subject):
     handle than `[data-message-id]`, which matches three menu buttons here, all carrying
     the same id, with bodies of "Delete" and "Copy link".
     """
+    texts = [t for t in (PUA_RE.sub('', el.inner_text())
+                         for el in page.query_selector_all(MSG_SEL))
+             if TIME_RE.search(t)]
     out = []
-    for el in page.query_selector_all(MSG_SEL):
-        t = PUA_RE.sub('', el.inner_text())
+    for t in texts:
         m = HEADER_RE.match(t)
         if not m:
             continue
@@ -234,7 +245,12 @@ def messages_on_page(page, subject):
             'date': m.group('date').strip(),
             'body': clean_body(t[m.end():]),
         })
-    return out
+    # The count of message-shaped sections comes back too. A record per section or the
+    # topic does not land: a COLLAPSED message parses to nothing (it renders no address
+    # for HEADER_RE to match), so without this a 3-message topic could bank only its one
+    # auto-expanded message and enter the ledger looking complete. That is the snippet
+    # defect's exact shape -- quiet, plausible, and only visible in aggregate.
+    return out, len(texts)
 
 
 def as_mbox(records, topic_id):
@@ -320,7 +336,12 @@ def scrape(limit=None, out_path=None, verbose=False, headless=True):
                         break
 
                     expand_all(page)
-                    records = messages_on_page(page, subject)
+                    records, expected = messages_on_page(page, subject)
+                    if records and len(records) < expected:
+                        failed += 1
+                        print(f'  [{n}/{len(todo)}] {tid}: PARTIAL {len(records)}/{expected}'
+                              f' messages parsed -- not banked, will retry', flush=True)
+                        continue
                     if not records:
                         failed += 1
                         # The page text, not just the count. A zero-message topic is

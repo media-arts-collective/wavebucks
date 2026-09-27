@@ -142,6 +142,15 @@ Two rules the corpus turned out not to support, both deleted the same day:
   `N. ` (2.9%), and the real subjects are never numbered. The prompt rule and the
   `subject-body-mismatch` check are gone; the traits in `recap.md` now come from
   the live group listing.
+
+  **Settled 2026-09-26 against real `Subject:` headers**, which is the outside
+  source this file asks for two paragraphs down. `aedile/analysis/ingest.py
+  --gmail` pulled 157 messages out of the krewe mailbox with their headers
+  intact; 35 are thread-starters (no `Re:`/`Fwd:`). **0 of 35 restate the body
+  opening, and 0 of 35 begin `N. `.** Real ones look like `Rapid Rewards Brunch.
+  Sun. 1/4 @ 1pm, 920 St. Mary`, `2026 patch`, `[Carnival26] Jumpsuit Dropoff
+  1/21 5-8pm` — a standing headline, not the first sentence. The scrape's
+  382/385 was the pipeline end to end.
 - The three-blank-line default (#27). Now a per-email draw (`dealGap`) at the
   measured 54/34/11, not an instruction. Zach: *"defaulting to 3 spaces as a rule
   is wrong, it should be stochastic."* The distribution itself stays UNVERIFIED as
@@ -239,8 +248,12 @@ with `AEDILE_CONTEXT.consolidation.md`. It was replaced by:
   not auto-applied) — not part of the runtime path, and not a reason to
   reconsider the two points above.
 - The historical archive has already been imported into the `Messages`
-  tab (the local `messages.jsonl` export and the scraper that produced it
-  are gone now that migration's done — see `README.md`'s "Historical
+  tab, **defect and all** — measured 2026-09-26, 489 of the 500 newest rows
+  are legacy-imported and 0 of those carry a Subject. `aedile/analysis/
+  ingest.py` is the replacement for the scraper that vanished; it merges
+  sources rather than replacing, and `--audit` reprints every number this
+  file quotes. The original `messages.jsonl` export and the scraper that
+  produced it are gone (migration's done — see `README.md`'s "Historical
   archive import" section for what re-running this would take). The
   `Personality`/`Threads`/`Shards`/`ConsolidationLog` sheet tabs themselves
   are left in place (orphaned, not auto-deleted) since they hold historical data a

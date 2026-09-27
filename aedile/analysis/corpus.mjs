@@ -236,6 +236,13 @@ export const isFullBody = m => m.body.trim().length > 101;
 // successor era is unmeasurable from this archive for a second reason on top of the
 // address handoff.
 //
+// msk@kreweofvaporwave.com IS KAREN (Zach, 2026-09-26). A third identity on the
+// operator role, signing `MsK`, 4 rows from 2025-11-18 of which 1 is itself a snippet.
+// `isOperator` does not match it (`msk` does not start with `kreweofv`) and it stays
+// out deliberately: 3 usable messages cannot carry a rate, and folding a distinct
+// author into the operator pool is what the one-account-two-authors note above warns
+// against. Named here so the identity question is closed rather than rediscovered.
+//
 // Why this is a worse defect than the missing subjects, in the form the argument needs:
 // a missing Subject is a field nobody has and everybody can see is missing. A preview
 // snippet is a field everybody has and nobody can see is wrong. The row looks complete,

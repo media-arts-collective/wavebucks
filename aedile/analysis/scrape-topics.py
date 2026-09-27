@@ -92,6 +92,30 @@ def load_cookies(path):
     return out
 
 
+def refresh_cookies(ctx):
+    """Re-export the live container session into the browser context.
+
+    THE COOKIE FILE IS A SNAPSHOT OF A ROTATING CREDENTIAL. Measured 2026-09-27: a run
+    scraped 18 topics, then every subsequent page came back as the signed-out shell. A
+    fresh export of the SAME container made the SAME topic (`jx04kDZAANg`) scrape
+    immediately -- so the session had not been revoked and this was not rate limiting; a
+    throttled host does not hand you a working credential one second later. Google rotates
+    the session cookies, Firefox writes the new values, and the exported file goes stale
+    where it sits. Any run longer than a few dozen pages outlives its own credential.
+
+    So the export is re-run mid-scrape rather than being a precondition. It reads the
+    live browser's cookie DB, which is the only place the current values exist.
+    """
+    import subprocess
+    exporter = Path(__file__).resolve().parent / 'container-cookies.py'
+    # Fail loud: a refresh that quietly did nothing would restore the exact silent
+    # stall this exists to end.
+    subprocess.run([sys.executable, str(exporter)], check=True,
+                   stdout=subprocess.DEVNULL)
+    ctx.clear_cookies()
+    ctx.add_cookies(load_cookies(COOKIES))
+
+
 def topic_ids(path=VAULT_JSONL):
     """Every distinct topic id the corpus already knows about, oldest first."""
     seen = {}
@@ -138,19 +162,61 @@ def clean_body(raw):
     return re.sub(r'\n{3,}', '\n\n', b).strip()
 
 
-def split_messages(page_text, subject):
-    """One record per message, split on the rendered sender/date header."""
-    hits = list(HEADER_RE.finditer(page_text))
+MSG_SEL = 'section[aria-expanded]'
+
+
+def expand_all(page):
+    """Expand every message in the topic before reading it.
+
+    THIS IS THE WHOLE SCRAPE. A COLLAPSED message renders its sender MASKED with no
+    address at all (`mburns70124`) and its body TRUNCATED mid-sentence ("ESPECIALLY if
+    you have a") -- which is the same ~101-character preview defect this file exists to
+    eliminate, reappearing one page deeper than the list view where it was first found.
+    Google expands only the LAST message of a topic by default, so reading the page as
+    rendered silently keeps single-message topics and drops every discussion: 27 topics
+    banked, all of them `1 msg`, while every multi-message topic "parsed to zero".
+
+    Clicking `Expand all` fixes both halves at once. Measured on topic `TqKFCHIWJEw`:
+    `mburns70124` becomes `mburns70124<mburns70124@gmail.com>` and the three bodies come
+    out 308, 846 and 493 characters instead of one preview.
+
+    `Show trimmed content` is deliberately NOT clicked -- that expands the quoted reply
+    trail, which is not the message and which `normalizeBody` strips everywhere else.
+    """
+    btn = page.query_selector('[aria-label="Expand all"]')
+    if not btn:
+        return  # a single-message topic arrives expanded and has no such button
+    btn.click()
+    # Waiting on the attribute, not a guessed sleep: the sections expand asynchronously
+    # and a fixed delay reads some of them still masked and truncated, which is the
+    # failure mode above wearing a smaller number.
+    page.wait_for_function(
+        "() => [...document.querySelectorAll('section[aria-expanded]')]"
+        ".every(s => s.getAttribute('aria-expanded') === 'true')",
+        timeout=20000)
+
+
+def messages_on_page(page, subject):
+    """One record per message, read from its own section element.
+
+    Per section rather than a regex over the whole page: each section's text STARTS with
+    the header, so message boundaries come from the DOM instead of being inferred from
+    where the next header happens to match. `section[aria-expanded]` is also a far better
+    handle than `[data-message-id]`, which matches three menu buttons here, all carrying
+    the same id, with bodies of "Delete" and "Copy link".
+    """
     out = []
-    for i, m in enumerate(hits):
-        body = page_text[m.end():(hits[i + 1].start() if i + 1 < len(hits) else len(page_text))]
-        body = clean_body(body)
+    for el in page.query_selector_all(MSG_SEL):
+        t = PUA_RE.sub('', el.inner_text())
+        m = HEADER_RE.match(t)
+        if not m:
+            continue
         out.append({
             'subject': subject,
             'addr': m.group('addr').strip(),
             'display': m.group('display').strip(),
             'date': m.group('date').strip(),
-            'body': body,
+            'body': clean_body(t[m.end():]),
         })
     return out
 
@@ -179,7 +245,7 @@ def as_mbox(records, topic_id):
 
 
 def scrape(limit=None, out_path=None, verbose=False, headless=True):
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
     if not COOKIES.exists():
         sys.exit(f'no session at {COOKIES} -- run container-cookies.py first')
@@ -202,38 +268,54 @@ def scrape(limit=None, out_path=None, verbose=False, headless=True):
         try:
             for n, tid in enumerate(todo, 1):
                 url = f'https://groups.google.com/g/{GROUP}/c/{tid}'
+                t0 = time.monotonic()
                 try:
-                    page.goto(url, wait_until='domcontentloaded', timeout=60000)
-                    # Poll for the message header rather than sleeping a guessed interval.
-                    # A fixed 2.5s read the nav chrome and none of the conversation, which
-                    # parses to zero messages and is indistinguishable from an empty topic.
-                    # Fast pages now cost ~1s instead of 2.5, slow ones get up to 25.
-                    text, subject = '', ''
-                    deadline = time.monotonic() + 25
-                    while time.monotonic() < deadline:
-                        page.wait_for_timeout(700)
+                    # THE SESSION GATE, checked every page and not just the first, with one
+                    # refresh-and-retry. A lapsed session renders the public shell, which
+                    # parses to zero messages and is indistinguishable from an empty topic,
+                    # so 600 pages of nothing look exactly like a slow scrape. Two gated
+                    # reads in a row on the SAME topic means the refresh did not help and it
+                    # stops -- no third attempt, no evasion.
+                    for attempt in (0, 1):
+                        page.goto(url, wait_until='domcontentloaded', timeout=60000)
+                        # Wait on the message sections, not on a header regex over the
+                        # page text. The old poll could not tell "still loading" from
+                        # "loaded, but every message is collapsed", so it burned its full
+                        # 26-second budget on every multi-message topic and then reported
+                        # zero messages.
+                        try:
+                            page.wait_for_selector(MSG_SEL, timeout=25000)
+                        except PWTimeout:
+                            pass
                         text = page.inner_text('body')
-                        if HEADER_RE.search(text):
+                        subject = (page.title() or '').strip()
+                        if not ('Content unavailable' in text or (
+                                'Sign in' in text and 'My groups' not in text)):
                             break
-                        if 'Content unavailable' in text:
-                            break
-                    subject = (page.title() or '').strip()
-
-                    # THE SESSION GATE. Checked every page, not just the first: a session
-                    # can lapse mid-run and the failure mode is 628 pages of a public shell
-                    # that parse to zero messages and look like an empty group.
-                    if 'Content unavailable' in text or (
-                            'Sign in' in text and 'My groups' not in text):
-                        print(f'\nSTOP: not signed in at topic {n} ({tid}). '
-                              f'Re-run container-cookies.py; Firefox must have written the '
-                              f'session to disk.', flush=True)
+                        if attempt == 0:
+                            print(f'  [{n}/{len(todo)}] {tid}: signed out -- '
+                                  f're-exporting the container session', flush=True)
+                            refresh_cookies(ctx)
+                    else:
+                        print(f'\nSTOP: still not signed in at topic {n} ({tid}) after a '
+                              f'fresh export. The container itself is signed out -- sign '
+                              f'{GROUP} back in, then re-run; the ledger resumes.',
+                              flush=True)
                         break
 
-                    records = split_messages(text, subject)
+                    expand_all(page)
+                    records = messages_on_page(page, subject)
                     if not records:
                         failed += 1
+                        # The page text, not just the count. A zero-message topic is
+                        # indistinguishable from a stall by the ledger alone -- the ledger
+                        # only grows on success -- and every guess about WHY was wrong until
+                        # this printed what actually rendered.
                         if verbose:
-                            print(f'  [{n}/{len(todo)}] {tid}: no messages parsed', flush=True)
+                            samp = ' / '.join(PUA_RE.sub('', text).split('\n')[:6])[:200]
+                            print(f'  [{n}/{len(todo)}] {tid}: no messages parsed '
+                                  f'({len(text)}c, {time.monotonic() - t0:.0f}s) '
+                                  f'title={subject[:40]!r} text={samp!r}', flush=True)
                         continue
 
                     # Flush per topic, so a crash costs the topic in flight and nothing
@@ -252,7 +334,12 @@ def scrape(limit=None, out_path=None, verbose=False, headless=True):
                 except Exception as e:
                     # One topic dying costs one topic. duel.mjs learned this the hard way.
                     failed += 1
-                    print(f'  [{n}/{len(todo)}] {tid}: FAILED {type(e).__name__}', flush=True)
+                    # The exception's first line, not just its class. `TimeoutError` alone
+                    # cannot tell a 60s page load from a section that refused to expand,
+                    # and those want different fixes.
+                    why = (str(e).splitlines() or [''])[0][:120]
+                    print(f'  [{n}/{len(todo)}] {tid}: FAILED {type(e).__name__}: {why}',
+                          flush=True)
         finally:
             browser.close()
 

@@ -281,19 +281,27 @@ export function runChecks(d, notes, vault, opts = {}) {
   // reports the length difference as a voice problem. Fourth instance of a digest
   // rate applied to the terse register, after numberedList, the blank-line gap and
   // the spacing checks.
-  if (!/!/.test(body) && !(headsup && body.length <= 300)) {
+  // The population matters more than the length. Among ANNOUNCEMENTS at lead 0-1
+  // day (pre-2025, the messages this genre imitates) the rate is 93% at 150-400
+  // chars, 94% at 400-1000 and 95% above, and only below 150 chars does it fall, to
+  // 60% on n=5 with a CI of [23,88] -- a sample that cannot resolve anything. The
+  // earlier 49%-at-150-chars figure was measured over ALL operator messages of any
+  // kind, which is the wrong population: a two-line "the door code is 1234" is not
+  // an announcement. So the exemption is now 150 chars, not 300.
+  if (!/!/.test(body) && !(headsup && body.length <= 150)) {
     add('warn', 'no-exclamation',
-      `no exclamation mark; ${body.length <= 300 ? '49-69% of archived messages this short have one' : '92% of the archive has at least one, averaging 3.5 per message'}`);
+      'no exclamation mark; 93-95% of the operator\'s day-before announcements carry at least one');
   }
 
-  // Numbering cuts the opposite way per genre. The digest numbers almost
-  // everything; a heads-up should not, and numbering there is a borrowed digest
-  // trait rather than a missing one.
+  // Numbering is NOT checked for a heads-up, and that is deliberate. It measures
+  // 44% of the operator's day-before Sunday messages with a CI of [25, 66]: a
+  // coin-flip, dealt by devices.mjs at that rate. A `numbered-headsup` warn lived
+  // here briefly, written off AEDILE_CONTEXT.headsup.md's claim that "a
+  // single-venue heads-up should not be numbered", and it fired on drafts whose own
+  // dealt hand had told them to number. A device the dealer owns must not also be
+  // graded here, or the two halves of the generator disagree about the same draft.
   const bodyItems = itemNumbers(body);
-  if (headsup && bodyItems.length) {
-    add('warn', 'numbered-headsup',
-      `numbers ${bodyItems.length} item(s); numbering is not a heads-up trait, it scales with length and belongs to the digest, and a single-venue notice should not be numbered`);
-  } else if (!headsup && !bodyItems.length) {
+  if (!headsup && !bodyItems.length) {
     add('warn', 'no-numbering', 'no numbered items -- the archive numbers almost everything');
   }
 
@@ -306,7 +314,7 @@ export function runChecks(d, notes, vault, opts = {}) {
   // over messages.jsonl the real rate is 40%. The check is still worth firing;
   // quoting the vault's number at the operator was repeating a fabrication, so
   // it now cites the measured figure instead.
-  if (vault?.motifs?.['all-caps-emphasis'] && !/\b[A-Z]{4,}\b/.test(body)) {
+  if (!headsup && vault?.motifs?.['all-caps-emphasis'] && !/\b[A-Z]{4,}\b/.test(body)) {
     add('warn', 'no-caps',
       'no ALL-CAPS emphasis; 40% of the archive\'s messages carry it');
   }

@@ -59,30 +59,26 @@ place, time, date; a one-line intro if the venue is new; what the krewe brings
 RSVP mechanics (the corpus commands attendance, it doesn't collect RSVPs); any
 fact not given; any taste verdict; new recipients.
 
-## Form (per beat)
-Both beats live in the **terse register**. Numbering is NOT a lock-in trait: it
-scales with length (14% / 50% / 93% for short/mid/long messages) and belongs to
-the omnibus *digest*, a separate genre. Reach for a numbered list only when there
-are genuinely many items; a single-venue heads-up should not be numbered.
-- **lock-in**: carries the newly-firmed facts (place/time), a one-line intro if
-  the venue is new, and an optional solicited question. Differs from the nudge by
-  *framing and timing*, not structure, usually 1 to 2 lines more, not a list.
-**Length depends on the KIND of gathering, and this is the thing most easily got
-wrong.** Measured per event over 45 Sunday meetings in the archive: the last
-message before the event (lead 0 to 1 day, n=18) runs a **median 1024 characters /
-187 words**, restates the address 83% of the time, carries one clock time, and has
-an exclamation mark in **100%** of cases. Half of them are still numbered. A Sunday
-work meeting is a substantial message.
+## Form
 
-The bar social is the opposite: the real Half Moon nudge is two lines and 120
-characters. So do not reach for the one-liner unless the gathering is that light.
-A build day with a brunch half and a work half gets the long form, and generating
-60 words for it is about five times too thin.
+Measured, and appended to this file at prompt-assembly time by
+`analysis/headsup-form.mjs`. It is not written here because the version that WAS
+written here was wrong twice in one session, in the same direction both times:
 
-- **nudge**: restates place + time compactly (short announcements state place 90%
-  / time 95%, so the nudge does NOT omit logistics), present-tense/imperative, drops
-  the intro and questions. Optionally ALL-CAPS one exhortation (`COME THROUGH`).
-  The barest form is a single unsigned line (`1pm tomorrow! 826 Rosedale`).
+- "Both beats live in the **terse register**." The day-before message for a Sunday
+  gathering runs a median 134 words, middle half 52 to 279. There is no terse rule.
+- "Numbering is NOT a lock-in trait... a single-venue heads-up should not be
+  numbered." 44% of them are numbered, CI [25, 66].
+
+Both came from generalising one population to another, which is what a prose
+snapshot invites. The generated block states its own n and its own confidence
+interval, and an interval that spans the decision is reported as undecidable rather
+than rounded into a rule.
+
+The beats still differ in FUNCTION, which is not a measurement and stays here:
+- **lock-in** carries newly-firmed facts and may solicit a taste call.
+- **nudge** assumes everything is known and just summons. It still states place and
+  time; it does not omit logistics.
 
 ## Voice invariants (borrowed: corpus-wide, NOT genre-specific)
 These are shared krewe-voice traits, already quantified empirically in

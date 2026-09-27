@@ -343,20 +343,31 @@ const levelsOf = (d, opts) => runChecks(d, NUDGE_NOTES, VAULT, opts)
   }
 }
 
-// Numbering inverts: the digest numbers almost everything, a single-venue notice
-// should not. Same body, opposite finding.
+// Numbering is NOT graded for a heads-up, in either direction. It measures 44% of
+// the operator's day-before Sunday messages, CI [25, 66], and devices.mjs deals it
+// at that rate. A `numbered-headsup` warn used to live here, written off prose that
+// said a single-venue heads-up "should not be numbered", and it fired on drafts
+// whose own dealt hand had told them to number. Whatever the dealer owns, this file
+// does not grade.
 {
   const numbered = { subject: 'build day tomorrow',
     body: '1. BUILD DAY IS TOMORROW. 920 St. Mary, 1pm!\n\n<3\nSM', confidence: 'high' };
-  const got = runChecks(numbered, NUDGE_NOTES, VAULT, { genre: 'headsup' })
-    .map(f => f.id);
-  const ok = got.includes('numbered-headsup') && !got.includes('no-numbering');
-  if (ok) { passed++; console.log('  ok   a numbered heads-up is warned at, not a numberless one'); }
+  const plain = { subject: 'build day tomorrow',
+    body: 'Build day tomorrow. 920 St. Mary, 1pm!\n\n<3\nSM', confidence: 'high' };
+  const ids = d => runChecks(d, NUDGE_NOTES, VAULT, { genre: 'headsup' }).map(f => f.id);
+  const a = ids(numbered), b = ids(plain);
+  const ok = !a.includes('numbered-headsup') && !a.includes('no-numbering')
+          && !b.includes('numbered-headsup') && !b.includes('no-numbering');
+  if (ok) { passed++; console.log('  ok   numbering is not graded either way for a heads-up'); }
   else {
     failed++;
-    console.log('  FAIL a numbered heads-up is warned at, not a numberless one');
-    console.log(`       got [${got.join(', ')}]`);
+    console.log('  FAIL numbering is not graded either way for a heads-up');
+    console.log(`       numbered=[${a}] plain=[${b}]`);
   }
+  // A recap still gets the warn: that population really does number almost everything.
+  const asRecap = runChecks(plain, NUDGE_NOTES, VAULT, {}).map(f => f.id);
+  if (asRecap.includes('no-numbering')) { passed++; console.log('  ok   a recap is still warned for not numbering'); }
+  else { failed++; console.log(`  FAIL a recap is still warned for not numbering -- got [${asRecap}]`); }
 }
 
 // Spacing is skipped rather than passed: a two-line notice has no modal gap.

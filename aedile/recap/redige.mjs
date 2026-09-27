@@ -31,6 +31,7 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { callModel, parseDecision } from '../brain/model.mjs';
 import { runChecks, report } from './checks.mjs';
+import { formBlock } from '../analysis/headsup-form.mjs';
 import { dealDevices, dealFlourish, dealTypo, dealSignoff, dealGap, dealSubject, devicesBlock } from './devices.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -183,12 +184,18 @@ export function buildSystemPrompt(vault, genre = 'recap') {
   // The genre file ENDS with its output contract, so it goes last: the two blocks
   // that are not the contract sit above it. A prompt whose final words are
   // anything other than "respond with only JSON" gets prose some of the time.
+  // The heads-up genre's form is COMPUTED, not quoted: headsup.md carries the
+  // genre's purpose and the beats' functions, and analysis/headsup-form.mjs
+  // measures the shape from the corpus every run. A figure in a prompt file is a
+  // snapshot, and both snapshots this file used to carry were falsified the first
+  // time anyone measured them.
   return [
     contextBody('AEDILE_CONTEXT.core.md'),
     `## Two real recaps from the archive\n\nMatch this register. Do not copy their content.\n\n${examples}`,
     closed,
     contextBody(g.context),
-  ].join('\n\n');
+    genre === 'headsup' ? formBlock() : '',
+  ].filter(Boolean).join('\n\n');
 }
 
 /** Lead time, computed HERE and never by the model.

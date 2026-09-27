@@ -125,15 +125,26 @@ function rng(seed) {
  *  A forced `false` here, rather than a second probability, because these are
  *  not "rarer in this genre", they are wrong in it. The per-beat rates that ARE
  *  probabilities are still hand-set placeholders and stay open in #49. */
-const GENRE_OFF = {
-  headsup: ['numberedList'],
-  // A nudge is the morning-of summons and asks for nothing: AEDILE_CONTEXT.
-  // headsup.md has it "present-tense/imperative, drops the intro and questions",
-  // and the real Half Moon nudge is two lines that close on an imperative ("Bring
-  // a buddy") where its own lock-in two days earlier had carried the ask ("Reply
-  // with bars."). Same voice, same event, opposite about soliciting. Dealt at the
-  // pool's 0.62 the question came back anyway, so the beat has to suppress it.
-  'headsup:nudge': ['numberedList', 'question'],
+/** Per-genre probability overrides, measured -- not suppressions.
+ *
+ *  This started as GENRE_OFF, a list of devices forced to `false` for a heads-up on
+ *  the authority of AEDILE_CONTEXT.headsup.md's prose. Measured against the 18
+ *  day-before/day-of Sunday-gathering messages Abe actually sent (pre-2025, see
+ *  analysis/headsup-form.mjs), that prose was wrong in both places:
+ *
+ *    numbering   headsup.md: "NOT a lock-in trait"        measured 44%  CI[25,66]
+ *    questions   headsup.md: the nudge "drops questions"  measured 33%  CI[16,56]
+ *
+ *  Forcing either to zero reproduces a rule nobody follows. Both are genuinely
+ *  coin-flips, which is precisely what a dealt probability is for and precisely what
+ *  an instruction cannot express. Zach, 2026-09-26: "we're going to fix heads up
+ *  today using actual statistical measures, triple checked, three different ways."
+ *
+ *  Only rates re-measured on that subpool appear here; the rest keep the 400-4000
+ *  char pool's values, which is a known approximation rather than a silent one.
+ */
+const GENRE_P = {
+  headsup: { greeting: 0.67, numberedList: 0.44, allCaps: 0.44, question: 0.33 },
 };
 
 /** Deal one email its hand. `seed` makes it reproducible; omit for a real
@@ -141,12 +152,11 @@ const GENRE_OFF = {
  *  devices that belong to another register. */
 export function dealDevices(seed, genre, beat) {
   const rand = seed === undefined ? Math.random : rng(seed);
-  const off = new Set(GENRE_OFF[`${genre}:${beat}`] || GENRE_OFF[genre] || []);
+  const over = GENRE_P[`${genre}:${beat}`] || GENRE_P[genre] || {};
   const hand = {};
   for (const d of DEVICES) {
-    hand[d.key] = off.has(d.key) ? false
-      : d.requires && !hand[d.requires] ? false
-      : rand() < d.p;
+    const p = over[d.key] ?? d.p;
+    hand[d.key] = d.requires && !hand[d.requires] ? false : rand() < p;
   }
   return hand;
 }
@@ -364,14 +374,21 @@ export const SUBJECT_SHAPES = [
 
 /** Draw one subject shape. Seeded like the rest, with its own suffix so it varies
  *  independently of the device hand. */
+/** The examples in SUBJECT_SHAPES are SHAPES, not text to reuse. The generator's
+ *  first run with them lifted "Rapid Rewards Brunch" wholesale onto a laser harp
+ *  build day; `invented-name` blocked it, which is the right outcome and the wrong
+ *  reason to need it. This warning rides along with whichever shape is drawn. */
+const SUBJECT_CAVEAT = ' The example is the SHAPE only: do not reuse any of its'
+  + ' words, names or venues, only its arrangement and punctuation.';
+
 export function dealSubject(seed) {
   const rand = seed === undefined ? Math.random : rng(String(seed) + ':subject');
   let r = rand();
   for (const sh of SUBJECT_SHAPES) {
-    if (r < sh.p) return sh.say;
+    if (r < sh.p) return sh.say + SUBJECT_CAVEAT;
     r -= sh.p;
   }
-  return SUBJECT_SHAPES[0].say;  // float slack lands on the commonest shape
+  return SUBJECT_SHAPES[0].say + SUBJECT_CAVEAT;  // float slack -> commonest shape
 }
 
 /** Deal at most one flourish. Same seeding contract as dealDevices. */

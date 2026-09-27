@@ -94,6 +94,67 @@ export function comparable(rows, dow, hour) {
   return { rows: sameBand, how: `all ${want}-band events, any weekday (${DOW[dow]} alone was n=${sameDay.length})`, widened: true };
 }
 
+/** The whole shape: how many notices ONE event gets, and which leads co-occur.
+ *
+ *  This is the question a marginal lead distribution cannot answer and that reading one
+ *  was leading directly to the wrong design. `when.mjs Sunday 1pm` says the day-before
+ *  is the commonest single lead and 2+ days accounts for two thirds; from that I filed a
+ *  two-message schedule on #68. Grouped by EVENT instead, 81% of events get exactly ONE
+ *  notice, and of the events that did get an early one, 71% got no follow-up at all.
+ *
+ *  Both readings are of the same data. The marginal one counts messages, this one counts
+ *  events, and only this one answers "what does an event get".
+ *
+ *  cadence.mjs has said "75% of topics are single-message" since before any of this, and
+ *  brunch.mjs said "1 msg 67%" for Sunday meetings. The figure was on hand twice and a
+ *  two-beat schedule got filed anyway, which is why it is now a command rather than a
+ *  thing to remember. */
+export function sequences({ until = null, dow = null } = {}) {
+  // Grouped by the DAY THE EVENT FALLS ON, which is the only stable event identity
+  // available: two notices about one gathering agree on that and on nothing else.
+  const byDay = new Map();
+  for (const m of load({ until }).filter(x => isAnnouncement(x.body))) {
+    const ev = eventDay(m);
+    if (ev === null) continue;
+    const lead = ev - dayNum(m._d);
+    if (lead < 0 || lead > 10) continue;
+    if (dow !== null && new Date(ev * 86400000).getUTCDay() !== dow) continue;
+    if (!byDay.has(ev)) byDay.set(ev, { day: ev, dow: new Date(ev * 86400000).getUTCDay(), leads: new Set() });
+    byDay.get(ev).leads.add(lead);
+  }
+  return [...byDay.values()].map(e => ({ ...e, leads: [...e.leads].sort((a, b) => b - a) }));
+}
+
+export function reportSequences(opts = {}) {
+  const evs = sequences(opts);
+  const p = console.log, n = evs.length;
+  p(`events with at least one resolvable notice: ${n}` + (opts.dow !== null && opts.dow !== undefined ? `  (${DOW[opts.dow]} only)` : ''));
+  p('');
+  p('NOTICES PER EVENT -- this is the number that decides how many beats to schedule:');
+  const cnt = {};
+  for (const e of evs) cnt[e.leads.length] = (cnt[e.leads.length] || 0) + 1;
+  for (const k of Object.keys(cnt).sort()) {
+    p(`  ${k} notice${k === '1' ? ' ' : 's'}  ${'#'.repeat(cnt[k])} ${cnt[k]} (${Math.round(100 * cnt[k] / n)}%)`);
+  }
+  p('');
+  const early = evs.filter(e => e.leads.some(l => l >= 3 && l <= 6));
+  if (early.length) {
+    const also = f => early.filter(f).length;
+    p(`OF THE ${early.length} EVENTS THAT GOT AN EARLY NOTICE (lead 3-6):`);
+    p(`  also a day-before (lead 1): ${also(e => e.leads.includes(1))} (${Math.round(100 * also(e => e.leads.includes(1)) / early.length)}%)`);
+    p(`  also a morning-of (lead 0): ${also(e => e.leads.includes(0))} (${Math.round(100 * also(e => e.leads.includes(0)) / early.length)}%)`);
+    p(`  no follow-up at all:        ${also(e => !e.leads.includes(1) && !e.leads.includes(0))}`);
+    p('');
+  }
+  p('THE ACTUAL LEAD-SETS, commonest first:');
+  const sets = {};
+  for (const e of evs) { const k = JSON.stringify(e.leads); sets[k] = (sets[k] || 0) + 1; }
+  for (const [k, v] of Object.entries(sets).sort((a, b) => b[1] - a[1]).slice(0, 12)) {
+    p(`  ${String(v).padStart(3)}x  ${k}`);
+  }
+  return evs;
+}
+
 export function report(dow, hour, { until = null } = {}) {
   const rows = corpus({ until });
   const { rows: set, how, widened } = comparable(rows, dow, hour);
@@ -134,8 +195,11 @@ if (process.argv[1] && process.argv[1].endsWith('when.mjs')) {
   const dow = DOW_IDX[dowArg] ?? DOW.findIndex(d => d.toLowerCase().startsWith(dowArg.slice(0, 3)));
   const hour = parseHour(args[1]);
   if (dow < 0 || hour === null) {
-    console.error('usage: when.mjs <weekday> <time>     e.g. when.mjs Sunday 1pm');
+    console.error('usage: when.mjs <weekday> <time> [--sequences]');
+    console.error('   e.g. when.mjs Sunday 1pm              when a notice was sent');
+    console.error('        when.mjs Sunday 1pm --sequences   how many notices an event got');
     process.exit(2);
   }
-  report(dow, hour, { until: process.argv.includes('--all') ? null : null });
+  if (process.argv.includes('--sequences')) reportSequences({ dow });
+  else report(dow, hour);
 }

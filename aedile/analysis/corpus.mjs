@@ -167,6 +167,29 @@ export const isOperator = m => {
  *  it is not only subjects and headers, it is a quarter of the bodies. */
 export const isFullBody = m => m.body.trim().length > 101;
 
+// WHICH FINDINGS THE SNIPPET DEFECT ACTUALLY TOUCHES. A caveat with no boundary invites
+// discarding results that are fine, so: a truncated body still carries a correct
+// timestamp. Operator send hour, snippets against survivors --
+//
+//   snippets   median 12h, quartiles 10-16, n=170
+//   survivors  median 11h, quartiles 10-16, n=403
+//
+// Same profile. So anything measured from `date` is UNAFFECTED: send hour, lead time,
+// cadence, day of week, messages per event. Anything measured from `body` is affected
+// and biased toward "trait absent": length, paragraph count, sign-off, exclamation,
+// numbering, closing asks, item depth.
+//
+// The one figure tonight that needs no caveat at all, and the largest clean sample in
+// this file: operator messages pointing at today or tonight, n=102 --
+//
+//    6h  1     9h 20  <- mode    12h  9      15h 1     18h 3
+//    7h  2    10h 19             13h  7      16h 3     19h 1
+//    8h  9    11h 17             14h  5      17h 3
+//
+//   median 10:00 local, 73% between 08:00 and 12:59
+//
+// So a morning-of notice goes out 08:00-13:00 with 09:00-11:00 the attested centre.
+
 // WHAT THIS COSTS THE ABE-ERA ANALYSIS, which is every figure this repo publishes:
 //
 //   509 operator rows at until:2024, of which 148 are snippets (29%), leaving 361.

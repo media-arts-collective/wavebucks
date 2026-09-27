@@ -16,6 +16,11 @@ WHAT IS WRONG WITH THE ARCHIVE THIS REPLACES
     `people/` and `voice/` were generated from it an hour later, so they are
     derived and must be regenerated from whatever replaces it.
 
+    Item 4 is kept in this list although it turned out NOT to be a defect,
+    because three revisions of this file asserted it was and the belief
+    outlived the evidence twice. Deleting it would leave the next reader to
+    rediscover the same wrong conclusion from the same data.
+
     1. NO SUBJECTS.    The scraper slugged each thread from the BODY'S FIRST
        LINE and dropped the Subject: header. 448 of 542 comparable slugs are
        the body opening verbatim; nearly all of the other 94 differ only by
@@ -36,33 +41,42 @@ WHAT IS WRONG WITH THE ARCHIVE THIS REPLACES
        already produced one wrong published number (a UTC-5 shift applied to
        an hour that was already local). Gmail's API really is UTC. The two
        sources cannot be mixed without an offset on each row.
-    4. TRUNCATED.      Ends 2026-06-17 overall, 2026-01-24 for the
-       operator. The 2025 hole is a different size depending on WHOSE mail
-       you count, so both are stated:
+    4. NOT TRUNCATED -- STALE, AND WITH A HANDOFF INSIDE IT. This entry
+       claimed truncation through three revisions. It is wrong, and the
+       check is one command: compare the archive against live Gmail, month
+       by month, for the months both cover.
 
-         month      all senders   operator
-         2025-05         0            0
-         2025-06         0            0
-         2025-07         1            0
-         2025-08         0            0
-         2025-09        14            0
+         2026-01  archive 97  gmail 98        2026-05  archive 0  gmail 0
+         2026-02  archive 14  gmail 14        2026-06  archive 2  gmail 2
+         2026-03  archive  1  gmail  1        2026-08  archive 0  gmail 3
+         2026-04  archive  2  gmail  2        2026-09  archive 0  gmail 13
 
-       Three months empty of everyone; five consecutive months empty of the
-       operator. Neither number is wrong and neither is usable without the
-       population beside it.
+       It matches an independent source everywhere up to 2026-06-17 and
+       misses only what arrived after it was taken on 2026-07-29. That is
+       not a defect in how it was scraped; it is a snapshot having a date.
+       Re-running this tool fixes it and nothing else needs to.
 
-       The single message in 2025-07 is not a gap at all: aedile/CLAUDE.md
-       records July as historically silent for this krewe. Calling it part
-       of an archive defect turns the group's own rhythm into a data
-       problem, which is worse than miscounting it.
+       What looked like truncation was two real things wearing one mask.
+       The operator's mail appears to stop on 2026-01-24 -- but the archive
+       has other senders' mail for every month after that, so nothing was
+       cut off. The address simply handed over:
 
-       This entry said "2026-02-19 for the operator, and May-Sep 2025 is
-       missing outright" until 2026-09-26, both taken from a peer's message
-       and neither run. 2026-02-19 is the last message of the vaporwaRE
-       MEMBER, not the operator: it is what the buggy `/^kreweofv/`
-       predicate returns, so the figure was an artifact of the bug
-       documented in `unmask` below. Inheriting a number is how a bug
-       travels into the docs of the tool that found it.
+         year   kreweofvaporwave@gmail.com   kreweofvaporwave@krewe...com
+         2023              79                            0
+         2024              78                            0
+         2025              51                            2
+         2026               1                            6
+
+       The Office address first appears 2025-12 and carries the operator by
+       2026; aedile now runs as it, and --gmail shows it active through
+       2026-09-27. So the operator never went quiet. ONE ROLE, TWO
+       ADDRESSES, handing off inside the corpus -- alongside the one
+       account, two authors that corpus.mjs already documents. A sender
+       predicate matching only the gmail.com address loses the successor
+       era entirely and reads the loss as an archive that stops.
+
+       The genuine holes are 2025-05, -06 and -08, empty of everyone.
+
     5. NO THREADING.   No Message-ID, In-Reply-To or References, so thread
        membership is inferred from a URL. 86 of its 628 topics have no
        thread file at all.

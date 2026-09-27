@@ -167,6 +167,27 @@ Two rules the corpus turned out not to support, both deleted the same day:
   is wrong, it should be stochastic."* The distribution itself stays UNVERIFIED as
   a human habit; #27 has the 2020 regime change.
 
+**Every rate above is computed over a pool where 31% of the bodies are
+preview snippets, and the truncation is length-biased (2026-09-26).**
+`messages.jsonl` holds 343 rows of 80-101 characters against 9 rows of
+102-110 — Google Groups topic-list previews captured instead of messages,
+ending mid-sentence. The loss is directional: a body cut at 101 characters
+is cut before the sign-off, before the closing exclamation, and before every
+numbered item after the first, so a snippet votes "trait absent" for every
+trait that lives late in a message. Measured on 99 matched pairs where the
+true length is known, P(truncated) runs 62% / 75% / 94% as true length rises
+past 1000 / 3000 characters, and the operator is hit hardest because they
+write longest (median 113 words against 36 for everyone else).
+
+So `numberedList` 0.82, the 54/34/11 and 42/40/18 gap draws, the sign-off and
+exclamation rates and the length targets are all LOWER BOUNDS, not estimates.
+Do not re-derive them from `messages.jsonl` and expect a correction — the
+same pool produces the same bias. `aedile/analysis/ingest.py --audit` prints
+the snippet bands for any file; its module docstring has the full measurement
+and the reason the Abe-era correction is not estimable from anything on this
+box. It needs pre-2025 ground truth, which means an mbox from a mailbox
+subscribed before 2025.
+
 **Before teaching the generator any new trait, check its provenance against a
 source outside the scrape.** Non-breaking spaces, gap sizes and subjects all read
 as strong authorial signal and all three were the pipeline.

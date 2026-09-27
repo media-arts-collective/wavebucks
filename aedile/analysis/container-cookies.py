@@ -106,12 +106,26 @@ def export(container, out_path, to_stdout=False):
 
     # Copied because Firefox holds a write lock while running. Opened read-only, and the
     # copy lives in a 0700 temp dir that is removed on the way out.
+    #
+    # THE -wal FILE MUST COME TOO. cookies.sqlite is in WAL journal mode, so with Firefox
+    # running the newest writes live in cookies.sqlite-wal (688 KB when this was found) and
+    # the main file alone is a STALE snapshot. The first version of this script copied only
+    # the main file, exported 55 cookies that looked complete, and produced a session that
+    # did not authenticate -- Google served the public SPA shell and the Groups page said
+    # "Content unavailable / try switching accounts" in both Chromium and Firefox. Nothing
+    # about the export announced the staleness; the count looked right.
     tmpdir = tempfile.mkdtemp(prefix='cookie-export-')
     os.chmod(tmpdir, stat.S_IRWXU)
     tmp = Path(tmpdir) / 'cookies.sqlite'
     try:
         shutil.copy2(src, tmp)
-        con = sqlite3.connect(f'file:{tmp}?mode=ro', uri=True)
+        for suffix in ('-wal', '-shm'):
+            side = src.with_name(src.name + suffix)
+            if side.exists():
+                shutil.copy2(side, tmp.with_name(tmp.name + suffix))
+        # NOT mode=ro: SQLite must be able to replay the WAL into the copy, which is a
+        # write. The copy is disposable; the browser's own files are never touched.
+        con = sqlite3.connect(str(tmp))
         try:
             rows = con.execute(
                 'SELECT host, path, name, value, expiry, isSecure, originAttributes '

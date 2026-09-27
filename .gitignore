@@ -48,3 +48,6 @@ __pycache__/
 *cookies*.txt
 *.cookies
 cookies.sqlite
+# The scrape's resume ledger: which topic IDs already landed in the mbox. Per-machine
+# progress, not a fact about the project.
+aedile/analysis/.scrape-used.json

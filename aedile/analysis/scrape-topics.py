@@ -51,6 +51,12 @@ COOKIES = Path('/srv/vaporwave-reports/aedile/.groups-cookies.txt')
 GROUP = 'kreweofvaporwave'
 # Consecutive post-refresh denials that mean the SESSION died rather than the topic.
 MAX_DENIED_IN_A_ROW = 6
+# A run of topics that bank NOTHING, whatever the individual symptom. Measured 2026-09-27:
+# 70 consecutive topics failed the same way over 40 minutes while the ledger sat still and
+# the log looked busy. Refreshing the session is the cheap thing that has fixed every such
+# run so far, so it is tried on a schedule; a run that survives the refresh is a real stop.
+REFRESH_AFTER_BARREN = 8
+MAX_BARREN = 28
 # Overridable so a SECOND worker can run concurrently over the same 628 topics from the
 # other end of the list (`--reverse`) with its own ledger and its own mbox. The two never
 # write the same file, so there is no lock and no race; they meet in the middle, and the
@@ -310,6 +316,8 @@ def scrape(limit=None, out_path=None, verbose=False, headless=True, reverse=Fals
     done = failed = messages = 0
     # Consecutive access denials. One is a bad topic; a run of them is a lost session.
     denied = 0
+    # Consecutive topics that banked nothing, by any route. See the loop head.
+    barren, last_done = 0, 0
     with sync_playwright() as pw:
         browser = pw.firefox.launch(headless=headless)
         ctx = browser.new_context()
@@ -317,6 +325,26 @@ def scrape(limit=None, out_path=None, verbose=False, headless=True, reverse=Fals
         page = ctx.new_page()
         try:
             for n, tid in enumerate(todo, 1):
+                # BARREN RUN DETECTION, in one place because every failure path leads
+                # here. Compared against `done` rather than counted in each `except`:
+                # there are five ways for a topic to bank nothing and they are not worth
+                # five copies of this. A frozen ledger under a busy log is the single
+                # symptom every session failure in this scrape has produced.
+                if done == last_done:
+                    barren += 1
+                else:
+                    barren, last_done = 0, done
+                if barren and barren % REFRESH_AFTER_BARREN == 0:
+                    print(f'  -- {barren} topics in a row banked nothing; re-exporting '
+                          f'the container session', flush=True)
+                    refresh_cookies(ctx)
+                if barren >= MAX_BARREN:
+                    print(f'\nSTOP: {barren} topics in a row banked nothing, through '
+                          f'{barren // REFRESH_AFTER_BARREN} session refreshes. Something '
+                          f'changed that a fresh cookie does not fix -- read the failures '
+                          f'above; the ledger resumes.', flush=True)
+                    break
+
                 url = f'https://groups.google.com/g/{GROUP}/c/{tid}'
                 t0 = time.monotonic()
                 try:

@@ -35,17 +35,34 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { normalize } from './normalize.mjs';
+import { isOperator } from '../analysis/corpus.mjs';
 
 const VAULT = process.env.KREWE_VAULT
   || '/srv/vaporwave-reports/obsidian-vault/mailing-list-archive';
-const MS_ACCOUNT = 'kreweofvaporwave@gmail.com';
 
-/** The same pool duel.mjs draws from, so the comparison is like for like. */
+/** The same pool duel.mjs draws from, so the comparison is like for like.
+ *
+ *  SENDER TEST ROUTED THROUGH corpus.mjs (#72). This matched
+ *  `email === 'kreweofvaporwave@gmail.com'` locally, which drops 93 of the operator's
+ *  573 messages because the old scraper nulled `email` while redacting `author` to an
+ *  ellipsized form. #72 warned that widening it would move greeting, numberedList,
+ *  allCaps, parenthetical, crude and semicolon simultaneously, since every probability in
+ *  devices.mjs's DEVICES table was measured on the narrow pool and live checks are
+ *  thresholded against them.
+ *
+ *  MEASURED, AND IT IS A NO-OP HERE: pool 164 before and 164 after, every rate identical,
+ *  output byte-identical. The sign-off filter below is why -- it admits only messages
+ *  ending `<3 MS`, and 92 of those 93 recoverable messages are ~101-character preview
+ *  snippets, cut long before any sign-off. They were never in this pool to begin with.
+ *
+ *  So this is safe HERE and is not safe generally: cadence.mjs has no sign-off filter, so
+ *  the same widening hands it 93 messages of which 92 are snippets, which would make its
+ *  body-derived figures worse rather than better. That one needs isFullBody alongside. */
 function corpus() {
   const path = join(VAULT, 'messages.jsonl');
   if (!existsSync(path)) { console.error(`style: no corpus at ${path}`); process.exit(3); }
   return readFileSync(path, 'utf8').trim().split('\n').map(l => JSON.parse(l))
-    .filter(m => m.email === MS_ACCOUNT && typeof m.body === 'string')
+    .filter(m => isOperator(m) && typeof m.body === 'string')
     .filter(m => m.body.length >= 400 && m.body.length <= 4000)
     .filter(m => /<3[\s\S]{0,4}MS\s*$/.test(m.body))
     // Through the SAME normalizer the duel puts both sides through. Without

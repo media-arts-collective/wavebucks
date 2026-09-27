@@ -91,25 +91,49 @@ export const isOperator = m => {
 // documented in the tooling that found the contamination was produced BY the
 // contamination, through two hops and no query.
 //
-// OPERATOR-authored mail by month, against all senders, because "the corpus stops" is
+// OPERATOR-authored mail by month against all senders, because "the corpus stops" is
 // a different claim depending on whose mail you mean:
 //
-//   month     all senders   operator
-//   2025-04        9            2
-//   2025-05        0            0
-//   2025-06        0            0
-//   2025-07        1            0      <- CLAUDE.md:179: July is historically silent,
-//   2025-08        0            0         so this one is the krewe's rhythm, not a defect
-//   2025-09       14            0
-//   2025-10       27            1
+//   month     all   operator          month     all   operator
+//   2025-01    50      29             2025-10    27       1
+//   2025-02    26      16             2025-11    16       0  <- silent, others active
+//   2025-03     3       2             2025-12    43       5
+//   2025-04     9       2             2026-01    97       9
+//   2025-05     0       0             2026-02    14       0  <- silent, others active
+//   2025-06     0       0             2026-03     1       0
+//   2025-07     1       0             2026-04     2       0
+//   2025-08     0       0             2026-06     2       0
+//   2025-09    14       0
 //
-// So May-Sep 2025 is five operator-silent months and three corpus-empty ones. Both
-// were asserted tonight as corrections of each other and both are right about
-// different populations -- the third time in one session that a disagreement resolved
-// that way, after the exclamation rate (49% over all messages vs 93% over
-// announcements) and the subject denominators (12/31 vs 10/31 on two regexes). When
-// two measurements of "the same thing" disagree here, check the population before
-// arguing about the number.
+// SO "THE CORPUS STOPS 2026-01-24" IS THE WRONG READING, and it is one this session
+// published. The scrape reaches 2026-06-17 for other senders. What ends on 2026-01-24
+// is the OPERATOR ACCOUNT, which goes quiet in six 2025 months, returns thinly from
+// October to January, and then stops while everyone else keeps posting. That is Abe
+// retiring and the successor moving to the Office address (8 rows), not a truncated
+// scrape. #45's staleness is real and separate; this is not evidence for it.
+//
+// 2025-07's single message is NOT a gap: CLAUDE.md:179 records July as historically
+// silent. Reading it as truncation turns the krewe's own rhythm into a data defect.
+//
+// THE `until:2024` CUTOFF IS DOING TWO JOBS AND ONLY ONE IS DELIBERATE. It was chosen
+// for REGISTER -- Abe is the voice worth imitating -- and it has silently been the only
+// thing excluding every defect found on 2026-09-26:
+//
+//   the vaporwaRE member's 7 messages    all postdate 2025-10
+//   aedile's own 4 outbound subjects     2026
+//   the 2 unresolvable masked rows       2026-01
+//
+// A session that widens the era gets the register change it asked for and loses a
+// filter it did not know it had. Before any successor-era rate means anything: exclude
+// the vaporwaRE spelling (done, above), mark aedile-authored rows, and unmask what can
+// be unmasked. None of tonight's checks carry forward on their own.
+//
+// AND WHEN TWO MEASUREMENTS DISAGREE HERE, CHECK THE POPULATION FIRST. Three times in
+// one session: the exclamation rate (49% over all operator messages, 93% over
+// announcements), the subject denominators (12/31 and 10/31 on two regexes), and the
+// month counts above. Only the last was an actual contradiction; the other two were two
+// parties measuring different sets on purpose and then comparing the outputs as if they
+// were the same quantity. Ship the definition attached to the rate.
 
 /** The send timestamp. NOT UTC despite what the Date object implies: the archive
  *  stores the hour as WRITTEN in local time (only 0.8% of 1099 sends fall between

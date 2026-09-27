@@ -533,7 +533,7 @@ def call(action, **params):
         if attempt == 1:
             print(f'ingest: {action} {params} -> {body.get("error")!r}; '
                   f'retrying once', file=sys.stderr)
-    raise SystemExit(f'ingest: {action} {params} returned not-ok twice: '
+    raise SystemExit(f'ingest: {action} {params} failed twice: '
                      f'{json.dumps(body)[:400]}')
 
 
@@ -542,16 +542,37 @@ def _call_once(action, **params):
     out = subprocess.run(args, capture_output=True, text=True, timeout=180)
     if out.returncode:
         raise SystemExit(f'ingest: {action} failed rc={out.returncode}: {out.stderr.strip()}')
-    # A non-JSON body is a real failure; let it raise. Never skip a thread --
-    # a half-read mailbox that exits 0 is the silent failure this repo's
-    # discipline forbids.
-    return json.loads(out.stdout)
+    # An EMPTY or unparseable response is the endpoint's other transport
+    # failure -- #54 reports it at roughly one call in four in a long session.
+    # It is reported here as a not-ok body so `call` retries it exactly once
+    # and then dies, rather than raising a JSONDecodeError naming no thread.
+    # Never SKIP a thread: a half-read mailbox that exits 0 is the silent
+    # failure this repo's discipline forbids.
+    try:
+        return json.loads(out.stdout)
+    except json.JSONDecodeError:
+        return {'ok': False,
+                'error': f'unparseable response, {len(out.stdout)} bytes: '
+                         f'{out.stdout[:120]!r}'}
 
 
 def from_gmail(query, year_from, year_to):
     """One readInbox per calendar year, because readInbox has no offset
     parameter -- it is `GmailApp.search(q, 0, limit)` with start pinned to 0
-    and limit capped at 100, so time windows are the only way to page."""
+    and limit capped at 100, so time windows are the only way to page.
+
+    NOTE THE `-in:drafts` IN THE DEFAULT QUERY. `list:...` matches UNSENT
+    DRAFTS addressed to the list, and two of them -- both aedile's -- came
+    into the first pull as if the list had received them. A draft is text
+    nobody has read. Counting it as list traffic is the same error as
+    counting aedile's own sent mail, one step earlier, and worse in kind
+    because an unsent draft may never go out at all.
+
+    The two that leaked were caught downstream by `--mark-aedile`, which is
+    luck and not a defence: a HUMAN's unsent draft to the list would leak in
+    and be marked aedile_authored=False, which reads as "a real message from
+    a real member". Excluded at the source instead.
+    """
     seen = 0
     for year in range(year_from, year_to + 1):
         q = f'{query} after:{year}/01/01 before:{year + 1}/01/01'
@@ -660,7 +681,10 @@ def main():
     p.add_argument('--mark-aedile', action='store_true',
                    help="set aedile_authored by cross-referencing aedile's Log; "
                         'costs one read call. See aedile_marker().')
-    p.add_argument('--query', default='list:kreweofvaporwave.googlegroups.com')
+    p.add_argument('--query',
+                   default='list:kreweofvaporwave.googlegroups.com -in:drafts',
+                   help='Gmail search. Keep -in:drafts unless you mean to '
+                        'ingest unsent text; see from_gmail().')
     p.add_argument('--years', default='2019:2026', metavar='FROM:TO')
     p.add_argument('--audit', metavar='FILE',
                    help='measure a JSONL and exit; no ingest')

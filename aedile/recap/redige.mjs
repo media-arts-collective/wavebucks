@@ -32,6 +32,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { callModel, parseDecision } from '../brain/model.mjs';
 import { runChecks, report } from './checks.mjs';
 import { formBlock, measuredRates } from '../analysis/headsup-form.mjs';
+import { subjectWeights } from '../analysis/subject-shapes.mjs';
 import { dealDevices, dealFlourish, dealTypo, dealSignoff, dealGap, dealSubject, devicesBlock } from './devices.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -402,11 +403,11 @@ async function main(argv) {
   const typo = dealTypo();
   const signoff = dealSignoff();
   const gap = dealGap(undefined, genre);
-  const subjectShape = dealSubject();
+  const subjectShape = dealSubject(undefined, subjectWeights());
   const dealt = Object.entries(hand).filter(([, v]) => v).map(([k]) => k);
   console.error(`-- genre: ${genre}${beat ? ` (beat: ${beat})` : ''}`);
   console.error(`-- devices: ${dealt.join(', ') || 'none'}; gap ${gap}`);
-  console.error(`-- subject shape: ${subjectShape.slice(9, 60)}...`);
+  console.error(`-- subject: ${subjectShape.slice(9, 96)}`);
 
   const lead = leadTimeBlock(eventDate, beat, asOf);
   const leadDays = eventDate ? leadTimeBlock.days : undefined;

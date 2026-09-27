@@ -305,6 +305,47 @@ export function runChecks(d, notes, vault, opts = {}) {
     add('warn', 'no-numbering', 'no numbered items -- the archive numbers almost everything');
   }
 
+  // A numbered item is a TOPIC, not a label. Measured over all 1125 numbered items
+  // in the operator's pre-2025 messages: median 43 words, and the short tail is
+  // 8 items under 5 words (0.7%) and 35 at 5-9 (3.1%). So a hard floor at ten would
+  // reject real items; the tiers below follow the distribution instead.
+  //
+  // The failure this catches: a draft numbered two clock times as "1. 1pm: sausages
+  // and taters." / "2. 3pm: build session." -- 4 and 3 words -- and passed every
+  // check, because numbering had been measured as a boolean and nobody had asked
+  // what an item CONTAINS. The traits were proxies and the proxies got satisfied.
+  const itemWords = body.split(/(?=(?:^|\n)\s*-?\d+\.\s)/)
+    .filter(x => /^\s*-?\d+\.\s/.test(x))
+    .map(x => (x.trim().match(/\S+/g) || []).length);
+  const tiny = itemWords.filter(n => n < 5);
+  const short = itemWords.filter(n => n >= 5 && n < 10);
+  if (tiny.length) {
+    add('fail', 'stub-items',
+      `${tiny.length} numbered item(s) of ${tiny.join(', ')} words. 8 of 1125 archived items are that short (0.7%); the median is 43. Give each item real content or do not number at all`);
+  } else if (short.length) {
+    add('warn', 'thin-items',
+      `${short.length} numbered item(s) of ${short.join(', ')} words, against a median of 43. Attested but rare (3.1%): check each one is a topic and not a label`);
+  }
+
+  // Did the draft follow the hand it was dealt? This is NOT a rate check -- rates
+  // belong to the dealer. It is instruction-following: a device dealt ON that does
+  // not appear means the draw did nothing, and the whole point of dealing is that
+  // the frequency comes out right across many emails. `greeting` was dealt ON and
+  // absent from the output with nothing to notice.
+  if (opts.hand) {
+    const seen = {
+      greeting: /^\s*(hi|hello|hey|hiya|yo|good (morning|evening|afternoon)|greetings|dear|friends|happy|ok|okay)\b/i.test(body),
+      numberedList: /(?:^|\n)\s*-?\d+\.\s/.test(body),
+      allCaps: /\b[A-Z]{4,}\b/.test(body),
+      question: /\?/.test(body),
+    };
+    const ignored = Object.keys(seen).filter(k => opts.hand[k] === true && !seen[k]);
+    if (ignored.length) {
+      add('warn', 'hand-ignored',
+        `dealt but absent: ${ignored.join(', ')}. The draw is how a corpus frequency gets reproduced across emails; ignoring it pins the rate at zero`);
+    }
+  }
+
   // 5. Motifs the corpus says are near-universal. Warn only: a short recap
   //    legitimately might not shout, and the counts are of THREADS not of
   //    obligations.

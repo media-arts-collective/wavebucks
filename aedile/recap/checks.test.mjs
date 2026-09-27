@@ -176,7 +176,10 @@ expectClean('a list ordinal followed by a capitalised word', (() => {
   // the sign-off check searched the whole body; it now reads the last line, so
   // an item pasted below the initials is a draft that does not end in a
   // sign-off -- which is the thing being checked, not what this case is about.
-  d.body = d.body.replace('\n\n<3 SM', '\n\n4. Someone should follow up.\n\n<3 SM');
+  // The item is deliberately over ten words: `stub-items` fails a numbered item
+  // shorter than that, and this case is about Nobody-after-an-ordinal, not length.
+  d.body = d.body.replace('\n\n<3 SM',
+    '\n\n4. Someone should follow up with Nobody about the venue, since the cost is still unknown.\n\n<3 SM');
   return d;
 })());
 

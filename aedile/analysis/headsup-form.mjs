@@ -146,9 +146,22 @@ export function formBlock() {
     `about a Sunday gathering, up to ${ERA_UNTIL}. Percentages are of those messages.`,
     '');
 
-  say.push(`- **Length: around ${median(wA)} words.** The middle half runs ${q1} to ${q3}, so there is`,
-    '  real latitude, but this is not a one-line nudge: a Sunday gathering with an eat',
-    '  half and a work half gets a message with body to it.');
+  // The median is the TARGET. An earlier version of this block offered the
+  // interquartile range as "real latitude", which is how a 55-word draft got
+  // written and posted against a 134-word norm: a spread quoted as permission.
+  const itemLens = POOL.flatMap(x => x.m.body.split(/(?=(?:^|\n)\s*-?\d+\.\s)/)
+    .filter(t => /^\s*-?\d+\.\s/.test(t)).map(t => words(t)));
+  const paras = POOL.map(x => x.m.body.split(/\n\s*\n/).filter(t => t.trim()).length);
+  say.push(`- **Write about ${median(wA)} words.** That is the target, not a floor. Half of these`,
+    `  messages fall between ${q1} and ${q3} words, but aim at ${median(wA)}: a draft near the bottom of`,
+    '  that range is thin, not concise.',
+    `- **About ${median(paras)} paragraph blocks.**`,
+    `- **If you number items, each item is a TOPIC with real content: median ${median(itemLens)} words,`,
+    `  and not one of the ${itemLens.length} items in the corpus is under 10.** Numbering a bare clock`,
+    '  time ("1. 1pm: sausages") is not what the list does; an item explains the thing.',
+    '  If you have nothing to say about an item, it is not an item.',
+    '- **Do not open with digits.** Only 3 of 18 first lines contain a number. The',
+    '  opening is a greeting or a short framing line; logistics come after it.');
 
   // Phrasing follows the RATE, not the verdict. A well-established 6% is still a
   // reason NOT to do something, and an earlier version of this function printed

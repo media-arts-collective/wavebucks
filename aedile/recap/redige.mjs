@@ -420,7 +420,7 @@ async function main(argv) {
     die(String(err.message || err), 5);
   }
 
-  const findings = runChecks(decision, notes + '\n' + (eventDate || ''), vault, { genre, beat, leadDays });
+  const findings = runChecks(decision, notes + '\n' + (eventDate || ''), vault, { genre, beat, leadDays, hand });
 
   writeFileSync(out, JSON.stringify({ ...decision, _checks: findings, _notes: notes }, null, 2));
   console.error(`-- wrote ${out}`);

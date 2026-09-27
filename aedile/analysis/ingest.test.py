@@ -113,6 +113,10 @@ with tempfile.TemporaryDirectory() as d:
     check('multipart picks text/plain, decoded per its charset',
           reply['body'].strip(), 'I will bring the caf\xe9 table.')
     check('source tagged', root['source'], 'mbox')
+    # message_id is the RFC header and gmail_id is Gmail's own; an mbox row
+    # has the first and never the second. Joining the two namespaces would
+    # return nothing and read as an empty overlap.
+    check('mbox carries no gmail_id', root['gmail_id'], None)
 
     # Merge: the legacy copy of the root message must collapse into the mbox
     # one, and the mbox one must win -- otherwise a re-ingest silently

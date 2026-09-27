@@ -50,10 +50,12 @@ SOURCES, BEST FIRST
                   long-subscribed member it holds essentially all list
                   traffic they received.
     --gmail       The krewe Office mailbox through aedile's read endpoint.
-                  Real headers, but see the coverage warning it prints:
-                  that mailbox holds NOTHING before 2025 (measured: 0
-                  threads for `before:2025/01/01`), so it is the successor
-                  era only.
+                  Real sender, subject and offset, but NOT the Message-ID,
+                  In-Reply-To or References headers -- readThread does not
+                  return raw source -- so this path fixes defects 1-4 and
+                  not 5. And see the coverage warning it prints: that
+                  mailbox holds NOTHING before 2025 (measured: 0 threads for
+                  `before:2025/01/01`), so it is the successor era only.
     --jsonl FILE  The existing archive, as a floor. Carries no headers; its
                   rows are emitted with `source: "legacy-scrape"` and null
                   header fields so a reader can tell a missing subject from
@@ -87,9 +89,15 @@ LOCAL = ZoneInfo('America/Chicago')
 VAULT_JSONL = '/srv/vaporwave-reports/obsidian-vault/mailing-list-archive/messages.jsonl'
 CALL_SH = 'aedile/recap/call.sh'
 
+# `message_id` is the RFC-2822 Message-ID HEADER and nothing else, so a join
+# on it means what it says. Gmail's own per-message id lives in `gmail_id`,
+# a different namespace entirely -- it is what GmailMessage.getId() returns,
+# not what the sender wrote. Sharing one field between them would make a join
+# across the two sources return zero rows and look like an empty overlap
+# rather than a category error.
 FIELDS = ['author', 'email', 'date', 'date_iso', 'subject', 'message_id',
-          'in_reply_to', 'references', 'to', 'cc', 'body', 'topic_url', 'source',
-          'aedile_authored']
+          'gmail_id', 'in_reply_to', 'references', 'to', 'cc', 'body',
+          'topic_url', 'source', 'aedile_authored']
 
 # Addresses aedile can send under. A message from any other address is
 # nobody's ambiguity -- a human wrote it.
@@ -193,6 +201,7 @@ def from_mbox(path):
             'date_iso': dt.isoformat(),
             'subject': str(msg['Subject']) if msg['Subject'] else None,
             'message_id': (msg['Message-ID'] or '').strip() or None,
+            'gmail_id': None,
             'in_reply_to': (msg['In-Reply-To'] or '').strip() or None,
             'references': (msg['References'] or '').split() or None,
             'to': str(msg['To']) if msg['To'] else None,
@@ -289,11 +298,36 @@ def aedile_marker(log_rows):
 
 
 def call(action, **params):
+    """One retry, loudly, then die.
+
+    The endpoint intermittently answers `Invalid or missing token` to a
+    request whose token is fine -- /exec 302s to googleusercontent.com and
+    the POST body does not always survive the hop, so the server sees no
+    token at all. That is a transport failure, not a semantic one, which is
+    the narrow case where a retry is honest rather than papering over.
+    Every retry prints, so the flakiness stays visible instead of becoming a
+    number nobody can see; twice in a row is a real failure and exits.
+    """
+    for attempt in (1, 2):
+        body = _call_once(action, **params)
+        if body.get('ok'):
+            return body
+        if attempt == 1:
+            print(f'ingest: {action} {params} -> {body.get("error")!r}; '
+                  f'retrying once', file=sys.stderr)
+    raise SystemExit(f'ingest: {action} {params} returned not-ok twice: '
+                     f'{json.dumps(body)[:400]}')
+
+
+def _call_once(action, **params):
     args = [CALL_SH, action] + [f'{k}={v}' for k, v in params.items()]
     out = subprocess.run(args, capture_output=True, text=True, timeout=180)
     if out.returncode:
         raise SystemExit(f'ingest: {action} failed rc={out.returncode}: {out.stderr.strip()}')
-    return json.loads(out.stdout)           # a non-JSON body is a real failure; let it raise
+    # A non-JSON body is a real failure; let it raise. Never skip a thread --
+    # a half-read mailbox that exits 0 is the silent failure this repo's
+    # discipline forbids.
+    return json.loads(out.stdout)
 
 
 def from_gmail(query, year_from, year_to):
@@ -314,8 +348,16 @@ def from_gmail(query, year_from, year_to):
                     'date': legacy_date(dt),
                     'date_iso': dt.isoformat(),
                     'subject': m.get('subject'),
-                    'message_id': m.get('messageId'),
-                    'in_reply_to': None,    # Gmail's API does not expose it
+                    # readThread returns GmailMessage.getId(), which is
+                    # Gmail's own id, NOT the Message-ID header. The header,
+                    # In-Reply-To and References are all reachable through
+                    # getRawContent(), which readThread does not return --
+                    # widening it would expose full raw message source
+                    # through the read endpoint, which is a decision and not
+                    # a default. Until then this path cannot do threading.
+                    'message_id': None,
+                    'gmail_id': m.get('messageId'),
+                    'in_reply_to': None,
                     'references': None,
                     'to': m.get('to'), 'cc': m.get('cc'),
                     'body': m.get('body', ''),
@@ -367,7 +409,9 @@ def audit(path):
     print(f'email null             {sum(1 for r in rows if not r.get("email"))}')
     print(f'author ellipsized      {sum(1 for r in rows if "..." in str(r.get("author", "")))}')
     print(f'subject present        {sum(1 for r in rows if r.get("subject"))}')
-    print(f'message_id present     {sum(1 for r in rows if r.get("message_id"))}')
+    print(f'message_id present     {sum(1 for r in rows if r.get("message_id"))}'
+          f'   (the RFC header -- threading needs it)')
+    print(f'gmail_id present       {sum(1 for r in rows if r.get("gmail_id"))}')
     print(f'date_iso present       {sum(1 for r in rows if r.get("date_iso"))}')
     print(f'body empty             {sum(1 for r in rows if not str(r.get("body") or "").strip())}')
     print(f'body-prefix collisions {n - len(set(prefixes))}   '

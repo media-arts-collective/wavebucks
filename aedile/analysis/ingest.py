@@ -36,10 +36,25 @@ WHAT IS WRONG WITH THE ARCHIVE THIS REPLACES
        already produced one wrong published number (a UTC-5 shift applied to
        an hour that was already local). Gmail's API really is UTC. The two
        sources cannot be mixed without an offset on each row.
-    4. TRUNCATED.      Ends 2026-06-17 overall and 2026-01-24 for the
-       operator. 2025-05, 2025-06 and 2025-08 hold no message at all;
-       2025-07 holds one, which is not a gap -- aedile/CLAUDE.md records
-       July as historically silent.
+    4. TRUNCATED.      Ends 2026-06-17 overall, 2026-01-24 for the
+       operator. The 2025 hole is a different size depending on WHOSE mail
+       you count, so both are stated:
+
+         month      all senders   operator
+         2025-05         0            0
+         2025-06         0            0
+         2025-07         1            0
+         2025-08         0            0
+         2025-09        14            0
+
+       Three months empty of everyone; five consecutive months empty of the
+       operator. Neither number is wrong and neither is usable without the
+       population beside it.
+
+       The single message in 2025-07 is not a gap at all: aedile/CLAUDE.md
+       records July as historically silent for this krewe. Calling it part
+       of an archive defect turns the group's own rhythm into a data
+       problem, which is worse than miscounting it.
 
        This entry said "2026-02-19 for the operator, and May-Sep 2025 is
        missing outright" until 2026-09-26, both taken from a peer's message
@@ -73,6 +88,22 @@ SOURCES, BEST FIRST
 
     Sources MERGE rather than replace, because none of them is complete and
     the legacy file is still the only copy of 2019-2024.
+
+WHAT A WIDER CORPUS INHERITS -- READ THIS BEFORE USING ONE
+    Every rate this repo currently publishes was measured on `until:2024`,
+    because Abe is the voice worth imitating. That was a choice about
+    register; it has been doing a second job nobody asked it to do, which
+    is keeping several defects out of the numbers. The vaporwaRE member's
+    7 messages all postdate 2025-10. Aedile's own 4 outbound messages are
+    2026. The 2 genuinely unattributable masked rows are 2026-01. Every one
+    of those is excluded by the era cutoff and by nothing else.
+
+    So a session that widens the era -- which is exactly what this tool
+    makes easy -- inherits none of that protection. It needs `--unmask`,
+    `--mark-aedile`, and a sender predicate that excludes the vaporwaRE
+    spelling, all three, before any successor-era rate means anything. The
+    successor era has never been pooled for a single published figure, and
+    it is where all 31 real subjects and all of aedile's own output live.
 
 SCHEMA is a strict superset of the old one. `author`, `email`, `date`,
 `body` and `topic_url` keep their exact old spelling and meaning -- in

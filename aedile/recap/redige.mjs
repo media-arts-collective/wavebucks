@@ -377,7 +377,7 @@ async function main(argv) {
     if (!saved.body || !saved.subject) die(`${input} has no subject/body -- not a saved decision`, 3);
     if (!saved._notes) die(`${input} has no _notes -- regenerate it with this version, which saves them`, 3);
     leadTimeBlock(eventDate, beat, asOf);  // recompute leadTimeBlock.days for the check
-    const findings = runChecks(saved, saved._notes + '\n' + (eventDate || ''), readVault(), { genre, beat, leadDays: eventDate ? leadTimeBlock.days : undefined, shape: genre === 'recap' ? recapForm() : undefined });
+    const findings = runChecks(saved, saved._notes + '\n' + (eventDate || ''), readVault(), { genre, beat, leadDays: eventDate ? leadTimeBlock.days : undefined, shape: genre === 'recap' ? recapForm() : undefined, asOf: asOf || new Date() });
     report(findings);
     console.log(render(saved));
     const blocked = findings.filter(f => f.level === 'fail');
@@ -430,7 +430,7 @@ async function main(argv) {
     die(String(err.message || err), 5);
   }
 
-  const findings = runChecks(decision, notes + '\n' + (eventDate || ''), vault, { genre, beat, leadDays, hand, shape: genre === 'recap' ? recapForm() : undefined });
+  const findings = runChecks(decision, notes + '\n' + (eventDate || ''), vault, { genre, beat, leadDays, hand, shape: genre === 'recap' ? recapForm() : undefined, asOf: asOf || new Date() });
 
   writeFileSync(out, JSON.stringify({ ...decision, _checks: findings, _notes: notes }, null, 2));
   console.error(`-- wrote ${out}`);

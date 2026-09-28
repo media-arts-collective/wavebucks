@@ -263,6 +263,90 @@ export function runChecks(d, notes, vault, opts = {}) {
     }
   }
 
+  // 1a-quinquies. A weekday word that the calendar contradicts.
+  //
+  // THE WORST OUTPUT THIS FILE CAN EMIT, and for a recap nothing was watching it.
+  // `temporal-mismatch` below only fires on opts.leadDays, which only a heads-up
+  // supplies. On 2026-09-27, generated from Zach's real notes, the lead item read
+  // "LASER HARP INTEGRATION DAY IS SATURDAY OCTOBER 11TH" in capitals. 2026-10-11
+  // is a SUNDAY, the notes never said Saturday, and Tyler's own line in them says
+  // "Sun 10/11". Every other check passed: no figure is invented (the 11th is in
+  // the notes), no name, no em-dash. A weekday is not a figure, so nothing looked.
+  //
+  // MEASURED AGAINST THE ARCHIVE FIRST: 139 weekday+explicit-date pairs in
+  // operator mail, 132 correct, 7 mismatched (5%). Those 7 are the operator's own
+  // date errors -- "Sunday Dec 14" twice in 2024, when it was a Saturday -- and
+  // that is the argument FOR blocking, not against. Unlike the em-dash, this is
+  // not a style the archive has; it is a mistake the archive made and nobody
+  // caught. A check that would also have caught a human's slip is working.
+  //
+  // Deliberately tight: the weekday and the date must be adjacent (whitespace, a
+  // comma, or "the"). "Wednesday is October 14th" is not matched, and neither is
+  // "Wednesday movie nights at Lucky's, so November 25th", which is the pair a
+  // looser pattern would invent and fail on. A bare "Wednesday the 25th" carries
+  // no month and is not resolvable, so it is left alone.
+  if (opts.asOf) {
+    const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july',
+      'august', 'september', 'october', 'november', 'december'];
+    const monthNum = w => {
+      const k = w.toLowerCase();
+      const i = MONTHS.findIndex(m => m === k || m.slice(0, 3) === k.slice(0, 3));
+      return i < 0 ? null : i;
+    };
+    const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const asOf = new Date(opts.asOf);
+    const PAIR = /\b(sun|mon|tues|wednes|thurs|fri|satur)day\b[\s,]*(?:the\s+)?(?:([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?|(\d{1,2})\/(\d{1,2}))\b/gi;
+    const bad = [];
+    for (const m of text(whole).matchAll(PAIR)) {
+      const said = `${m[1]}day`.toLowerCase();
+      const mon = m[2] ? monthNum(m[2]) : Number(m[4]) - 1;
+      const day = Number(m[3] || m[5]);
+      if (mon === null || !(mon >= 0 && mon <= 11) || !(day >= 1 && day <= 31)) continue;
+      // The year is whichever candidate lands closest to the send date, so a
+      // December notice written in November resolves forward and not back.
+      let best = null;
+      for (const y of [asOf.getFullYear() - 1, asOf.getFullYear(), asOf.getFullYear() + 1]) {
+        const c = new Date(y, mon, day);
+        if (c.getMonth() !== mon) continue;   // 31st of a 30-day month
+        if (!best || Math.abs(c - asOf) < Math.abs(best - asOf)) best = c;
+      }
+      if (!best) continue;
+      const real = DAYS[best.getDay()];
+      if (real !== said) bad.push(`"${m[0].trim()}" is a ${real}`);
+    }
+    if (bad.length) {
+      add('fail', 'weekday-mismatch',
+        `the weekday does not match the date: ${bad.join('; ')}. Telling the list the wrong day is `
+        + 'the worst thing this email can do');
+    }
+  }
+
+  // 1a-sexies. A member's email address in the body.
+  //
+  // Generated from the real notes, the draft published a member's personal address
+  // in its first item because the notes list it beside that person's name. Grounded
+  // in the input, so every invented-* check passed it.
+  //
+  // The archive is not silent here -- 11 of 573 operator messages contain an
+  // address, and one publishes a member's deliberately: "you can also get it
+  // delivered to Brandon. Just email him <address>". That one person was the
+  // contact point for the thing being announced. So this is not "never" for a
+  // human; it is "never for the generator", which has no consent signal and cannot
+  // tell a contact point from a name that happened to be in the notes. Same
+  // reasoning as invented-pronoun, which also blocks a thing the archive does 9% of
+  // the time: naming the person instead always works, and the harm of guessing
+  // wrong falls on a real member.
+  //
+  // The krewe's own list and account addresses are exempt -- those are public.
+  const PUBLIC_ADDR = /@(?:googlegroups\.com|kreweofvaporwave\.com)$/i;
+  const addrs = [...new Set((text(whole).match(/\b[\w.+-]+@[\w-]+\.[a-z]{2,}\b/gi) || []))]
+    .filter(a => !PUBLIC_ADDR.test(a));
+  if (addrs.length) {
+    add('fail', 'private-detail',
+      `a personal email address in the body: ${addrs.join(', ')}. Name the person instead -- the list `
+      + 'is ~40 people and the notes are not consent to publish it');
+  }
+
   // 1b. No invented pronouns. A gendered third-person pronoun the input does not
   // supply is an invented fact about a real member, and the failure is not a style
   // tell but misgendering someone on a 40-person list.

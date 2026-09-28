@@ -52,12 +52,14 @@ const CLEAN = {
 const VAULT = { motifs: { 'all-caps-emphasis': 622 } };
 
 let passed = 0, failed = 0;
-const ids = d => runChecks(d, NOTES, VAULT).filter(f => f.level === 'fail').map(f => f.id);
+const ids = (d, opts) => runChecks(d, NOTES, VAULT, opts).filter(f => f.level === 'fail').map(f => f.id);
 
-function expectFinding(label, mutate, wanted) {
+// `opts` for the checks that only fire when the caller supplies a measured figure
+// or a date (shape, leadDays, asOf): without it they are silent, by design.
+function expectFinding(label, mutate, wanted, opts = undefined) {
   const d = structuredClone(CLEAN);
   mutate(d);
-  const got = ids(d);
+  const got = ids(d, opts);
   const ok = got.includes(wanted);
   if (ok) { passed++; console.log(`  ok   ${label}`); }
   else {
@@ -67,8 +69,21 @@ function expectFinding(label, mutate, wanted) {
   }
 }
 
-function expectClean(label, d) {
-  const got = ids(d);
+/** Assert one specific fail-level id is ABSENT. Needed where the case sentence
+ *  carries a date the fixture's notes do not, so `invented-figure` fires by
+ *  design and expectClean cannot be used to prove the OTHER check stayed quiet. */
+function expectNoFinding(label, d, unwanted, opts = undefined) {
+  const got = ids(d, opts);
+  if (!got.includes(unwanted)) { passed++; console.log(`  ok   ${label}`); }
+  else {
+    failed++;
+    console.log(`  FAIL ${label}`);
+    console.log(`       expected "${unwanted}" absent, got [${got.join(', ')}]`);
+  }
+}
+
+function expectClean(label, d, opts = undefined) {
+  const got = ids(d, opts);
   if (!got.length) { passed++; console.log(`  ok   ${label}`); }
   else {
     failed++;
@@ -166,6 +181,53 @@ const SHAPE = { items: 5, wordsPerItem: 43, ownerPct: 8, names: ['Tyler', 'Zach'
   d.body = '1. Tyler is booking the room.\n\n2. The harp needs relays.\n\n3. Bar takeovers with video games.\n\n4. Cost unknown.\n\n<3 MS';
   expectWarn('one owner in four items is fine', d, 'owner-heavy', false, { shape: SHAPE });
 }
+
+// The lead item of the 2026-09-27 draft: "SATURDAY OCTOBER 11TH" when 2026-10-11
+// is a Sunday. Worst possible output, and nothing was watching for a recap.
+const AS_OF = { asOf: new Date(2026, 8, 27) };   // 2026-09-27
+expectFinding('a weekday the calendar contradicts', d => {
+  d.body = d.body.replace('meeting monthly.', 'meeting monthly. Integration day is Saturday October 11th.');
+}, 'weekday-mismatch', AS_OF);
+
+// The same sentence with the right weekday must pass, or the check is just noise.
+expectNoFinding('the correct weekday passes', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('meeting monthly.', 'meeting monthly. Integration day is Sunday October 11th.');
+  return d;
+})(), 'weekday-mismatch', AS_OF);
+
+// A bare ordinal carries no month and is not resolvable -- left alone, not guessed at.
+expectNoFinding('a weekday with no month is not resolved', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('meeting monthly.', 'meeting monthly. Either Wednesday the 25th or Sunday the 29th.');
+  return d;
+})(), 'weekday-mismatch', AS_OF);
+
+// The pair a looser pattern would invent: a weekday in one clause, a date in the
+// next. Matching those two would fail a correct sentence.
+expectNoFinding('a weekday and a date in separate clauses are not paired', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('meeting monthly.', "meeting monthly. Daryll runs Wednesday movie nights, so November 25th is open.");
+  return d;
+})(), 'weekday-mismatch', AS_OF);
+
+// M/D form, same rule. 2026-10-11 is a Sunday, so Saturday 10/11 is wrong.
+expectFinding('a weekday against an M/D date', d => {
+  d.body = d.body.replace('meeting monthly.', 'meeting monthly. Harp day Saturday 10/11.');
+}, 'weekday-mismatch', AS_OF);
+
+// A member's address, which the real notes put next to their name and the draft
+// published verbatim in its first item.
+expectFinding('a personal email address in the body', d => {
+  d.body = d.body.replace('meeting monthly.', 'meeting monthly. Alex (misterdee27@gmail.com) is available.');
+}, 'private-detail');
+
+// The krewe's own addresses are public and must not fire.
+expectClean('the list address is not a private detail', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('meeting monthly.', 'meeting monthly. Reply to kreweofvaporwave@googlegroups.com.');
+  return d;
+})());
 
 // Deliberately placed in the SUBJECT: it is part of the draft, and an earlier
 // version of these checks read only the body and let this through.

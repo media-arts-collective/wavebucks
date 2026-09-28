@@ -229,6 +229,16 @@ expectClean('the list address is not a private detail', (() => {
   return d;
 })());
 
+// open_questions go out too -- post() appends them to the body. A date invented
+// there used to pass because only subject+body were read.
+expectFinding('an invented date in open_questions', d => {
+  d.open_questions = ['Evangelion screening: Wednesday 10/25 or Sunday 10/29?'];
+}, 'invented-figure');
+
+expectFinding('a wrong weekday in open_questions', d => {
+  d.open_questions = ['Integration day is Saturday October 11th, right?'];
+}, 'weekday-mismatch', AS_OF);
+
 // Deliberately placed in the SUBJECT: it is part of the draft, and an earlier
 // version of these checks read only the body and let this through.
 expectFinding('a date not in the notes, in the subject', d => {

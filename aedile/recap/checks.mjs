@@ -135,7 +135,15 @@ export function runChecks(d, notes, vault, opts = {}) {
   // The subject is part of the draft and goes out with it, so it is graded too.
   // A test caught this: an invented date placed in the subject slipped through
   // a version of these checks that only read the body.
-  const whole = `${subject}\n${body}`;
+  // open_questions ship: post() appends them into the body that crosses the wire
+  // (redige.mjs:281) and render() shows them to the reviewer, so they are part of
+  // the email and are graded like the rest of it. They were not until 2026-09-27,
+  // when a draft's "Still open" block read "Wednesday 10/25 or Sunday 10/29" --
+  // an invented month (the notes say 11/25 or 11/29) with both weekdays wrong for
+  // October -- and passed, because nothing looked at it. Exactly the subject bug
+  // one comment down, one field over: text that goes out must be text that was
+  // graded.
+  const whole = [subject, body, ...(d.open_questions || [])].join('\n');
 
   // 1. No invented people. Every name in the draft must be in the input.
   const known = vocabulary(notes);

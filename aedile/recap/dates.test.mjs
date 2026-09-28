@@ -11,7 +11,7 @@
 import test from 'node:test';
 import assert from 'node:assert';
 
-import { datesIn, timesIn, weekdayPairs, dateBlock, resolve, monthNum, DAYS } from './dates.mjs';
+import { datesIn, timesIn, weekdayPairs, dateBlock, resolve, monthNum, dateNumerals, DAYS } from './dates.mjs';
 
 const ASOF = new Date(2026, 8, 27);          // 2026-09-27, the meeting
 const iso = d => d.toISOString().slice(0, 10);
@@ -104,4 +104,18 @@ test('the block states each date, its weekday, and the times verbatim', () => {
 
 test('an input with no date and no time adds nothing to the prompt', () => {
   assert.equal(dateBlock('Solder pins on the Pis and DACs. Partnerships. Outreach.', ASOF), '');
+});
+
+// The notes say "Oct 14th", the dealer instructs "include the calendar date as
+// M/D", the draft writes "10/14" -- one day, no shared substring, and
+// invented-figure blocked the subject the dealer had asked for.
+test('a date restated as M/D is forgiven when the notes name that day', () => {
+  const notes = '* Next Wing Wednesday Oct 14th\n* Rapid Rewards Brunch: Sunday Oct 18th';
+  const got = dateNumerals('wings 10/14, brunch 10/18', notes, ASOF);
+  assert.ok(got.has('14') && got.has('18') && got.has('10'));
+});
+
+test('a date the notes do not name is forgiven nothing', () => {
+  const notes = '* Next Wing Wednesday Oct 14th';
+  assert.equal(dateNumerals('party 10/22', notes, ASOF).size, 0);
 });

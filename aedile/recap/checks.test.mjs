@@ -73,8 +73,9 @@ function expectFinding(label, mutate, wanted, opts = undefined, extraNotes = '')
 /** Assert one specific fail-level id is ABSENT. Needed where the case sentence
  *  carries a date the fixture's notes do not, so `invented-figure` fires by
  *  design and expectClean cannot be used to prove the OTHER check stayed quiet. */
-function expectNoFinding(label, d, unwanted, opts = undefined) {
-  const got = ids(d, opts);
+function expectNoFinding(label, d, unwanted, opts = undefined, extraNotes = '') {
+  const got = runChecks(d, NOTES + extraNotes, VAULT, opts)
+    .filter(f => f.level === 'fail').map(f => f.id);
   if (!got.includes(unwanted)) { passed++; console.log(`  ok   ${label}`); }
   else {
     failed++;
@@ -292,6 +293,20 @@ expectNoFinding('a two-digit item number is not an invented figure', (() => {
 expectFinding("a member's handle without the domain", d => {
   d.body = d.body.replace('meeting monthly.', 'meeting monthly. misterdee27 is available.');
 }, 'private-detail', { }, '* Alex misterdee27@gmail.com\n');
+
+// The dealer asks for M/D in the subject; the notes write "Oct 14th". One day, so
+// the numeral is not invented. The fixture's notes mention Wednesday, so use a real
+// date the notes carry.
+expectNoFinding('a date restated as M/D is not an invented figure', (() => {
+  const d = structuredClone(CLEAN);
+  d.subject = 'laser harp 10/14';
+  return d;
+})(), 'invented-figure', AS_OF, '\n- Harp day is Oct 14th.\n');
+
+// An unnamed day still blocks, which is what keeps the grace safe.
+expectFinding('a date the notes never name still blocks', d => {
+  d.body = d.body.replace('meeting monthly.', 'meeting monthly. Party on 10/22.');
+}, 'invented-figure', AS_OF);
 
 // Deliberately placed in the SUBJECT: it is part of the draft, and an earlier
 // version of these checks read only the body and let this through.

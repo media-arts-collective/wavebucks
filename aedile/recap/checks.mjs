@@ -16,7 +16,7 @@
  */
 
 import { isRagged, modalGap } from './normalize.mjs';
-import { weekdayPairs } from './dates.mjs';
+import { weekdayPairs, dateNumerals } from './dates.mjs';
 import { NAMES } from '../analysis/recap-form.mjs';
 
 // Capitalised words that are not people. Sentence-initial words mostly appear
@@ -472,8 +472,19 @@ export function runChecks(d, notes, vault, opts = {}) {
   }
 
   // 2. No invented figures. Dates, money, times, counts.
+  //
+  // A DATE RESTATED IN ANOTHER FORMAT IS THE SAME FACT. The notes say "Oct 14th";
+  // `dealSubject` deals `calDate` and instructs "include the calendar date as M/D";
+  // the draft writes "10/14"; and this check called `14` invented. That is the
+  // dealer and a check disagreeing about one draft -- the same defect `no-numbering`
+  // had -- and here the check was wrong, because 10/14 and Oct 14th are provably one
+  // day. `dates.mjs` does the proving, so this is not a loosening: a numeral is
+  // forgiven only when it belongs to a date that RESOLVES to a day the notes name.
+  // An invented day still blocks, and has a test.
+  const graceful = dateNumerals(whole, notes, opts.asOf || new Date());
   const knownFigures = figures(notes);
-  const inventedFigures = [...figures(whole)].filter(n => !knownFigures.has(n));
+  const inventedFigures = [...figures(whole)]
+    .filter(n => !knownFigures.has(n) && !graceful.has(n));
   if (inventedFigures.length) {
     add('fail', 'invented-figure',
       `figure(s) in the draft not present in the input: ${inventedFigures.join(', ')}`);

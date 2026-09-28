@@ -143,3 +143,29 @@ export function dateBlock(src, asOf = new Date()) {
   }
   return lines.join('\n');
 }
+
+/** The numerals a draft may spell differently from the notes, because they belong
+ *  to a date that resolves to a day the notes actually name.
+ *
+ *  "Oct 14th" in the notes and "10/14" in the draft are one day, but they share no
+ *  substring, so `invented-figure` called `14` invented and blocked a correct
+ *  subject -- one the dealer had ASKED for, having dealt `calDate` and instructed
+ *  "include the calendar date as M/D". Resolving both sides and comparing days is
+ *  what makes forgiving it safe: a date the notes do not name is not in this set,
+ *  so it still blocks.
+ *
+ *  Returns the numerals in the same normalised form `figures()` produces, so both
+ *  the M/D halves and the bare/ordinal day are covered. */
+export function dateNumerals(draft, notes, asOf) {
+  const nights = new Set(datesIn(notes, asOf).map(d => d.toISOString().slice(0, 10)));
+  const out = new Set();
+  for (const m of String(draft || '').matchAll(DATE_ANY)) {
+    const mon = m[1] ? Number(m[1]) - 1 : monthNum(m[3]);
+    if (mon === null) continue;
+    const day = Number(m[2] || m[4]);
+    const date = resolve(mon, day, asOf);
+    if (!date || !nights.has(date.toISOString().slice(0, 10))) continue;
+    for (const n of [String(mon + 1), String(day), `${day}st`, `${day}nd`, `${day}rd`, `${day}th`]) out.add(n);
+  }
+  return out;
+}

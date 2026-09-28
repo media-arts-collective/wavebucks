@@ -480,7 +480,45 @@ async function main(argv) {
     die(String(err.message || err), 5);
   }
 
-  const findings = runChecks(decision, raw + '\n' + (eventDate || ''), vault, { genre, beat, leadDays, hand, shape: genre === 'recap' ? recapForm() : undefined, asOf: asOf || new Date() });
+  const checkOpts = { genre, beat, leadDays, hand, shape: genre === 'recap' ? recapForm() : undefined, asOf: asOf || new Date() };
+  const grade = d => runChecks(d, raw + '\n' + (eventDate || ''), vault, checkOpts);
+  let findings = grade(decision);
+
+  // ONE repair pass, and only over blocking findings.
+  //
+  // Every check message already says what is wrong and why, in the words a human
+  // reads. Handing those same words back to the model is strictly cheaper than a
+  // human re-rolling: on 2026-09-27 three consecutive generations were blocked by
+  // three mechanical violations each ("a member's handle: misterdee27", "a person
+  // attached to an opinion: Zach has doubts", "1pm not present in the input"), all
+  // of them fixable without any new fact.
+  //
+  // Bounded at one, and it keeps whichever draft grades better, so a repair that
+  // makes things worse is discarded rather than shipped. It changes nothing about
+  // grounding: the notes the checks grade against are untouched, so a repair cannot
+  // launder an invented fact -- it can only remove one.
+  const blockers = f => f.filter(x => x.level === 'fail');
+  if (blockers(findings).length) {
+    const fix = ['## Your draft was rejected. Fix exactly these and change nothing else.', ''];
+    for (const f of blockers(findings)) fix.push(`- ${f.msg}`);
+    fix.push('',
+      'Keep every other sentence as it stands. Add no facts: each of these is fixed by',
+      'removing or rewording what is already there, never by introducing something new.');
+    console.error(`-- ${blockers(findings).length} blocking finding(s); one repair pass`);
+    try {
+      const repaired = parseDecision(await callModel(`${prompt}\n\n${fix.join('\n')}`, spoken));
+      const after = grade(repaired);
+      if (blockers(after).length < blockers(findings).length) {
+        decision = repaired;
+        findings = after;
+        console.error(`-- repair kept: ${blockers(after).length} blocking finding(s) remain`);
+      } else {
+        console.error(`-- repair discarded: it graded ${blockers(after).length}, no better than ${blockers(findings).length}`);
+      }
+    } catch (err) {
+      console.error(`-- repair pass failed, keeping the original: ${err.message || err}`);
+    }
+  }
 
   // _hand/_gap are saved because the re-post path re-grades the SAVED decision, and
   // without them `hand-ignored` -- the one check that verifies the draft followed the

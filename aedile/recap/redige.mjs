@@ -298,6 +298,10 @@ export function leadTimeBlock(eventDate, beat, asOf) {
  *  BE COMMITTED: this repo is public, so recipients come from argv. */
 const LIST_RECIPIENT = 'kreweofvaporwave@googlegroups.com';
 
+/** Same default call.sh uses, and the same caveat: that tree is being retired, so the
+ *  environment wins. Only read by --if-new, which needs the READ token. */
+const SECRETS = process.env.AEDILE_SECRETS || '/srv/vaporwave-reports/aedile/.aedile-api-secrets';
+
 /** Render open_questions into the body the same way MeetingRecap.js does --
  *  plain text, "Still open:" then a dash list. #41 moved assembly here so the
  *  POST carries a FINISHED body: the createDraft primitive is a dumb sink that
@@ -308,6 +312,36 @@ function appendOpenQuestions(body, openQuestions) {
   if (!openQuestions || !openQuestions.length) return body;
   const items = openQuestions.map(q => `  - ${q}`).join('\n');
   return `${body}\n\nStill open:\n${items}`;
+}
+
+/** Has this label already been drafted to this addressee recently?
+ *
+ *  There is no outbound dedup anywhere in the system: logDraft only ever writes, so
+ *  running the same batch twice makes two drafts and two Log rows, and a director
+ *  finds duplicates in the mailbox with no way to tell which is which. The Log is
+ *  enough to answer it -- on an originate, logDraft puts the ADDRESSEE in the `From`
+ *  column (WriteApi.js:323) -- so `--if-new` reads it back before posting.
+ *
+ *  KNOWN LIMIT, and it is not fixable from this side: once a human converts a draft
+ *  to a scheduled message, the Log still says `*_draft_posted` and nothing here can
+ *  tell that it was armed or sent. So this prevents a double DRAFT, not a double send.
+ */
+function alreadyDrafted(label, to, days = 14) {
+  const token = process.env.READ_API_TOKEN
+    || (() => { try { return (readFileSync(SECRETS, 'utf8').match(/^AEDILE_READ_API_TOKEN=(.*)$/m) || [])[1]?.replace(/["'\r]/g, ''); } catch { return undefined; } })();
+  if (!token) die('--if-new needs READ_API_TOKEN (or a readable secrets file) to check the Log', 5);
+  let raw;
+  try {
+    raw = execFileSync('curl', ['-sfL', '--max-time', '60', '-G', EXEC,
+      '--data-urlencode', `token=${token}`, '--data-urlencode', 'scope=log', '--data-urlencode', 'limit=200'],
+      { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+  } catch (err) {
+    die(`--if-new could not read the Log: ${err.message}`, 7);
+  }
+  let rows;
+  try { rows = JSON.parse(raw).rows || []; } catch { die(`--if-new got non-JSON from the Log:\n${raw.slice(0, 200)}`, 7); }
+  const cutoff = Date.now() - days * 86400000;
+  return rows.some(r => r.Action === label && String(r.From) === to && new Date(r.Timestamp).getTime() >= cutoff);
 }
 
 /** Hand the finished draft to aedile's createDraft primitive (originate form).
@@ -469,6 +503,10 @@ async function main(argv) {
     const blocked = findings.filter(f => f.level === 'fail');
     if (args.includes('--post')) {
       if (blocked.length) die(`${blocked.length} blocking finding(s) -- not posting`, 6);
+      if (args.includes('--if-new') && alreadyDrafted(GENRES[genre].label, to)) {
+        console.error(`-- already drafted: a ${GENRES[genre].label} row for ${to} exists in the last 14 days. Nothing posted.`);
+        process.exit(0);
+      }
       const dryRun = args.includes('--dry-run');
       const r = post(saved, dryRun, genre, to);
       console.error(dryRun

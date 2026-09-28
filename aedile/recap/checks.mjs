@@ -513,7 +513,12 @@ export function runChecks(d, notes, vault, opts = {}) {
   // dealt hand had told them to number. A device the dealer owns must not also be
   // graded here, or the two halves of the generator disagree about the same draft.
   const bodyItems = itemNumbers(body);
-  if (!headsup && !bodyItems.length) {
+  // ...and then this did it anyway for the recap genre. `numberedList` is dealt at
+  // p=0.82, so about one recap in five is told "Do NOT number anything. Write it as
+  // prose" -- and was then warned at for obeying. Zach, 2026-09-27: "following the
+  // deal?" It was; the check was grading the dealer's own decision. Silent when the
+  // hand dealt numbering OFF, and unchanged when no hand was supplied.
+  if (!headsup && !bodyItems.length && opts.hand?.numberedList !== false) {
     add('warn', 'no-numbering', 'no numbered items -- the archive numbers almost everything');
   }
 
@@ -567,7 +572,10 @@ export function runChecks(d, notes, vault, opts = {}) {
   // over messages.jsonl the real rate is 40%. The check is still worth firing;
   // quoting the vault's number at the operator was repeating a fabrication, so
   // it now cites the measured figure instead.
-  if (!headsup && vault?.motifs?.['all-caps-emphasis'] && !/\b[A-Z]{4,}\b/.test(body)) {
+  // Same deal-vs-check conflict as no-numbering above: allCaps is dealt, so a draft
+  // told not to shout must not be warned for not shouting.
+  if (!headsup && vault?.motifs?.['all-caps-emphasis'] && !/\b[A-Z]{4,}\b/.test(body)
+      && opts.hand?.allCaps !== false) {
     add('warn', 'no-caps',
       'no ALL-CAPS emphasis; 40% of the archive\'s messages carry it');
   }

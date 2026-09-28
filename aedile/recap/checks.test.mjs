@@ -239,6 +239,15 @@ expectFinding('a wrong weekday in open_questions', d => {
   d.open_questions = ['Integration day is Saturday October 11th, right?'];
 }, 'weekday-mismatch', AS_OF);
 
+// A draft dealt "do NOT number" must not be warned for not numbering.
+{
+  const d = structuredClone(CLEAN);
+  d.body = 'Wednesday meet at the usual place. Bar takeovers with video games.\n\n<3 MS';
+  expectWarn('numbering dealt off is not graded', d, 'no-numbering', false, { hand: { numberedList: false } });
+  expectWarn('numbering dealt ON and absent still warns', d, 'no-numbering', true, { hand: { numberedList: true } });
+  expectWarn('no hand supplied: unchanged behaviour', d, 'no-numbering', true);
+}
+
 // Deliberately placed in the SUBJECT: it is part of the draft, and an earlier
 // version of these checks read only the body and let this through.
 expectFinding('a date not in the notes, in the subject', d => {

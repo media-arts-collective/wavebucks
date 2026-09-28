@@ -16,6 +16,7 @@
  */
 
 import { isRagged, modalGap } from './normalize.mjs';
+import { weekdayPairs } from './dates.mjs';
 
 // Capitalised words that are not people. Sentence-initial words mostly appear
 // in both texts and cancel out; these are the ones that would not.
@@ -294,34 +295,12 @@ export function runChecks(d, notes, vault, opts = {}) {
   // looser pattern would invent and fail on. A bare "Wednesday the 25th" carries
   // no month and is not resolvable, so it is left alone.
   if (opts.asOf) {
-    const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july',
-      'august', 'september', 'october', 'november', 'december'];
-    const monthNum = w => {
-      const k = w.toLowerCase();
-      const i = MONTHS.findIndex(m => m === k || m.slice(0, 3) === k.slice(0, 3));
-      return i < 0 ? null : i;
-    };
-    const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const asOf = new Date(opts.asOf);
-    const PAIR = /\b(sun|mon|tues|wednes|thurs|fri|satur)day\b[\s,]*(?:the\s+)?(?:([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?|(\d{1,2})\/(\d{1,2}))\b/gi;
-    const bad = [];
-    for (const m of text(whole).matchAll(PAIR)) {
-      const said = `${m[1]}day`.toLowerCase();
-      const mon = m[2] ? monthNum(m[2]) : Number(m[4]) - 1;
-      const day = Number(m[3] || m[5]);
-      if (mon === null || !(mon >= 0 && mon <= 11) || !(day >= 1 && day <= 31)) continue;
-      // The year is whichever candidate lands closest to the send date, so a
-      // December notice written in November resolves forward and not back.
-      let best = null;
-      for (const y of [asOf.getFullYear() - 1, asOf.getFullYear(), asOf.getFullYear() + 1]) {
-        const c = new Date(y, mon, day);
-        if (c.getMonth() !== mon) continue;   // 31st of a 30-day month
-        if (!best || Math.abs(c - asOf) < Math.abs(best - asOf)) best = c;
-      }
-      if (!best) continue;
-      const real = DAYS[best.getDay()];
-      if (real !== said) bad.push(`"${m[0].trim()}" is a ${real}`);
-    }
+    // The calendar lives in dates.mjs, shared with the prompt block that tells the
+    // model each date's real weekday. Two copies is how a check and a prompt come
+    // to disagree about the same draft.
+    const bad = weekdayPairs(text(whole), opts.asOf)
+      .filter(p => p.claimed !== p.actual)
+      .map(p => `"${p.text}" is a ${p.actual}`);
     if (bad.length) {
       add('fail', 'weekday-mismatch',
         `the weekday does not match the date: ${bad.join('; ')}. Telling the list the wrong day is `

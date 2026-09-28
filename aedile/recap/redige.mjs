@@ -31,6 +31,7 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { callModel, parseDecision } from '../brain/model.mjs';
 import { runChecks, report } from './checks.mjs';
+import { dateBlock } from './dates.mjs';
 import { formBlock, measuredRates } from '../analysis/headsup-form.mjs';
 import { formBlock as recapFormBlock, form as recapForm } from '../analysis/recap-form.mjs';
 import { subjectWeights } from '../analysis/subject-shapes.mjs';
@@ -460,10 +461,16 @@ async function main(argv) {
   console.error(`-- subject: ${subjectShape.slice(9, 96)}`);
 
   const lead = leadTimeBlock(eventDate, beat, asOf);
+  // Same principle as leadTimeBlock, applied to every date in the notes rather
+  // than just the event's: Node resolves the weekday, the model is told. Built
+  // from `raw` -- the writer's own bytes -- not from the model's rendering of
+  // them, so the spelling it is shown is the spelling the checks grade against.
+  const dates = dateBlock(raw, asOf ? new Date(asOf) : new Date());
   const leadDays = eventDate ? leadTimeBlock.days : undefined;
   const prompt = [
     buildSystemPrompt(vault, genre),
     lead,
+    dates,
     devicesBlock(hand, [flourish, signoff].filter(Boolean).join('\n- '), typo, gap, subjectShape),
   ].filter(Boolean).join('\n\n');
   let decision;

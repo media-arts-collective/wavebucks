@@ -144,13 +144,27 @@ expectClean('a parenthetical aside in the archive\'s own shape', (() => {
 
 // Oversubdivision, warn-level, and only when the caller supplies the measured
 // shape. The fixture is short, so eight one-line items is the shape being caught.
-const SHAPE = { items: 5, wordsPerItem: 43 };
+const SHAPE = { items: 5, wordsPerItem: 43, ownerPct: 8, names: ['Tyler', 'Zach', 'Kevin', 'Adam'] };
 {
   const d = structuredClone(CLEAN);
   d.body = '1. One thing.\n\n2. Two.\n\n3. Three.\n\n4. Four.\n\n5. Five.\n\n6. Six.\n\n7. Seven.\n\n8. Eight.\n\n<3 MS';
   expectWarn('eight thin items against a median of five', d, 'oversubdivided', true, { shape: SHAPE });
   // Same draft, no measured shape passed: silent, like every other corpus-gated check.
   expectWarn('no shape supplied, nothing to compare against', d, 'oversubdivided', false);
+}
+
+// Owner-heavy: every item naming who owes something, against ~8% in the archive.
+{
+  const d = structuredClone(CLEAN);
+  d.body = '1. Tyler is booking the room.\n\n2. Zach will email the list.\n\n3. Kevin is bringing the DAC.\n\n<3 MS';
+  expectWarn('an item per owner reads like a tracker', d, 'owner-heavy', true, { shape: SHAPE });
+}
+// Naming a person is not the problem -- a quarter of archived items do. One
+// owner in four items is inside the measured rate and must stay silent.
+{
+  const d = structuredClone(CLEAN);
+  d.body = '1. Tyler is booking the room.\n\n2. The harp needs relays.\n\n3. Bar takeovers with video games.\n\n4. Cost unknown.\n\n<3 MS';
+  expectWarn('one owner in four items is fine', d, 'owner-heavy', false, { shape: SHAPE });
 }
 
 // Deliberately placed in the SUBJECT: it is part of the draft, and an earlier

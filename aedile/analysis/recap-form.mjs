@@ -38,6 +38,32 @@ const signed = b => {
 
 const words = s => s.split(/\s+/).filter(Boolean).length;
 
+/** HAND-CURATED, and the only figure in this file that is not derived. Three
+ *  automatic sources were tried on 2026-09-27 and all three are wrong:
+ *  `people/` filenames are mangled email local-parts (`Tylernomacorg`,
+ *  `Cragmailcom`), so Tyler, Chris, Josh, Kevin, Brandon and Daryll are absent
+ *  and the rate came out 5%; the `author` display names survive for only 11
+ *  people, giving 3%; and taking every mid-sentence capitalised token gave 47%
+ *  by counting Canal, Esplanade, Raspberry and Need as people.
+ *
+ *  So this list is eyeballed off the mid-sentence frequency table, and the rate
+ *  it produces is an UPPER BOUND -- a place or a thing wrongly kept inflates it.
+ *  That is good enough for the finding it supports, because the finding survives
+ *  all three name sets: 3%, 25% and 47% are each far below the 86-88% the
+ *  generator was writing. Direction, not decimal. */
+export const NAMES = ['Abraham', 'Adam', 'Alex', 'Asha', 'Ben', 'Brandon', 'Chuck', 'Dan', 'Elliot',
+  'Elliott', 'Fran', 'Francesca', 'George', 'Haley', 'Ingrid', 'Izze', 'Jacob', 'Jake', 'Jeff', 'Joe',
+  'Joseph', 'Jordan', 'Ken', 'Kevin', 'Laura', 'Lauren', 'Margaret', 'Michael', 'Nick', 'Nora', 'Olin',
+  'Paul', 'Phoebe', 'Rich', 'Ryan', 'Seymore', 'Smitty', 'Stephen', 'Telemachus', 'Tricia', 'Tyler',
+  'Vanessa', 'Zach'];
+
+/** "Kevin is bringing the projector", "Stephen will email them" -- a name plus a
+ *  verb of commitment. This is the shape a recap uses sparingly and a project
+ *  tracker uses in every line. */
+export const ownerRe = (names = NAMES) => new RegExp(
+  `\\b(?:${names.join('|')})\\b(?:\\s+\\w+){0,3}?\\s+(?:is|are|will|has|can|should|needs? to|volunteered|wants|said)\\b`);
+const nameRe = (names = NAMES) => new RegExp(`\\b(?:${names.join('|')})\\b`);
+
 /** The numbered items of a body, split on the numbering itself. Text before the
  *  first number (greeting, preamble) is not an item and is dropped -- counting it
  *  is what turned 42 words per item into 60 on the first pass. */
@@ -55,12 +81,25 @@ export function pool({ since = null, until = null } = {}) {
  *  cannot disagree. */
 export function form(p = pool()) {
   const numbered = p.map(itemsOf).filter(a => a.length);
+  const items = numbered.flat();
+  const lens = items.map(words).sort((a, b) => a - b);
+  const at = q => lens[Math.floor(lens.length * q)] || 0;
+  const rate = re => Math.round(100 * items.filter(t => re.test(t)).length / (items.length || 1));
   return {
     n: p.length,
     numberedPct: Math.round(100 * numbered.length / (p.length || 1)),
     words: median(p.map(words)),
     items: median(numbered.map(a => a.length)),
-    wordsPerItem: median(numbered.flatMap(a => a.map(words))),
+    wordsPerItem: median(items.map(words)),
+    // The spread, because the median alone instructs uniformity -- and uniformity
+    // is the tell style.mjs ranks (#29). A real recap mixes a one-line item in
+    // with a fat paragraph.
+    p25: at(0.25), p75: at(0.75),
+    shortPct: Math.round(100 * items.filter(t => words(t) <= 15).length / items.length),
+    longPct: Math.round(100 * items.filter(t => words(t) >= 60).length / items.length),
+    namePct: rate(nameRe()),
+    ownerPct: rate(ownerRe()),
+    names: NAMES,
   };
 }
 
@@ -73,16 +112,20 @@ export function formBlock() {
     '',
     `Computed from the ${f.n} signed recap-length messages the operator actually sent.`,
     '',
-    `- **About ${f.items} numbered items.** Not ${f.items + 2} and not 2. ${f.numberedPct}% of these messages`,
-    '  number their items at all.',
-    `- **About ${f.wordsPerItem} words per item**, and that is the figure to hit. An item is a short`,
-    '  paragraph, not a headline: it carries the detail that makes the item actionable',
-    '  (who is doing it, where, what is still unknown).',
-    `- **About ${f.words} words overall.**`,
-    '',
-    'These three are one shape, and the failure mode is splitting the same material',
-    'into more, thinner items to look thorough. Merge related items instead: one fat',
-    'item that says everything about the cinema beats three that each say a third.',
+    `- **About ${f.items} numbered items.** Not ${f.items + 3} and not 2. ${f.numberedPct}% of these messages`,
+    '  number their items at all. Merge related material rather than splitting it finer:',
+    '  one item that says everything about the cinema beats three that each say a third.',
+    `- **Vary the item lengths.** Median ${f.wordsPerItem} words, but a quarter run ${f.p25} or fewer and`,
+    `  ${f.longPct}% run 60 or more; ${f.shortPct}% are one line. Items that are all the same length are`,
+    '  the single clearest sign an email was generated. Some items are a paragraph, some',
+    '  are six words.',
+    `- **About ${f.words} words overall -- but ONLY what the notes support.** If the notes give`,
+    '  a topic six words, the item is six words. Never pad an item to reach a length:',
+    '  everything you add that the notes do not contain is an invented fact, and that is',
+    '  where a made-up time, place or joke comes from. A short honest recap is correct.',
+    `- **Name a person in about ${f.namePct}% of items, and say who owes something in about ${f.ownerPct}%.**`,
+    '  A recap reports what the room settled, not who owes what. Naming an owner in every',
+    '  item reads like a project tracker, and this list has never received one.',
   ].join('\n');
 }
 

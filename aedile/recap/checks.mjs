@@ -228,6 +228,41 @@ export function runChecks(d, notes, vault, opts = {}) {
     }
   }
 
+  // 1a-quater. Owner-heavy: a recap that reads like a project tracker.
+  //
+  // The largest deviation measured on 2026-09-27, and the one nobody had a number
+  // for. The archive names a person in ~25% of items and says who owes something in
+  // ~8%. The drafts that night: 86-88% and 71-75%. A recap here reports what the
+  // room settled; the owner list is what the action-items section of the NOTES is
+  // for, and it does not transfer to the mail.
+  //
+  // The 25%/8% come from a hand-curated name list (see NAMES in
+  // analysis/recap-form.mjs) because all three automatic sources on this box are
+  // mangled. So the threshold is deliberately loose -- three times the measured
+  // rate -- and warn-level. The finding survives every name set tried (3%, 25%,
+  // 47% all far below 86%), which is what makes it quotable; the exact percentage
+  // is not.
+  if (opts.shape && opts.shape.ownerPct && opts.shape.names) {
+    const parts = body.split(/(?=(?:^|\n)\s*-?\d+(?:\.\d+)?[.)]\s)/)
+      .filter(t => /^\s*-?\d+(?:\.\d+)?[.)]\s/.test(t));
+    const owner = new RegExp(`\\b(?:${opts.shape.names.join('|')})\\b`
+      + '(?:\\s+\\w+){0,3}?\\s+(?:is|are|will|has|can|should|needs? to|volunteered|wants|said)\\b');
+    if (parts.length >= 3) {
+      const hits = parts.filter(t => owner.test(t)).length;
+      const rate = Math.round(100 * hits / parts.length);
+      // Both conditions, because either alone misfires. A rate test alone fires on
+      // one owner in four items (25% against a 24% bar), which is an ordinary recap
+      // sentence; a count test alone fires on 3 owners in a 20-item digest. The
+      // finding is owner assignment being PERVASIVE, so it takes both.
+      if (rate > opts.shape.ownerPct * 3 && hits >= 3) {
+        add('warn', 'owner-heavy',
+          `${hits} of ${parts.length} items assign an owner (${rate}%); the archive does it in about `
+          + `${opts.shape.ownerPct}% of items. A recap reports what was settled -- the owner list is `
+          + 'what the notes are for');
+      }
+    }
+  }
+
   // 1b. No invented pronouns. A gendered third-person pronoun the input does not
   // supply is an invented fact about a real member, and the failure is not a style
   // tell but misgendering someone on a 40-person list.

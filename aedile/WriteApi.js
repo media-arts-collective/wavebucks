@@ -9,8 +9,8 @@
  *      would. Kept until the tier cutovers (#42/#43) move judgment to the Node
  *      brain and #46 decommissions them. NOT the target topology.
  *
- *   2. EXECUTE-ONLY primitives (createDraft, sendReplyAll, addLabel) — the
- *      target topology (milestone #2, #36). Apps Script drops to a pure Gmail
+ *   2. EXECUTE-ONLY primitives (createDraft, sendReplyAll, addLabel,
+ *      trashMessage) — the target topology (milestone #2, #36). Apps Script drops to a pure Gmail
  *      I/O layer: the server-side brain does ALL the judgment (reads context,
  *      calls the model, writes the text) and POSTs a finished action here. Each
  *      primitive decides nothing, reads no institutional-memory context, and
@@ -91,6 +91,14 @@
  *   ?action=addLabel      -d threadId=<id> -d label=<name>
  *           Adds a Gmail label to a thread (creating it if missing). Inert —
  *           never drafts, never sends. The enact half of a triage `flag`.
+ *   ?action=trashMessage  -d messageId=<id>
+ *           Moves ONE message to the trash. Exists to answer #74: a Gmail
+ *           scheduled send cannot be created or edited by any API, but it
+ *           carries an ordinary message id, so whether trashing it CANCELS
+ *           the send is a separate, untested question. Message-scoped so a
+ *           probe cannot take a thread's replies with it; no inverse verb,
+ *           because the reversal is the Gmail UI's 30-day trash. Delete this
+ *           if the probe answers no — it has no other caller.
  *
  * LEGACY TRIGGER-ACTIONS (all POST; judgment runs in Apps Script):
  *   ?action=scanInbox[&dryRun=true]                   Runs scanInbox() (= InboxProcessor.scanUnread()).
@@ -365,10 +373,51 @@ const WRITE_API = (() => {
     return respondOk('addLabel', dryRun, { threadId: params.threadId, label: params.label, labeled: true });
   }
 
+  /**
+   * trashMessage — the probe for #74, and nothing more.
+   *
+   * The question it exists to answer: Gmail's scheduled send cannot be
+   * CREATED or EDITED through any API (measured — the v1 discovery document
+   * carries no send-time field anywhere, and a pending-send message is not a
+   * draft, so drafts.update cannot reach it). Whether it can be CANCELLED is
+   * a separate code path nobody has tested. A scheduled message carries an
+   * ordinary message id, so moveToTrash() can address it; what Gmail does in
+   * response is undocumented either way.
+   *
+   * Message-scoped, not thread-scoped, on purpose. A scheduled beat is one
+   * message that usually sits alone on a thread, and trashing the THREAD
+   * would take any real reply with it. A probe that can destroy a
+   * conversation is not a probe.
+   *
+   * No untrash verb, deliberately. GmailMessage exposes moveToTrash() and no
+   * inverse — the reversal lives in the Gmail UI, where trash is recoverable
+   * for 30 days. Writing a thread-scoped "untrash" to pair with a
+   * message-scoped trash would be an asymmetry that restores more than it
+   * removed. No permanent-delete verb either, for the same reason: this verb
+   * is safe only because Gmail keeps what it takes.
+   *
+   * If the probe answers no, delete this. It has no other caller.
+   */
+  function primTrashMessage(params, dryRun) {
+    if (!params.messageId) return respondBad('trashMessage requires a messageId.');
+    // Deliberately unguarded: an unreachable id throws and the 500 IS the
+    // answer. A probe that swallowed the error would report "nothing
+    // happened" for both "cancelled cleanly" and "could not find it".
+    const message = GmailApp.getMessageById(params.messageId);
+    if (!message) return respondBad('trashMessage: no message with id ' + params.messageId);
+    const before = message.isInTrash();
+    if (dryRun) {
+      return respondOk('trashMessage', dryRun, { messageId: params.messageId, inTrash: before, note: 'DRY RUN — nothing changed.' });
+    }
+    message.moveToTrash();
+    return respondOk('trashMessage', dryRun, { messageId: params.messageId, inTrashBefore: before, inTrashAfter: message.isInTrash() });
+  }
+
   const PRIMITIVES = {
     createDraft: primCreateDraft,
     sendReplyAll: primSendReplyAll,
     addLabel: primAddLabel,
+    trashMessage: primTrashMessage,
   };
 
   /**

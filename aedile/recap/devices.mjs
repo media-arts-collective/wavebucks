@@ -103,7 +103,10 @@ export const DEVICES = [
 /** A small string-seeded PRNG, so a burst reproduces exactly from its seed and
  *  a specimen always gets the same hand. Not cryptographic and does not need
  *  to be. */
-function rng(seed) {
+/** Exported for schedule.mjs, which deals a second bump beat per event at a measured
+ *  rate and needs the SAME seeded generator so a schedule is reproducible and
+ *  "why did Wednesday only get one?" is answerable after the fact. */
+export function rng(seed) {
   let h = 2166136261 >>> 0;
   for (const ch of String(seed)) {
     h ^= ch.charCodeAt(0);

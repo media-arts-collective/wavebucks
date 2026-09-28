@@ -88,6 +88,42 @@ function intake(path) {
   return text;
 }
 
+/** Bullets mean outline. Detected, not declared: a heading or marker the writer
+ *  has to remember is a contract that gets forgotten, and the notes are written
+ *  during a meeting. Whisper output is unbulleted prose, so it falls through
+ *  unchanged and the transcript path is untouched. */
+const looksLikeOutline = raw => (raw.match(/(?:^|\n)\s*[*\-\u2022]\s+\S/g) || []).length >= 3;
+
+/** One model call, turning bullets into the meeting as it was spoken, so the
+ *  outline rides the pipeline the transcript already rides -- same prompt, same
+ *  devices, same checks, nothing downstream aware of which path it came from.
+ *
+ *  THE CHECKS STILL GRADE THE RAW FILE, not this. #68's warning is that a
+ *  fabricated transcript makes invented-name/invented-figure circular, because
+ *  they prove a fact appears in the input and the agent wrote the input. That
+ *  applies to this output too: it is model-authored. So main() keeps the writer's
+ *  bytes as the grounding text and hands only the model the spoken version, which
+ *  means anything this pass adds is caught against the original rather than
+ *  laundered by it. */
+async function outlineToTranscript(raw) {
+  const sys = [
+    'You are given one person\'s bullet notes from a meeting that already happened.',
+    'Rewrite them as what was actually said in the room: plain spoken prose, people',
+    'talking, in the order the notes have them.',
+    '',
+    'Add NOTHING. No date, time, place, name, number or decision that is not in the',
+    'notes. Do not resolve a question the notes leave open, do not infer a weekday',
+    'from a date, and do not invent who said what -- write "someone" if the notes',
+    'do not say. A line you cannot render without inventing something gets rendered',
+    'as the bare fact it is.',
+    '',
+    'Output the prose only. No preamble, no headings, no bullets, no JSON.',
+  ].join('\n');
+  const text = (await callModel(sys, raw)).trim();
+  if (text.length < 200) die(`the outline pass returned ${text.length} chars -- refusing to draft from that`, 3);
+  return text;
+}
+
 // --- the vault ---------------------------------------------------------------
 
 /** The .md files carry the voice as prose a human reads; this pulls out the two
@@ -392,10 +428,17 @@ async function main(argv) {
     process.exit(blocked.length ? 6 : 0);
   }
 
-  const notes = intake(input);
-  if (notes.trim().length < 500) {
-    die(`input is ${notes.trim().length} chars, under the 500-char floor -- refusing rather than recapping nothing`, 3);
+  const raw = intake(input);
+  if (raw.trim().length < 500) {
+    die(`input is ${raw.trim().length} chars, under the 500-char floor -- refusing rather than recapping nothing`, 3);
   }
+
+  // `spoken` is what the model drafts from; `raw` stays the grounding text for the
+  // checks. An outline gets converted to speech first so it rides the transcript
+  // path; a transcript is already speech and is passed through untouched.
+  const outline = looksLikeOutline(raw);
+  const spoken = outline ? await outlineToTranscript(raw) : raw;
+  if (outline) console.error(`-- outline detected: ${raw.trim().length} chars of notes -> ${spoken.length} chars of speech`);
 
   const vault = readVault();
   console.error(`-- vault: ${Object.keys(vault.motifs).length} motifs, ${vault.examples.length} example recaps`);
@@ -425,19 +468,19 @@ async function main(argv) {
   ].filter(Boolean).join('\n\n');
   let decision;
   try {
-    decision = parseDecision(await callModel(prompt, notes));
+    decision = parseDecision(await callModel(prompt, spoken));
   } catch (err) {
     die(String(err.message || err), 5);
   }
 
-  const findings = runChecks(decision, notes + '\n' + (eventDate || ''), vault, { genre, beat, leadDays, hand, shape: genre === 'recap' ? recapForm() : undefined, asOf: asOf || new Date() });
+  const findings = runChecks(decision, raw + '\n' + (eventDate || ''), vault, { genre, beat, leadDays, hand, shape: genre === 'recap' ? recapForm() : undefined, asOf: asOf || new Date() });
 
   // _hand/_gap are saved because the re-post path re-grades the SAVED decision, and
   // without them `hand-ignored` -- the one check that verifies the draft followed the
   // draw -- silently did not run on the bytes that actually ship. It also made the
   // question "was it following the deal?" unanswerable from the artifact: the draw is
   // unseeded, printed to stderr once, and then gone.
-  writeFileSync(out, JSON.stringify({ ...decision, _checks: findings, _notes: notes, _hand: hand, _gap: gap }, null, 2));
+  writeFileSync(out, JSON.stringify({ ...decision, _checks: findings, _notes: raw, _spoken: outline ? spoken : undefined, _hand: hand, _gap: gap }, null, 2));
   console.error(`-- wrote ${out}`);
   report(findings);
 

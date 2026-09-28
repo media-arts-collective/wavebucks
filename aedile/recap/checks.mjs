@@ -17,6 +17,7 @@
 
 import { isRagged, modalGap } from './normalize.mjs';
 import { weekdayPairs } from './dates.mjs';
+import { NAMES } from '../analysis/recap-form.mjs';
 
 // Capitalised words that are not people. Sentence-initial words mostly appear
 // in both texts and cancel out; these are the ones that would not.
@@ -98,10 +99,20 @@ const vocabulary = src => new Set(
  *  three facts the email exists to carry. `1 pm` normalises to `1pm` so a draft
  *  may respace what the notes wrote. */
 const figures = src => new Set(
-  (text(src).match(/(?<![.\d])\$?\d[\d,.:]*(?:\s?(?:ms|am|pm)|%|st|nd|rd|th)?\b/gi) || [])
+  (text(stripItemNumbers(src)).match(/(?<![.\d])\$?\d[\d,.:]*(?:\s?(?:ms|am|pm)|%|st|nd|rd|th)?\b/gi) || [])
     .map(n => n.toLowerCase().replace(/[.,]$/, '').replace(/\s+/, ''))
     .filter(n => !/^\d\.?$/.test(n))
 );
+
+/** Line-anchored list ordinals, removed before figures are read.
+ *
+ *  The comment above says ordinals are "deliberately not" figures, and the
+ *  `!/^\d\.?$/` filter implements that for ONE digit only. A 13-item recap on
+ *  2026-09-27 blocked on `invented-figure: 12` -- the twelfth item's own number.
+ *  Every recap long enough to reach item 10 was unpostable, and the longer the
+ *  digest the likelier it hit. Stripping at the line anchor is the same rule
+ *  `itemNumbers` already uses to tell structure from prose. */
+const stripItemNumbers = src => text(src).replace(/(^|\n)([ \t]*)-?\d+\.(\s)/g, '$1$2$3');
 
 /** Anchored at a line start, like every comparable pattern in style.mjs. Without
  *  the anchor, "Doors at 8, show at 9. See you" read as item 9. */
@@ -264,10 +275,14 @@ export function runChecks(d, notes, vault, opts = {}) {
       // sentence; a count test alone fires on 3 owners in a 20-item digest. The
       // finding is owner assignment being PERVASIVE, so it takes both.
       if (rate > opts.shape.ownerPct * 3 && hits >= 3) {
+        // The message used to read "the owner list is what the notes are for", which
+        // contradicts `## Names`: naming the person on a commitment is exactly what
+        // the archive does and what the prompt asks for. The finding is that nearly
+        // every item IS a commitment item, not that anyone was named.
         add('warn', 'owner-heavy',
-          `${hits} of ${parts.length} items assign an owner (${rate}%); the archive does it in about `
-          + `${opts.shape.ownerPct}% of items. A recap reports what was settled -- the owner list is `
-          + 'what the notes are for');
+          `${hits} of ${parts.length} items are commitment items with an owner (${rate}%); the archive `
+          + `runs about ${opts.shape.ownerPct}%. Naming the person on a commitment is right -- having `
+          + 'almost every item be one is the recap reading as a task tracker');
       }
     }
   }
@@ -326,12 +341,89 @@ export function runChecks(d, notes, vault, opts = {}) {
   //
   // The krewe's own list and account addresses are exempt -- those are public.
   const PUBLIC_ADDR = /@(?:googlegroups\.com|kreweofvaporwave\.com)$/i;
-  const addrs = [...new Set((text(whole).match(/\b[\w.+-]+@[\w-]+\.[a-z]{2,}\b/gi) || []))]
-    .filter(a => !PUBLIC_ADDR.test(a));
-  if (addrs.length) {
+  const ADDR = /\b[\w.+-]+@[\w-]+\.[a-z]{2,}\b/gi;
+  const addrs = [...new Set((text(whole).match(ADDR) || []))].filter(a => !PUBLIC_ADDR.test(a));
+
+  // The LOCAL PART on its own is still the handle, and dropping the domain does not
+  // anonymise anyone. Given notes that read "Alex misterdee27@gmail.com", the draft
+  // wrote "misterdee27 is available" -- the person's login, published to ~40 people,
+  // in place of their name. The full-address pattern passed it. Only a local part
+  // whose whole address is in the NOTES counts, so an ordinary word is never
+  // mistaken for a handle.
+  const handles = [...new Set((text(notes).match(ADDR) || []))]
+    .filter(a => !PUBLIC_ADDR.test(a))
+    .map(a => a.split('@')[0])
+    .filter(h => h.length >= 4 && new RegExp(`\\b${h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text(whole)));
+
+  if (addrs.length || handles.length) {
+    const what = addrs.length
+      ? `a personal email address in the body: ${addrs.join(', ')}`
+      : `a member's handle in the body: ${handles.join(', ')}`;
     add('fail', 'private-detail',
-      `a personal email address in the body: ${addrs.join(', ')}. Name the person instead -- the list `
-      + 'is ~40 people and the notes are not consent to publish it');
+      `${what}. Name the person instead -- the list is ~40 people and the notes are not `
+      + 'consent to publish it');
+  }
+
+  // 1a-septies. A person attached to an opinion, or described instead of worked with.
+  //
+  // NOT a new rule. AEDILE_CONTEXT.recap.md's `## Names` already says it, and says
+  // it is the archive's own habit rather than an imposition: "Name someone when you
+  // are attributing a commitment they made or a thing they own... Every one is a
+  // person attached to a job. None is a person attached to an opinion, an
+  // attendance record, or an assessment." `## What stays out` repeats it twice
+  // ("Who held which opinion on the way to a decision", "Anything anyone said about
+  // a person rather than about the work"). The prompt was ignored, twice, in one
+  // draft generated from the real notes -- so this is purely the backstop half of
+  // the loop, with the instruction already in place.
+  //
+  // MEASURED, both populations, 573 operator messages and 628 thread files:
+  //   NAME + has doubts/thinks/feels/is skeptical/likes/concurs   0 and 0
+  //   ANY of those verbs with NO name required                    0 and 0
+  //   NAME within 6 words of a personal descriptor                0 and 0
+  // The second line is what makes the first trustworthy: the zero is the register
+  // being absent from this list, not my pattern being too narrow.
+  //
+  // THE NEAR-MISSES DECIDED BOTH PATTERNS, and neither survived its first draft:
+  //   - A bare descriptor lexicon measures 4 and 5, and every instance is ordinary
+  //     prose: "don't drive drunk", "a naked person, because painting and naked
+  //     people go together", the author about themselves. Blocking those words
+  //     would block the archive. Requiring a NAME nearby drops all nine and still
+  //     catches "Tyler has seen this guy naked maybe once".
+  //   - `said`/`says` is attested (2 and 3) and both carry a FACT, not an opinion:
+  //     "Kevin says that the trailer will be ready to go on Saturday". So the
+  //     opinion pattern excludes them; a commitment reported with a name is exactly
+  //     what `## Names` asks for.
+  //
+  // Names come from the curated list plus whoever the notes actually mention, so
+  // Chris, Daryll, Josh, Ruebin and Lester are covered without being hardcoded.
+  {
+    const people = [...new Set([...NAMES.map(n => n.toLowerCase()), ...nameCandidates(notes)])]
+      .filter(n => /^[a-z][a-z'’-]{2,}$/.test(n))
+      .map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    if (people.length) {
+      const N = `(?:${people.join('|')})`;
+      const OPINION = new RegExp(
+        `\\b${N}\\b\\s+(?:(?:has|had)\\s+(?:doubts|reservations|concerns|misgivings)`
+        + `|thinks|feels|believes|reckons|suspects|likes|prefers|dislikes|hates|loves`
+        + `|concurs|agrees|disagrees|objects`
+        + `|is\\s+(?:skeptical|sceptical|worried|unsure|doubtful|nervous|against))\\b`, 'i');
+      const DESC = '(?:naked|nudist|drunk|hungover|shirtless|stoned|wasted|creepy|lazy|flaky)';
+      const PERSONAL = new RegExp(
+        `\\b${N}\\b(?:\\W+\\w+){0,6}\\W+${DESC}\\b|\\b${DESC}\\b(?:\\W+\\w+){0,6}\\W+${N}\\b`, 'i');
+
+      const op = text(whole).match(OPINION);
+      if (op) {
+        add('fail', 'opinion-attribution',
+          `a person attached to an opinion: "${op[0]}". 0 occurrences in 1,201 archived documents, `
+          + 'and `## Names` forbids it -- record the decision, not who held which view on the way to it');
+      }
+      const pd = text(whole).match(PERSONAL);
+      if (pd) {
+        add('fail', 'personal-not-work',
+          `a person described rather than their work: "${pd[0].trim()}". \`## What stays out\`: `
+          + 'anything anyone said about a person rather than about the work');
+      }
+    }
   }
 
   // 1b. No invented pronouns. A gendered third-person pronoun the input does not

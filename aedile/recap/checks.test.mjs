@@ -56,10 +56,11 @@ const ids = (d, opts) => runChecks(d, NOTES, VAULT, opts).filter(f => f.level ==
 
 // `opts` for the checks that only fire when the caller supplies a measured figure
 // or a date (shape, leadDays, asOf): without it they are silent, by design.
-function expectFinding(label, mutate, wanted, opts = undefined) {
+function expectFinding(label, mutate, wanted, opts = undefined, extraNotes = '') {
   const d = structuredClone(CLEAN);
   mutate(d);
-  const got = ids(d, opts);
+  const got = runChecks(d, NOTES + extraNotes, VAULT, opts)
+    .filter(f => f.level === 'fail').map(f => f.id);
   const ok = got.includes(wanted);
   if (ok) { passed++; console.log(`  ok   ${label}`); }
   else {
@@ -247,6 +248,50 @@ expectFinding('a wrong weekday in open_questions', d => {
   expectWarn('numbering dealt ON and absent still warns', d, 'no-numbering', true, { hand: { numberedList: true } });
   expectWarn('no hand supplied: unchanged behaviour', d, 'no-numbering', true);
 }
+
+// `## Names`: "None is a person attached to an opinion, an attendance record, or
+// an assessment." Both of these reached a real draft on 2026-09-27.
+expectFinding('a person attached to an opinion', d => {
+  d.body = d.body.replace('meeting monthly.', 'meeting monthly. Tyler has doubts it will ever happen.');
+}, 'opinion-attribution');
+
+expectFinding('a person described rather than their work', d => {
+  d.body = d.body.replace('meeting monthly.', 'meeting monthly. Tyler has seen this guy naked, it was dark.');
+}, 'personal-not-work');
+
+// The near-miss that kept `said`/`says` out of the opinion pattern: the archive
+// reports commitments with a name, which is what `## Names` asks for.
+expectNoFinding('a commitment reported with a name', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('meeting monthly.', 'meeting monthly. Tyler says the relays will be ready.');
+  return d;
+})(), 'opinion-attribution');
+
+// A bare descriptor with nobody named is ordinary prose -- the archive has
+// "don't drive drunk" and "a naked person, because painting and naked people go
+// together". Nine such instances across both populations; none is this finding.
+expectNoFinding('a descriptor with no one named is left alone', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('meeting monthly.', "meeting monthly. Drive however you like, just don't drive drunk.");
+  return d;
+})(), 'personal-not-work');
+
+// A two-digit list ordinal is structure, not a figure. A 13-item recap blocked on
+// `invented-figure: 12` -- the twelfth item's own number -- so every digest long
+// enough to reach item 10 was unpostable.
+expectNoFinding('a two-digit item number is not an invented figure', (() => {
+  const d = structuredClone(CLEAN);
+  // `<3 SM`, not `<3 MS`: the initials are aedile's, and `3 MS` would additionally
+  // read as the time "3ms" to figures(), which is a fixture artefact and not this case.
+  d.body = '1. One thing settled.\n\n10. Ten.\n\n11. Eleven.\n\n12. Twelve.\n\n<3 SM';
+  return d;
+})(), 'invented-figure');
+
+// The local part alone is still the handle. Notes: "Alex misterdee27@gmail.com";
+// draft: "misterdee27 is available" -- the login, not the name, to ~40 people.
+expectFinding("a member's handle without the domain", d => {
+  d.body = d.body.replace('meeting monthly.', 'meeting monthly. misterdee27 is available.');
+}, 'private-detail', { }, '* Alex misterdee27@gmail.com\n');
 
 // Deliberately placed in the SUBJECT: it is part of the draft, and an earlier
 // version of these checks read only the body and let this through.

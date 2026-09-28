@@ -29,5 +29,18 @@
       "Bash(git push --force:*)",
       "Bash(git push -f:*)"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.command' | grep -qE 'redige\\.mjs|call\\.sh +(createDraft|sendReplyAll|scanInbox|checkBumps|setRecapEnabled)' && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"Spends the krewe API budget and can post or send mail from the aedile mailbox.\"}}' || true"
+          }
+        ]
+      }
+    ]
   }
 }

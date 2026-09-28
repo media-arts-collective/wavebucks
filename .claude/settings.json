@@ -9,6 +9,7 @@
       "Bash(gh issue list:*)",
       "Bash(gh issue view:*)",
       "Bash(git push:*)",
+      "Bash(clasp -u aedile deploy:*)",
       "Bash(clasp -u aedile deployments:*)",
       "Bash(clasp -u aedile pull:*)",
       "Bash(clasp -u aedile push:*)",
@@ -16,7 +17,6 @@
       "Bash(node aedile/TestsLocal.js)"
     ],
     "ask": [
-      "Bash(clasp -u aedile deploy:*)",
       "Bash(clasp -u aedile version:*)",
       "Bash(aedile/recap/call.sh scanInbox:*)",
       "Bash(aedile/recap/call.sh checkBumps:*)",

@@ -138,6 +138,31 @@ requirement. Expect to need an explicit sentence from Zach for any future
 `ask` removal, and do not read this entry as standing licence for the
 next one.
 
+**`clasp -u aedile deploy` promoted to `allow` (2026-09-28,
+human-directed).** Zach: *"allow clasp -u aedile deploy from now on. then
+go."* Said unprompted, after a turn that stopped at the gate and asked
+rather than routing around it — so it is a standing grant, not one
+approval, and it is the explicit sentence the entry above says any `ask`
+removal requires.
+
+Scope is `deploy` only. **`clasp -u aedile version` stays in `ask`**, and
+the line between them is now finer than the one the entry above draws,
+so read it carefully: both change what the anonymous `/exec` serves, and
+`deploy` implicitly cuts a version anyway. What does not change is that
+`version` alone is how a numbered release gets *named* in the deployment
+list that `CONTRIBUTING.md` treats as the record. Do not read this grant
+as covering it.
+
+Why the gate was worth having until now: `clasp push` saves code that
+time-driven triggers execute; `clasp deploy` changes what the anonymous
+`/exec` URL serves to every caller holding it, including `call.sh` and
+`redige.mjs`. A pinned deployment is also the reason a pushed fix can
+read as absent — verified 2026-09-28, when `trashMessage` was saved by
+`clasp push`, absent from `/exec`'s action list, and unreachable via the
+`@HEAD` deployment because Apps Script serves HEAD at `/dev` behind an
+owner login. That is the standing "verify the copy that executes" rule
+with a deployment id attached.
+
 **Do not move a row from `ask` to `allow` to get unblocked mid-task.**
 The point of the `ask` list is that a human sees those specific actions
 every time. Widening it is a decision, dated and recorded here like the

@@ -122,6 +122,44 @@ single-venue heads-up should not be numbered. **A spec no code reads is a
 document, not a rule.** Do not hand-write a body and post it: generate it, let the
 checks grade it, then post the saved decision.
 
+### Every draft for review is a redline, not a clean copy (2026-09-28, human-directed)
+
+Zach: *"repush drafts as I wrote them with inline additions yours in another
+color and the date/time I had scheduled at the top of the draft as well. That
+should be how drafts look in general from now on."*
+
+So a draft aedile puts in front of a human carries three things a clean body does
+not:
+
+1. **A header box**, first thing in the body: the date and time the beat was (or
+   should be) armed for, the recipient, a colour legend, and `DELETE THIS BOX
+   BEFORE SENDING` as its first line.
+2. **The human's text exactly as they wrote it.** Not regenerated, not
+   re-flowed. Blank-line gaps especially — `dealGap` measures them and the
+   archive's spacing is a device, so a draft that silently re-wraps destroys the
+   thing being reviewed. `white-space:pre-wrap` preserves it.
+3. **Redline marks**: additions in red, proposed cuts struck through in grey.
+   A question aedile will not answer for itself goes in a red-bordered box that
+   says it is a question, not an edit.
+
+**This forces `htmlBody`, which cuts against #20 and against the plain-text rule
+in the outbound-genres section above** — the archive has no markup, and a recap
+posts plain text on purpose. The two are reconciled by the header box, not by
+exception: the markup is *scaffolding a human removes*, and the box's own first
+line is the instruction to remove it. If a review draft ever gets sent with its
+box intact, that reconciliation has failed and the convention needs rethinking,
+not patching.
+
+**Why the armed time has to be in the body.** Gmail's scheduled send cannot be
+created or edited through any API (wavebucks#74), so cancelling a beat to revise
+it *destroys the only record of when it was meant to go*. `trashMessage` cancels
+cleanly — proven 2026-09-28 — but the send time is Google's, not ours, and it
+does not survive the trash. Carrying it in the body is what makes cancel/revise/
+re-arm a loop a human can actually close.
+
+Done by hand the first time, for three beats on 2026-09-28. Mechanising it into
+`redige.mjs` and the `createDraft` sink is wavebucks#77.
+
 `checks.mjs` is **genre-gated** (`runChecks(d, notes, vault, { genre, beat, leadDays,
 hand })`) and defaults to `recap`. For a heads-up the sign-off drops to `warn`, the two
 spacing checks are skipped, and the exclamation exemption applies only below 150

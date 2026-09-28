@@ -308,6 +308,41 @@ expectFinding('a date the notes never name still blocks', d => {
   d.body = d.body.replace('meeting monthly.', 'meeting monthly. Party on 10/22.');
 }, 'invented-figure', AS_OF);
 
+// Invented twice in two rolls on 2026-09-28, for an event whose notes name no venue.
+expectFinding('a place asserted without being named', d => {
+  d.body = d.body.replace('meeting monthly.', 'meeting monthly. Tomorrow at the usual spot.');
+}, 'vague-location');
+
+// The archive's own form: "Same place! 8640 Nelson." The locution is fine when the
+// address follows it, which is the near-miss that set this check's shape.
+expectNoFinding('the same locution with the address named', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('meeting monthly.', 'meeting monthly. Same place, 8640 Nelson.');
+  return d;
+})(), 'vague-location');
+
+// Asking where to meet is the honest handling of a missing venue, and the first
+// version of vague-location blocked exactly that. The archive uses the same shape.
+expectNoFinding('asking where the meeting is, is not asserting a place', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = d.body.replace('meeting monthly.',
+    'meeting monthly. Location TBD: if you know where we are meeting, reply and settle it.');
+  return d;
+})(), 'vague-location');
+
+// A DM's items ARE the task list: "Contact NOLA Brewing for Wing Wednesday" is 7
+// words and complete. The 43-word median comes from the list digest, not from this.
+expectNoFinding('short items in a DM are not stubs', (() => {
+  const d = structuredClone(CLEAN);
+  d.body = 'Your items:\n\n1. Contact NOLA Brewing for Wing Wednesday\n2. Bitwarden for Brandon\n\nSM';
+  return d;
+})(), 'stub-items', { genre: 'reminder' });
+
+// ...and they still block in a recap, which is what proves the exemption is scoped.
+expectFinding('short items still block in a recap', d => {
+  d.body = '1. Wings\n\n2. Harp\n\n<3 SM';
+}, 'stub-items');
+
 // Deliberately placed in the SUBJECT: it is part of the draft, and an earlier
 // version of these checks read only the body and let this through.
 expectFinding('a date not in the notes, in the subject', d => {

@@ -204,7 +204,7 @@ export const GENRES = {
   // form is asserted rather than measured -- there is no DM corpus, and its context
   // file says so in its own text rather than implying a rate it does not have.
   // Requires --to: a reminder sent to the list is a category error, not a typo.
-  reminder: { context: 'AEDILE_CONTEXT.reminder.md', label: 'reminder_draft_posted', needsTo: true },
+  reminder: { context: 'AEDILE_CONTEXT.reminder.md', label: 'reminder_draft_posted', needsTo: true, needsFor: true },
 };
 
 export function buildSystemPrompt(vault, genre = 'recap') {
@@ -393,7 +393,7 @@ async function main(argv) {
     console.error('usage: redige.mjs <notes.md|meeting.m4a|saved.json> [--genre recap|headsup]');
     console.error('                  [--beat lock-in|nudge] [--event-date YYYY-MM-DD]');
     console.error('                  [--as-of YYYY-MM-DD: the day it will be READ, default today]');
-    console.error('                  [--to ADDRESS: default the list; one person for a reminder]');
+    console.error('                  [--to ADDRESS] [--for NAME: both required for a reminder]');
     console.error('                  [--out FILE] [--post [--dry-run]] [--json]');
     process.exit(2);
   }
@@ -419,6 +419,32 @@ async function main(argv) {
   if (!GENRES[genre].needsTo && to !== LIST_RECIPIENT) {
     die(`--genre ${genre} goes to the list; --to is only for a reminder`, 2);
   }
+
+  // WHOSE items. `--to` is an address and says nothing about which of four owners the
+  // notes' action-item list belongs to; without this the model has to guess, and the
+  // failure mode is telling one person about another person's commitments. The name is
+  // a fact about the input, so it is passed in rather than inferred, the same reasoning
+  // as --event-date.
+  const forWhom = flag('--for');
+  if (GENRES[genre].needsFor && !forWhom) {
+    die(`--genre ${genre} requires --for NAME: it carries one person's items and cannot guess whose`, 2);
+  }
+  if (forWhom && !GENRES[genre].needsFor) die(`--for is only for a reminder`, 2);
+  if (forWhom && !/^[A-Z][a-zA-Z'’-]{1,30}$/.test(forWhom)) {
+    die(`--for must be one capitalised first name as the notes write it, got "${forWhom}"`, 2);
+  }
+
+  /** The addressee block. Deliberately spare: the notes already carry the items, so
+   *  this says which owner to read and, twice, that the others are off limits. */
+  const forBlock = forWhom ? [
+    `## This message is for ${forWhom}, and only ${forWhom}`,
+    '',
+    `Include ONLY the commitments the notes attach to ${forWhom}. Another person's item`,
+    `is not ${forWhom}'s business and must not appear -- not as context, not as a list of`,
+    'what everyone else is doing, not in a closing line. If the notes attach nothing to',
+    `${forWhom}, say so in one sentence and set confidence to "low" rather than inventing`,
+    'an obligation for them.',
+  ].join('\n') : '';
   if (genre === 'headsup' && !eventDate) {
     // Fail loud. A heads-up whose lead time nobody computed is the exact draft
     // that goes out saying "Sunday the 27th" to people reading it on the 27th.
@@ -498,6 +524,7 @@ async function main(argv) {
     buildSystemPrompt(vault, genre),
     lead,
     dates,
+    forBlock,
     genre === 'reminder' ? '' : devicesBlock(hand, [flourish, signoff].filter(Boolean).join('\n- '), typo, gap, subjectShape),
   ].filter(Boolean).join('\n\n');
   let decision;

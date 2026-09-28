@@ -436,6 +436,50 @@ export function runChecks(d, notes, vault, opts = {}) {
     }
   }
 
+  // 1a-octies. A location asserted without being named.
+  //
+  // The notes for 2026-09-27 give no venue for two of three events. Asked for a
+  // day-before nudge -- a genre whose whole job is place and time -- the generator
+  // invented the place TWICE IN TWO ROLLS rather than say it did not have one: "same
+  // address as last time", then "at the usual spot". Neither is a figure or a name, so
+  // nothing looked. A nudge that tells 40 people to go to "the usual spot" when the
+  // notes never named one is the same class of failure as the wrong weekday.
+  //
+  // MEASURED, 573 operator messages and 628 thread files:
+  //   "the usual spot/place/location/venue"   0 and 0
+  //   "as last time"                          0 and 0
+  //   "where we always/usually"               0 and 0
+  //   "same place/address/spot"               6 and 6
+  //   "you know where"                        1 and 1  <- EXCLUDED, see below
+  //
+  // THE NEAR-MISS IS THE RULE. The archive's "same place" instances NAME the place in
+  // the same breath: "Next Meeting; Sunday at 3pm. Same place! 8640 Nelson." It is not
+  // that the operator never refers back to a known venue -- it is that the address
+  // always follows. (46% of operator messages carrying a clock time name a street
+  // address outright.) So the locution alone blocks and the locution plus an address
+  // passes, which is exactly the archive's own habit.
+  //
+  // The honest alternative is available and the generator found it unprompted on a
+  // lock-in the same night: "Location TBD. I do not have a venue in these notes. If
+  // you know where we are meeting, reply and settle it."
+  // `you know where` is NOT in this pattern, and the first version of the check that
+  // included it was wrong twice over. It is an ASK, not an assertion, in the archive
+  // ("If you think you know where an FM tx box is, please try to borrow it") and in the
+  // generator's own best output of that night, a lock-in that said "If you know where we
+  // are meeting, reply and settle it" -- the honest handling of a missing venue, which
+  // the check then blocked. A request for information is the opposite of the failure.
+  const VAGUE_PLACE = /\b(?:the usual (?:spot|place|location|venue)|same (?:place|address|spot|location)|as last time|where we (?:always|usually) (?:meet|go))\b/i;
+  const vague = text(whole).match(VAGUE_PLACE);
+  if (vague) {
+    const after = text(whole).slice(vague.index, vague.index + 80);
+    if (!/\b\d{2,5}\s+[A-Z][a-z]/.test(after)) {
+      add('fail', 'vague-location',
+        `"${vague[0]}" asserts a place without naming one. The archive's own version names it in `
+        + 'the same breath ("Same place! 8640 Nelson"); with no address in the notes, say so '
+        + 'plainly instead');
+    }
+  }
+
   // 1b. No invented pronouns. A gendered third-person pronoun the input does not
   // supply is an invented fact about a real member, and the failure is not a style
   // tell but misgendering someone on a 40-person list.
@@ -626,8 +670,13 @@ export function runChecks(d, notes, vault, opts = {}) {
   const itemWords = body.split(/(?=(?:^|\n)\s*-?\d+\.\s)/)
     .filter(x => /^\s*-?\d+\.\s/.test(x))
     .map(x => (x.trim().match(/\S+/g) || []).length);
-  const tiny = itemWords.filter(n => n < 5);
-  const short = itemWords.filter(n => n >= 5 && n < 10);
+  // A REMINDER IS EXEMPT, and the median these thresholds come from is why. 43 words
+  // per item is measured on the 400-4000 char list digest, where an item is a topic
+  // with context. In a DM the items ARE the task list -- "Contact NOLA Brewing for
+  // Wing Wednesday" is 7 words and complete -- so grading it here reports a length
+  // difference as a content problem. Padding a task to ten words would be the defect.
+  const tiny = dm ? [] : itemWords.filter(n => n < 5);
+  const short = dm ? [] : itemWords.filter(n => n >= 5 && n < 10);
   if (tiny.length) {
     add('fail', 'stub-items',
       `${tiny.length} numbered item(s) of ${tiny.join(', ')} words. 8 of 1125 archived items are that short (0.7%); the median is 43. Give each item real content or do not number at all`);

@@ -108,13 +108,23 @@ export function comparable(rows, dow, hour) {
  *  was leading directly to the wrong design. `when.mjs Sunday 1pm` says the day-before
  *  is the commonest single lead and 2+ days accounts for two thirds; from that I filed a
  *  two-message schedule on #68. Grouped by EVENT instead, 81% of events get exactly ONE
- *  notice, and of the events that did get an early one, 71% got no follow-up at all.
+ *  notice, and of the events that did get an early one, 64% got no follow-up at all.
+ *
+ *  Both figures are the UNFILTERED population (n=113, pre-2025). Pass a weekday and they
+ *  move: Sunday alone is 69% single-notice (n=55) and 68% no-follow-up, because a Sunday
+ *  gathering gets more notice than a midweek one. Conditioned per weekday, the odds of a
+ *  SECOND notice are 29% for a Sunday and 7% midweek, which is what the dealt bump
+ *  schedule uses -- and those two reconcile with the 18% pooled figure here, which is how
+ *  I know the cut is real rather than an artefact of slicing. Re-derived 2026-09-28; the
+ *  "71%" this comment used to carry is 64% now, most likely because isOperator was
+ *  tightened on 2026-09-26 to exclude kreweofvaporware@, a different member.
  *
  *  Both readings are of the same data. The marginal one counts messages, this one counts
  *  events, and only this one answers "what does an event get".
  *
  *  cadence.mjs has said "75% of topics are single-message" since before any of this, and
- *  brunch.mjs said "1 msg 67%" for Sunday meetings. The figure was on hand twice and a
+ *  brunch.mjs said "1 msg 67%" for Sunday meetings -- still exactly 67% (29 of 43) when
+ *  re-run on 2026-09-28. The figure was on hand twice and a
  *  two-beat schedule got filed anyway, which is why it is now a command rather than a
  *  thing to remember. */
 export function sequences({ until = null, dow = null } = {}) {

@@ -136,6 +136,16 @@ export function runChecks(d, notes, vault, opts = {}) {
   // fail at blocking level. Default `recap` so every existing caller is
   // unchanged; a heads-up must ask for its own rules.
   const headsup = opts.genre === 'headsup';
+  // A `reminder` is one DM about one person's own commitments. Everything relaxed
+  // below is a trait of the LIST DIGEST measured on the 400-4000 char pool -- ragged
+  // spacing, numbering, an ALL-CAPS marker, an exclamation, a `<3 SM` sign-off to
+  // forty people. None of it transfers to two lines sent to one person, and grading
+  // it there reports a shape problem that is really an audience difference. What does
+  // NOT relax: every grounding check (invented name/figure/pronoun, the weekday, the
+  // date), the em-dash, `## Names`, and never borrowing MS. A DM is not a lower
+  // standard, it is a different form.
+  const dm = opts.genre === 'reminder';
+  const digest = !headsup && !dm;
 
   const body = d.body || '';
   const subject = d.subject || '';
@@ -491,7 +501,7 @@ export function runChecks(d, notes, vault, opts = {}) {
   }
 
   // 3. What the meeting did not settle has to survive as an open question.
-  if (!headsup && HEDGES.test(notes) && !(d.open_questions || []).length) {
+  if (digest && HEDGES.test(notes) && !(d.open_questions || []).length) {
     add('fail', 'swallowed-uncertainty',
       'the input hedges but the draft surfaces no open questions -- something was resolved that should not have been');
   }
@@ -517,7 +527,7 @@ export function runChecks(d, notes, vault, opts = {}) {
   if (!/^(?:(?:<3[ \t]*)+|(?:<3[ \t]*)*SM)$/.test(lastLine)) {
     // Blocking for a digest, advisory for a heads-up: the terse register signs
     // ~47% of the time and the barest attested nudge is a single unsigned line.
-    add(headsup ? 'warn' : 'fail', 'sign-off',
+    add(digest ? 'fail' : 'warn', 'sign-off',
       `the last line must be \`<3\`, the initials \`SM\`, or both; got ${JSON.stringify(lastLine)}`);
   }
   if (/\bMS\b/.test(body.replace(/<3\s*SM/g, ''))) {
@@ -582,7 +592,7 @@ export function runChecks(d, notes, vault, opts = {}) {
   // `!` at all". That message was aedile's own (five recap_draft_posted Log rows,
   // 2026-09-14T02:29-02:35Z), so it is evidence about the generator and not about the
   // list. The rates above are measured over the archive and do not depend on it.
-  if (!/!/.test(body) && !(headsup && body.length <= 150)) {
+  if (digest ? !/!/.test(body) : (headsup && !/!/.test(body) && body.length > 150)) {
     add('warn', 'no-exclamation',
       'no exclamation mark; 93-95% of the operator\'s day-before announcements carry at least one');
   }
@@ -600,7 +610,7 @@ export function runChecks(d, notes, vault, opts = {}) {
   // prose" -- and was then warned at for obeying. Zach, 2026-09-27: "following the
   // deal?" It was; the check was grading the dealer's own decision. Silent when the
   // hand dealt numbering OFF, and unchanged when no hand was supplied.
-  if (!headsup && !bodyItems.length && opts.hand?.numberedList !== false) {
+  if (digest && !bodyItems.length && opts.hand?.numberedList !== false) {
     add('warn', 'no-numbering', 'no numbered items -- the archive numbers almost everything');
   }
 
@@ -656,7 +666,7 @@ export function runChecks(d, notes, vault, opts = {}) {
   // it now cites the measured figure instead.
   // Same deal-vs-check conflict as no-numbering above: allCaps is dealt, so a draft
   // told not to shout must not be warned for not shouting.
-  if (!headsup && vault?.motifs?.['all-caps-emphasis'] && !/\b[A-Z]{4,}\b/.test(body)
+  if (digest && vault?.motifs?.['all-caps-emphasis'] && !/\b[A-Z]{4,}\b/.test(body)
       && opts.hand?.allCaps !== false) {
     add('warn', 'no-caps',
       'no ALL-CAPS emphasis; 40% of the archive\'s messages carry it');
@@ -667,7 +677,7 @@ export function runChecks(d, notes, vault, opts = {}) {
   // 400-4000 chars and signed). Uniform single spacing is the most reliable
   // way for a generated recap to look generated. Warn, not fail: a three-item
   // recap can legitimately be too short to show the pattern.
-  if (headsup) {
+  if (!digest) {
     // Skipped, not passed. Both spacing checks are calibrated on the 400-4000
     // char pool; a terse notice has too few gaps to have a modal one at all, and
     // `modalGap` returns 0 when there are none, so grading it here reports a

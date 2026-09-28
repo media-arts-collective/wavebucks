@@ -17,9 +17,16 @@
  * which one to cite. That cost a design: a two-beat bump schedule was filed on #68 off a
  * marginal lead-time distribution while the event-level figure was already on hand twice.
  *
- *   when.mjs Sunday 1pm --sequences   81% of EVENTS get exactly one notice   <- QUOTE THIS
- *   brunch.mjs                        69% for Sunday meetings, per event
+ *   when.mjs --sequences              81% of EVENTS get exactly one notice   <- QUOTE THIS
+ *                                     (all weekdays, n=113. ADD `Sunday 1pm` and it is
+ *                                      69%, n=55 -- a Sunday gathering gets more.)
+ *   brunch.mjs                        67% for Sunday meetings, per event (29 of 43)
  *   cadence.mjs                       75% of TOPICS are single-message
+ *
+ * The 81% and the `Sunday 1pm` filter did not belong on the same line, and sat that
+ * way from the commit that was meant to settle which figure to quote (2026-09-27).
+ * Re-derived 2026-09-28: the number is right and the command printed 69% beside it,
+ * because a weekday filter is a different population. Both are quotable; say which.
  *
  * All three are correct about their own population; only the first is conditioned on the
  * event and grouped by event, which is what "what does this gathering get" asks.

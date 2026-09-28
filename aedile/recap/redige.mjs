@@ -200,6 +200,11 @@ function contextBody(name) {
 export const GENRES = {
   recap: { context: 'AEDILE_CONTEXT.recap.md', label: 'recap_draft_posted' },
   headsup: { context: 'AEDILE_CONTEXT.headsup.md', label: 'headsup_draft_posted' },
+  // One person, their own commitments, ahead of a gathering. The ONLY genre whose
+  // form is asserted rather than measured -- there is no DM corpus, and its context
+  // file says so in its own text rather than implying a rate it does not have.
+  // Requires --to: a reminder sent to the list is a category error, not a typo.
+  reminder: { context: 'AEDILE_CONTEXT.reminder.md', label: 'reminder_draft_posted', needsTo: true },
 };
 
 export function buildSystemPrompt(vault, genre = 'recap') {
@@ -239,7 +244,7 @@ export function buildSystemPrompt(vault, genre = 'recap') {
     `## Two real recaps from the archive\n\nMatch this register. Do not copy their content.\n\n${examples}`,
     closed,
     contextBody(g.context),
-    genre === 'headsup' ? formBlock() : recapFormBlock(),
+    genre === 'headsup' ? formBlock() : genre === 'recap' ? recapFormBlock() : '',
   ].filter(Boolean).join('\n\n');
 }
 
@@ -280,10 +285,17 @@ export function leadTimeBlock(eventDate, beat, asOf) {
 
 // --- the sink ----------------------------------------------------------------
 
-/** The list any outbound genre is addressed to -- the Google Group, not the Workspace
- *  account aedile runs as (those are different addresses, and confusing them
- *  drafts krewe mail to aedile's own inbox). Kept in step with MeetingRecap.js's
- *  RECAP_RECIPIENT by hand: this end and the Apps Script end must agree. */
+/** The DEFAULT recipient: the Google Group, not the Workspace account aedile runs as
+ *  (those are different addresses, and confusing them drafts krewe mail to aedile's
+ *  own inbox). Kept in step with MeetingRecap.js's RECAP_RECIPIENT by hand: this end
+ *  and the Apps Script end must agree.
+ *
+ *  `post()` takes a `to` defaulting to this, and `--to` overrides it, so the
+ *  `reminder` genre can address one person. That needed no Apps Script change:
+ *  createDraft's originate form already passes `params.to` through unchecked
+ *  (WriteApi.js:317-324) because a draft cannot leave without a human opening it --
+ *  Zach, 2026-09-25: "drafts are safe by construction." A MEMBER ADDRESS MUST NEVER
+ *  BE COMMITTED: this repo is public, so recipients come from argv. */
 const LIST_RECIPIENT = 'kreweofvaporwave@googlegroups.com';
 
 /** Render open_questions into the body the same way MeetingRecap.js does --
@@ -307,7 +319,7 @@ function appendOpenQuestions(body, openQuestions) {
  *  not the decision's raw fields for the far end to assemble -- the primitive is
  *  the single dumb draft sink and judges nothing.
  */
-function post(decision, dryRun, genre = 'recap') {
+function post(decision, dryRun, genre = 'recap', to = LIST_RECIPIENT) {
   const token = process.env.WRITE_API_TOKEN;
   if (!token) {
     die('WRITE_API_TOKEN is not set -- it gates the sink, and this end has no other way in', 5);
@@ -328,7 +340,7 @@ function post(decision, dryRun, genre = 'recap') {
     `token=${encodeURIComponent(token)}`,
     'action=createDraft',
     dryRun ? 'dryRun=true' : null,
-    `to=${encodeURIComponent(LIST_RECIPIENT)}`,
+    `to=${encodeURIComponent(to)}`,
     `subject=${encodeURIComponent(decision.subject)}`,
     `body=${encodeURIComponent(body)}`,
     `logLabel=${encodeURIComponent(GENRES[genre].label)}`,
@@ -381,6 +393,7 @@ async function main(argv) {
     console.error('usage: redige.mjs <notes.md|meeting.m4a|saved.json> [--genre recap|headsup]');
     console.error('                  [--beat lock-in|nudge] [--event-date YYYY-MM-DD]');
     console.error('                  [--as-of YYYY-MM-DD: the day it will be READ, default today]');
+    console.error('                  [--to ADDRESS: default the list; one person for a reminder]');
     console.error('                  [--out FILE] [--post [--dry-run]] [--json]');
     process.exit(2);
   }
@@ -396,6 +409,16 @@ async function main(argv) {
   const beat = flag('--beat');
   const eventDate = flag('--event-date');
   const asOf = flag('--as-of');
+  const to = flag('--to') || LIST_RECIPIENT;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) die(`--to must be one email address, got "${to}"`, 2);
+  // Fail loud both ways. A reminder is one person's own items; sending it to ~40
+  // people leaks the whole action-item list and reads as a public dressing-down.
+  if (GENRES[genre].needsTo && to === LIST_RECIPIENT) {
+    die(`--genre ${genre} requires --to ADDRESS: it is one person's items, and the list is not a person`, 2);
+  }
+  if (!GENRES[genre].needsTo && to !== LIST_RECIPIENT) {
+    die(`--genre ${genre} goes to the list; --to is only for a reminder`, 2);
+  }
   if (genre === 'headsup' && !eventDate) {
     // Fail loud. A heads-up whose lead time nobody computed is the exact draft
     // that goes out saying "Sunday the 27th" to people reading it on the 27th.
@@ -421,7 +444,7 @@ async function main(argv) {
     if (args.includes('--post')) {
       if (blocked.length) die(`${blocked.length} blocking finding(s) -- not posting`, 6);
       const dryRun = args.includes('--dry-run');
-      const r = post(saved, dryRun, genre);
+      const r = post(saved, dryRun, genre, to);
       console.error(dryRun
         ? `-- DRY RUN: the sink would have drafted to ${r.wouldSendTo}. Nothing was written.`
         : `-- drafted to ${r.recipient}. NOTHING WAS SENT -- a director opens the draft and sends it.`);
@@ -449,7 +472,11 @@ async function main(argv) {
   // corpus frequency on its own, so the caller rolls and tells it.
   // The dealt rates for a heads-up are measured, not tabulated: see
   // analysis/headsup-form.mjs. A recap keeps devices.mjs's own pool rates.
-  const hand = dealDevices(undefined, genre, beat, genre === 'headsup' ? measuredRates() : {});
+  // The dealt devices are list-voice traits measured on the 400-4000 char digest pool
+  // -- a greeting ritual, an ALL-CAPS payload marker, a parenthetical joke. None of
+  // them belongs in a two-line DM about someone's own tasks, so a reminder is dealt
+  // no hand at all and devicesBlock is left out of its prompt.
+  const hand = genre === 'reminder' ? {} : dealDevices(undefined, genre, beat, genre === 'headsup' ? measuredRates() : {});
   const flourish = dealFlourish();
   const typo = dealTypo();
   const signoff = dealSignoff();
@@ -471,7 +498,7 @@ async function main(argv) {
     buildSystemPrompt(vault, genre),
     lead,
     dates,
-    devicesBlock(hand, [flourish, signoff].filter(Boolean).join('\n- '), typo, gap, subjectShape),
+    genre === 'reminder' ? '' : devicesBlock(hand, [flourish, signoff].filter(Boolean).join('\n- '), typo, gap, subjectShape),
   ].filter(Boolean).join('\n\n');
   let decision;
   try {
@@ -536,7 +563,7 @@ async function main(argv) {
   if (args.includes('--post')) {
     if (blocking.length) die(`${blocking.length} blocking finding(s) -- not posting`, 6);
     const dryRun = args.includes('--dry-run');
-    const r = post(decision, dryRun, genre);
+    const r = post(decision, dryRun, genre, to);
     console.error(dryRun
       ? `-- DRY RUN: the sink would have drafted to ${r.wouldSendTo}. Nothing was written.`
       : `-- drafted to ${r.recipient}. NOTHING WAS SENT -- a director opens the draft and sends it.`);

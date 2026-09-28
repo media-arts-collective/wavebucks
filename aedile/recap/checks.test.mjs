@@ -607,5 +607,57 @@ const levelsOf = (d, opts) => runChecks(d, NUDGE_NOTES, VAULT, opts)
   }
 }
 
+
+
+// --- the reminder genre: one DM, one person's own items ---------------------
+//
+// A DM is not a lower standard than a digest, it is a different form. These cases
+// pin both halves of that: the list-shaped rules go quiet, and every grounding rule
+// keeps blocking.
+
+console.log('\nthe reminder genre relaxes list form and nothing else');
+
+{
+  const dmOpts = { genre: 'reminder' };
+  // The barest honest reminder: two lines, unsigned, unnumbered, no exclamation,
+  // single-spaced. Every one of those is a digest trait it should not be graded on.
+  const bare = {
+    subject: 'Sunday: the relays call',
+    body: 'Ahead of Sunday: the relays-or-not call is yours and Adam\'s.\nCost on the gutted house is still unknown.',
+    open_questions: [],
+    // 'low' because the fixture's NOTES say "Reconstructed from memory; STT recording
+    // failed", and `overconfident` blocks on that -- correctly, and in a DM too: a
+    // reminder built on a reconstructed meeting is exactly as uncertain as a recap is.
+    confidence: 'low',
+  };
+  const fails = runChecks(bare, NOTES, VAULT, dmOpts).filter(f => f.level === 'fail').map(f => f.id);
+  if (!fails.length) { passed++; console.log('  ok   a two-line unsigned DM has no blocking findings'); }
+  else { failed++; console.log(`  FAIL a two-line unsigned DM has no blocking findings`); console.log(`       got [${fails.join(', ')}]`); }
+
+  // The same body graded as a recap DOES block -- which is what proves the gating is
+  // doing something rather than the fixture being trivially clean.
+  const asRecap = runChecks(bare, NOTES, VAULT).filter(f => f.level === 'fail').map(f => f.id);
+  if (asRecap.includes('sign-off')) { passed++; console.log('  ok   the same body still blocks as a recap'); }
+  else { failed++; console.log(`  FAIL the same body still blocks as a recap; got [${asRecap.join(', ')}]`); }
+
+  // Grounding does not relax. An invented figure blocks in a DM exactly as it does
+  // in a digest.
+  const invented = { ...bare, body: bare.body + '\nMeet at 4pm.' };
+  const ids = runChecks(invented, NOTES, VAULT, dmOpts).filter(f => f.level === 'fail').map(f => f.id);
+  if (ids.includes('invented-figure')) { passed++; console.log('  ok   an invented time still blocks in a DM'); }
+  else { failed++; console.log(`  FAIL an invented time still blocks in a DM; got [${ids.join(', ')}]`); }
+
+  // So does `## Names`, and so does borrowing the other figure's initials.
+  const opinion = { ...bare, body: bare.body + '\nTyler has doubts about the relays.' };
+  const oids = runChecks(opinion, NOTES, VAULT, dmOpts).filter(f => f.level === 'fail').map(f => f.id);
+  if (oids.includes('opinion-attribution')) { passed++; console.log('  ok   opinion-attribution still blocks in a DM'); }
+  else { failed++; console.log(`  FAIL opinion-attribution still blocks in a DM; got [${oids.join(', ')}]`); }
+
+  const ms = { ...bare, body: bare.body + '\n<3 MS' };
+  const mids = runChecks(ms, NOTES, VAULT, dmOpts).filter(f => f.level === 'fail').map(f => f.id);
+  if (mids.includes('signed-as-ms')) { passed++; console.log('  ok   borrowing MS still blocks in a DM'); }
+  else { failed++; console.log(`  FAIL borrowing MS still blocks in a DM; got [${mids.join(', ')}]`); }
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

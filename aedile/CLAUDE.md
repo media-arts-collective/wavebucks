@@ -124,6 +124,15 @@ checks grade it, then post the saved decision.
 
 ### Every draft for review is a redline, not a clean copy (2026-09-28, human-directed)
 
+> **SUSPENDED 2026-10-05. Do not build a redline draft.** Zach, on meeting the
+> four redlines a week later: *"the scheduled delete and repush of drafts was a
+> complete failure. these drafts are useless with all this markup"*. This
+> section's own last paragraph names that outcome as the point where the
+> convention "needs rethinking, not patching". Until he re-rules: a draft is a
+> clean body a human can send as-is, and aedile's proposed changes and
+> questions go in the chat or the issue, not in the mail. What follows is the
+> record of what was tried (#77), not an instruction.
+
 Zach: *"repush drafts as I wrote them with inline additions yours in another
 color and the date/time I had scheduled at the top of the draft as well. That
 should be how drafts look in general from now on."*

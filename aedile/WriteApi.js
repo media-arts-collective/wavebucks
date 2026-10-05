@@ -92,6 +92,10 @@
  *   ?action=addLabel      -d threadId=<id> -d label=<name>
  *           Adds a Gmail label to a thread (creating it if missing). Inert —
  *           never drafts, never sends. The enact half of a triage `flag`.
+ *   ?action=sendDraft     -d messageId=<draft's message id> -d sha256=<of its html>
+ *           Sends ONE existing draft, only if every participant is in
+ *           AUTOSEND_ALLOWLIST and the body still hashes to what was armed.
+ *           The send half of a timer that lives outside Gmail (#74).
  *   ?action=trashMessage  -d messageId=<id>
  *           Moves ONE message to the trash. Exists to answer #74: a Gmail
  *           scheduled send cannot be created or edited by any API, but it
@@ -414,9 +418,52 @@ const WRITE_API = (() => {
     return respondOk('trashMessage', dryRun, { messageId: params.messageId, inTrashBefore: before, inTrashAfter: message.isInTrash() });
   }
 
+  /**
+   * sendDraft — send one existing draft, unmodified since it was armed (#74).
+   *
+   * Gmail's scheduled send cannot be created through any API, so the timer
+   * lives outside Gmail (a systemd timer on the server) and calls this when
+   * the hour arrives. Two things make that safe to leave unattended:
+   *
+   *   - the same gate as sendReplyAll. A draft to anyone outside
+   *     AUTOSEND_ALLOWLIST is refused, so this cannot reach the list until
+   *     someone widens that property on purpose.
+   *   - sha256 of the HTML body, taken when a human armed it. An edit after
+   *     arming is a send nobody approved; a mismatch refuses, and the beat
+   *     quietly not going out is the failure in the right direction.
+   *
+   * Safe to call twice: a sent draft is no longer a draft, so the second call
+   * finds nothing. That matters because /exec loses responses (#54) and a
+   * caller cannot tell a lost reply from a lost request.
+   */
+  function primSendDraft(params, dryRun) {
+    if (!params.messageId) return respondBad('sendDraft requires a messageId.');
+    if (!params.sha256) return respondBad('sendDraft requires sha256 of the html body it was armed with.');
+    const draft = GmailApp.getDrafts().find(d => d.getMessage().getId() === params.messageId);
+    if (!draft) return respondBad('sendDraft: no draft with message id ' + params.messageId + ' (already sent, edited in the Gmail UI, or trashed).');
+    const message = draft.getMessage();
+
+    const aedileEnabled = PropertiesService.getScriptProperties().getProperty('AEDILE_ENABLED') === 'true';
+    const refusal = sendGate(aedileEnabled, InboxProcessor.isAllowlistEligible(message.getThread()));
+    if (refusal) return respondRefused('sendDraft', refusal);
+
+    const sha256 = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, message.getBody(), Utilities.Charset.UTF_8)
+      .map(b => ((b + 256) % 256).toString(16).padStart(2, '0')).join('');
+    if (sha256 !== params.sha256) return respondRefused('sendDraft', 'body changed since arming (sha256 ' + sha256 + '); re-arm it.');
+
+    const ctx = { threadId: message.getThread().getId(), from: message.getTo(), subject: message.getSubject() };
+    if (dryRun) {
+      return respondOk('sendDraft', dryRun, { messageId: params.messageId, to: message.getTo(), subject: ctx.subject, note: 'DRY RUN — guardrail and hash passed; nothing sent.' });
+    }
+    draft.send();
+    Config.logEvent(ctx.threadId, 'sendDraft', ctx.from, ctx.subject, 'armed_draft_sent', 'sha256 ' + sha256);
+    return respondOk('sendDraft', dryRun, { messageId: params.messageId, to: ctx.from, subject: ctx.subject, sent: true });
+  }
+
   const PRIMITIVES = {
     createDraft: primCreateDraft,
     sendReplyAll: primSendReplyAll,
+    sendDraft: primSendDraft,
     addLabel: primAddLabel,
     trashMessage: primTrashMessage,
   };

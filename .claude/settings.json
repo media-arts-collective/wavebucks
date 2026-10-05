@@ -22,6 +22,7 @@
       "Bash(aedile/recap/call.sh checkBumps:*)",
       "Bash(aedile/recap/call.sh createDraft:*)",
       "Bash(aedile/recap/call.sh sendReplyAll:*)",
+      "Bash(aedile/recap/call.sh sendDraft:*)",
       "Bash(aedile/recap/call.sh setRecapEnabled:*)",
       "Bash(aedile/recap/redige.mjs:*)"
     ],
@@ -37,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.command' | grep -qE 'redige\\.mjs|call\\.sh +(createDraft|sendReplyAll|trashMessage|scanInbox|checkBumps|setRecapEnabled)' && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"Spends the krewe API budget and can post or send mail from the aedile mailbox.\"}}' || true"
+            "command": "jq -r '.tool_input.command' | grep -qE 'redige\\.mjs|call\\.sh +(createDraft|sendReplyAll|sendDraft|trashMessage|scanInbox|checkBumps|setRecapEnabled)' && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"Spends the krewe API budget and can post or send mail from the aedile mailbox.\"}}' || true"
           }
         ]
       }

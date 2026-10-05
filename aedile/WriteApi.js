@@ -50,9 +50,10 @@
  *   4. Call: POST <exec-url> -d token=<WRITE_API_TOKEN> -d action=<action>
  *
  * READS (POST; dryRun meaningless and ignored):
- *   ?action=readThread&threadId=<id>
+ *   ?action=readThread&threadId=<id>[&html=true]
  *       Every message on that thread — from/to/cc/date/subject/plain body —
- *       read or unread. The only live-Gmail read in this project (#35). It is
+ *       read or unread. html=true adds the HTML body, which is the one to
+ *       re-draft from (#78). The only live-Gmail read in this project (#35). It is
  *       on this endpoint rather than ReadApi because ReadApi is a doGet whose
  *       token rides in a query string; a thread body should not be reachable
  *       by a URL someone can paste, log or prefetch. See readThread below.
@@ -438,10 +439,17 @@ const WRITE_API = (() => {
    * 2026-07-18. getMessages() returns the whole thread regardless of read
    * state, which is the point: unread replies were already findable, the root
    * message was not.
+   *
+   * html=true adds each message's getBody(). `body` is NOT the message: for
+   * anything composed or edited in the Gmail UI it is Gmail's text/plain
+   * alternative, hard-wrapped near 72 columns with bold flattened to
+   * *asterisks*. Re-drafting from it bakes Gmail's wrap in as if the author
+   * had typed it (#78). Anything that will be re-posted reads html.
    */
   function readThread(params) {
     const thread = requireThread(params.threadId);
-    const messages = thread.getMessages().map(m => ({
+    const withHtml = params.html === 'true';
+    const messages = thread.getMessages().map(m => Object.assign({
       messageId: m.getId(),
       date: m.getDate(),
       from: m.getFrom(),
@@ -449,7 +457,7 @@ const WRITE_API = (() => {
       cc: m.getCc(),
       subject: m.getSubject(),
       body: m.getPlainBody(),
-    }));
+    }, withHtml ? { html: m.getBody() } : {}));
     return { status: 200, body: { ok: true, action: 'readThread', threadId: params.threadId, count: messages.length, messages } };
   }
 

@@ -111,7 +111,20 @@ const READ_API = (() => {
     return rows;
   }
 
-  const SCOPES = { openloops, messages, log, requests };
+  // #84. `open=true` keeps only rows still open.
+  function loops(p) {
+    let rows = _rows('Loops');
+    if (p.open === 'true') rows = rows.filter(r => String(r.Status) === 'open');
+    return rows;
+  }
+
+  function record(p) {
+    const rows = _rows('Record');
+    rows.reverse(); // newest first (append-only, oldest-first on disk)
+    return rows.slice(0, _clampLimit(p.limit));
+  }
+
+  const SCOPES = { openloops, messages, log, requests, loops, record };
 
   function handle(params) {
     const configured = PropertiesService.getScriptProperties().getProperty('READ_API_TOKEN');

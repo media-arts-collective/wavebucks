@@ -424,5 +424,25 @@ console.log('\nWriteApi.sendGate — the send primitive fails closed, master kil
   assertTrue(sendGate(false, false).indexOf('AEDILE_ENABLED') === 0, 'master kill switch is the reason reported when both fail');
 }
 
+console.log('\nLoops.js nextRowId — ids are never reused');
+{
+  // Inline copy of Loops.js's nextRowId (plain node cannot load Apps Script
+  // globals; mirror any change there here).
+  function nextRowId(ids, prefix) {
+    let max = 0;
+    ids.forEach(id => {
+      const m = String(id).match(new RegExp('^' + prefix + '-(\\d+)$'));
+      if (m) max = Math.max(max, parseInt(m[1], 10));
+    });
+    return prefix + '-' + (max + 1);
+  }
+
+  assertEqual(nextRowId([], 'L'), 'L-1', 'an empty tab starts at 1');
+  assertEqual(nextRowId(['L-1', 'L-2'], 'L'), 'L-3', 'next after the highest');
+  assertEqual(nextRowId(['L-1', 'L-7'], 'L'), 'L-8', 'a gap is not refilled, so a closed id is never reused');
+  assertEqual(nextRowId(['L-9', 'L-10'], 'L'), 'L-11', 'numeric, not string, comparison');
+  assertEqual(nextRowId(['R-4', '', 'junk'], 'L'), 'L-1', 'another prefix and stray cells are ignored');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

@@ -194,6 +194,14 @@ matches no row and falls to the session's permission mode. Until the
 test is run with a human present, invoke gated verbs from the repo root
 as `aedile/recap/call.sh <verb>`, the spelling the rows name outright.
 
+**`openLoop` and `appendRecord` in `allow`, `closeLoop` in `ask`, and a
+SessionStart hook (2026-10-06, human-directed, #84).** Asked whether the
+three Loops verbs should be allowed and whether a session-start hook
+should print open loops, Zach: *"a. yes, allow except closeLoop is ask"*
+and *"b. yes"*. None of the three touches Gmail; they write rows to the
+private sheet. The hook runs `aedile/recap/loops.sh`, a read. On a check
+that would hold bot PRs touching this file, Zach: *"c. do nothing"*.
+
 **Do not move a row from `ask` to `allow` to get unblocked mid-task.**
 The point of the `ask` list is that a human sees those specific actions
 every time. Widening it is a decision, dated and recorded here like the

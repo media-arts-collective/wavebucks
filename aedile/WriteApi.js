@@ -460,12 +460,49 @@ const WRITE_API = (() => {
     return respondOk('sendDraft', dryRun, { messageId: params.messageId, to: ctx.from, subject: ctx.subject, sent: true });
   }
 
+  /**
+   * openLoop / closeLoop / appendRecord (#84) -- rows in the private Loops and
+   * Record tabs. No Gmail call, so no send guardrail applies; the only gate is
+   * the token. `sensitive` is strictBool like dryRun.
+   */
+  function primOpenLoop(params, dryRun) {
+    if (!params.owner || !params.ask) return respondBad('openLoop requires owner and ask.');
+    let sensitive;
+    try { sensitive = strictBool(params.sensitive, 'sensitive'); } catch (err) { return respondBad(String(err.message)); }
+    if (dryRun) return respondOk('openLoop', dryRun, { owner: params.owner, ask: params.ask, note: 'DRY RUN — nothing written.' });
+    const id = Loops.open({ owner: params.owner, counterpart: params.counterpart, ask: params.ask, channel: params.channel,
+      contact: params.contact, due: params.due, tag: params.tag, source: params.source, sensitive });
+    return respondOk('openLoop', dryRun, { id, opened: true });
+  }
+
+  function primCloseLoop(params, dryRun) {
+    if (!params.id || !params.how || !params.words) return respondBad('closeLoop requires id, how and words.');
+    if (dryRun) return respondOk('closeLoop', dryRun, { id: params.id, note: 'DRY RUN — nothing written.' });
+    const closed = Loops.close(params.id, params.how, params.words);
+    if (!closed) return respondRefused('closeLoop', 'no open loop with id ' + params.id);
+    return respondOk('closeLoop', dryRun, { id: closed.id, ask: closed.ask, closed: true });
+  }
+
+  function primAppendRecord(params, dryRun) {
+    if (!params.kind || !params.who || !params.words) return respondBad('appendRecord requires kind, who and words.');
+    if (Record.KINDS.indexOf(params.kind) === -1) return respondBad('kind must be one of: ' + Record.KINDS.join(', '));
+    let sensitive;
+    try { sensitive = strictBool(params.sensitive, 'sensitive'); } catch (err) { return respondBad(String(err.message)); }
+    if (dryRun) return respondOk('appendRecord', dryRun, { kind: params.kind, note: 'DRY RUN — nothing written.' });
+    const id = Record.append({ date: params.date, kind: params.kind, who: params.who, words: params.words,
+      source: params.source, supersedes: params.supersedes, tag: params.tag, sensitive });
+    return respondOk('appendRecord', dryRun, { id, appended: true });
+  }
+
   const PRIMITIVES = {
     createDraft: primCreateDraft,
     sendReplyAll: primSendReplyAll,
     sendDraft: primSendDraft,
     addLabel: primAddLabel,
     trashMessage: primTrashMessage,
+    openLoop: primOpenLoop,
+    closeLoop: primCloseLoop,
+    appendRecord: primAppendRecord,
   };
 
   /**

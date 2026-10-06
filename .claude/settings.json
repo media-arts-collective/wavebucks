@@ -6,6 +6,11 @@
       "Bash(aedile/recap/call.sh readInbox:*)",
       "Bash(aedile/recap/call.sh createDraft:*)",
       "Bash(./call.sh createDraft:*)",
+      "Bash(aedile/recap/call.sh openLoop:*)",
+      "Bash(./call.sh openLoop:*)",
+      "Bash(aedile/recap/call.sh appendRecord:*)",
+      "Bash(./call.sh appendRecord:*)",
+      "Bash(aedile/recap/loops.sh)",
       "Bash(aedile/recap/redige.mjs:*)",
       "Bash(./redige.mjs:*)",
       "Bash(gh issue create:*)",
@@ -28,16 +33,30 @@
       "Bash(aedile/recap/call.sh sendDraft:*)",
       "Bash(aedile/recap/call.sh setRecapEnabled:*)",
       "Bash(aedile/recap/call.sh trashMessage:*)",
+      "Bash(aedile/recap/call.sh closeLoop:*)",
       "Bash(./call.sh scanInbox:*)",
       "Bash(./call.sh checkBumps:*)",
       "Bash(./call.sh sendReplyAll:*)",
       "Bash(./call.sh sendDraft:*)",
       "Bash(./call.sh setRecapEnabled:*)",
-      "Bash(./call.sh trashMessage:*)"
+      "Bash(./call.sh trashMessage:*)",
+      "Bash(./call.sh closeLoop:*)"
     ],
     "deny": [
       "Bash(git push --force:*)",
       "Bash(git push -f:*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/aedile/recap/loops.sh"
+          }
+        ]
+      }
     ]
   }
 }

@@ -186,7 +186,14 @@ the subscription `claude` CLI (`redige.mjs:169-171`, no API key) and with
 `ask` because it does send (`WriteApi.js:458`, first real send
 2026-10-06).
 
-**UNVERIFIED, and the hole to know about:** that an `ask` row matches the
+**Tested 2026-10-06 with Zach present:** `cd aedile/recap && ./call.sh
+sendDraft messageId=<id> dryRun=true` was run and Zach, asked whether the
+prompt appeared: *"ok that worked"*. So an `ask` row does match the
+`./call.sh` segment of a `cd ... &&` chain. The paragraph below is the
+record from before that test; its env-prefixed and wrapped spellings
+remain untested.
+
+**UNVERIFIED before the test above, and the hole to know about:** that an `ask` row matches the
 `./call.sh sendDraft` segment of a `cd … && ./call.sh sendDraft` chain
 was not tested — Zach was away and the test is a prompt. An env-prefixed
 or wrapped spelling (`X=1 ./call.sh …`, `timeout 60 ./call.sh …`)

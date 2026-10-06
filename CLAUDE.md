@@ -202,6 +202,16 @@ and *"b. yes"*. None of the three touches Gmail; they write rows to the
 private sheet. The hook runs `aedile/recap/loops.sh`, a read. On a check
 that would hold bot PRs touching this file, Zach: *"c. do nothing"*.
 
+**`amendLoop` added to `ask` (2026-10-06).** Not ruled by Zach; placed
+beside `closeLoop` because it retires a row the same way. Moving it to
+`allow` needs his sentence.
+
+**Loops are krewe work; issues are this machinery (2026-10-06,
+human-directed).** Zach: *"Can we separate Loop items from repo/self-dev
+stuff? Loop should be for krewe work. Issues should be for maintaining
+this machinery."* A question about permissions, deploys or tests is an
+issue here, never a Loops row.
+
 **Do not move a row from `ask` to `allow` to get unblocked mid-task.**
 The point of the `ask` list is that a human sees those specific actions
 every time. Widening it is a decision, dated and recorded here like the

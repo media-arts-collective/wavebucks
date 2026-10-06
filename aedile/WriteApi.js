@@ -467,11 +467,12 @@ const WRITE_API = (() => {
    */
   function primOpenLoop(params, dryRun) {
     if (!params.owner || !params.ask) return respondBad('openLoop requires owner and ask.');
+    if (AUDIENCES.indexOf(params.audience) === -1) return respondBad('audience must be one of: ' + AUDIENCES.join(', '));
     let sensitive;
     try { sensitive = strictBool(params.sensitive, 'sensitive'); } catch (err) { return respondBad(String(err.message)); }
     if (dryRun) return respondOk('openLoop', dryRun, { owner: params.owner, ask: params.ask, note: 'DRY RUN — nothing written.' });
     const id = Loops.open({ owner: params.owner, counterpart: params.counterpart, ask: params.ask, channel: params.channel,
-      contact: params.contact, due: params.due, tag: params.tag, source: params.source, sensitive });
+      contact: params.contact, due: params.due, tag: params.tag, source: params.source, sensitive, audience: params.audience });
     return respondOk('openLoop', dryRun, { id, opened: true });
   }
 
@@ -483,14 +484,26 @@ const WRITE_API = (() => {
     return respondOk('closeLoop', dryRun, { id: closed.id, ask: closed.ask, closed: true });
   }
 
+  /** amendLoop -- correct an open loop by superseding it; only the fields passed change. */
+  function primAmendLoop(params, dryRun) {
+    if (!params.id) return respondBad('amendLoop requires id.');
+    if (params.audience && AUDIENCES.indexOf(params.audience) === -1) return respondBad('audience must be one of: ' + AUDIENCES.join(', '));
+    if (dryRun) return respondOk('amendLoop', dryRun, { id: params.id, note: 'DRY RUN — nothing written.' });
+    const amended = Loops.amend(params.id, params);
+    if (!amended) return respondRefused('amendLoop', 'no open loop with id ' + params.id);
+    return respondOk('amendLoop', dryRun, amended);
+  }
+
   function primAppendRecord(params, dryRun) {
     if (!params.kind || !params.who || !params.words) return respondBad('appendRecord requires kind, who and words.');
     if (Record.KINDS.indexOf(params.kind) === -1) return respondBad('kind must be one of: ' + Record.KINDS.join(', '));
+    if (AUDIENCES.indexOf(params.audience) === -1) return respondBad('audience must be one of: ' + AUDIENCES.join(', '));
+    if (params.kind === 'event' && !params.date) return respondBad('an event requires date.');
     let sensitive;
     try { sensitive = strictBool(params.sensitive, 'sensitive'); } catch (err) { return respondBad(String(err.message)); }
     if (dryRun) return respondOk('appendRecord', dryRun, { kind: params.kind, note: 'DRY RUN — nothing written.' });
     const id = Record.append({ date: params.date, kind: params.kind, who: params.who, words: params.words,
-      source: params.source, supersedes: params.supersedes, tag: params.tag, sensitive });
+      source: params.source, supersedes: params.supersedes, tag: params.tag, sensitive, audience: params.audience });
     return respondOk('appendRecord', dryRun, { id, appended: true });
   }
 
@@ -502,6 +515,7 @@ const WRITE_API = (() => {
     trashMessage: primTrashMessage,
     openLoop: primOpenLoop,
     closeLoop: primCloseLoop,
+    amendLoop: primAmendLoop,
     appendRecord: primAppendRecord,
   };
 

@@ -9,14 +9,35 @@
  * ever shared wider.
  *
  * Loops columns:  Id | Opened | Owner | Counterpart | Ask | Channel | Contact |
- *                 Due | Status | Closed | Tag | Source | Sensitive
+ *                 Due | Status | Closed | Tag | Source | Sensitive | Audience
  * Record columns: Id | Date | Kind | Who | Words | Source | Supersedes | Tag |
- *                 Sensitive
+ *                 Sensitive | Audience
  *
- * Record is append-only: a reversal is a new row whose Supersedes names the
- * old Id, and the old row stays. An Id is never reused, so rows may be closed
- * but not deleted.
+ * Loops are krewe work only. Work on this machinery is a GitHub issue.
+ *
+ * Audience is `list` or `private` and is required at intake: only a `list`
+ * row may be rendered into mail to the list. Rows older than the column were
+ * backfilled `private`, the value that cannot leak.
+ *
+ * Nothing is edited in place. Record is append-only: a reversal is a new row
+ * whose Supersedes names the old Id. A loop is corrected by `amend`, which
+ * writes the corrected row under a new Id and marks the old one superseded.
+ * An Id is never reused, so rows may be closed but not deleted.
  */
+
+const AUDIENCES = ['list', 'private'];
+
+/** Add any HEADER column the tab predates; a new Audience column is backfilled `private`. */
+function ensureColumns(sh, header) {
+  const have = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0].map(String);
+  header.forEach((h, i) => {
+    if (have[i] === h) return;
+    if (have[i]) throw new Error(sh.getName() + ' column ' + (i + 1) + ' is "' + have[i] + '", expected "' + h + '"');
+    sh.getRange(1, i + 1).setValue(h);
+    const rows = sh.getLastRow() - 1;
+    if (h === 'Audience' && rows > 0) sh.getRange(2, i + 1, rows, 1).setValue('private');
+  });
+}
 
 /** Next id for a prefix, from the ids already in the tab. Pure; TestsLocal.js mirrors it. */
 function nextRowId(ids, prefix) {
@@ -31,7 +52,7 @@ function nextRowId(ids, prefix) {
 const Loops = (() => {
 
   const HEADER = ['Id', 'Opened', 'Owner', 'Counterpart', 'Ask', 'Channel', 'Contact',
-    'Due', 'Status', 'Closed', 'Tag', 'Source', 'Sensitive'];
+    'Due', 'Status', 'Closed', 'Tag', 'Source', 'Sensitive', 'Audience'];
   const COL = {};
   HEADER.forEach((h, i) => { COL[h] = i; });
 
@@ -42,6 +63,7 @@ const Loops = (() => {
       sh = ss.insertSheet('Loops');
       sh.appendRow(HEADER);
     }
+    ensureColumns(sh, HEADER);
     return sh;
   }
 
@@ -57,7 +79,7 @@ const Loops = (() => {
       const sh = _sheet();
       const id = nextRowId(_ids(sh), 'L');
       sh.appendRow([id, new Date(), f.owner, f.counterpart || '', f.ask, f.channel || '',
-        f.contact || '', f.due || '', 'open', '', f.tag || '', f.source || '', f.sensitive ? 'yes' : '']);
+        f.contact || '', f.due || '', 'open', '', f.tag || '', f.source || '', f.sensitive ? 'yes' : '', f.audience]);
       return id;
     } finally {
       lock.releaseLock();
@@ -86,13 +108,49 @@ const Loops = (() => {
     }
   }
 
-  return { HEADER, open, close };
+  /**
+   * Correct an open loop without editing it: the corrected row is appended
+   * under a new Id and the old row is marked superseded. `f` holds only the
+   * fields that change. Returns null when the Id is absent or not open.
+   */
+  function amend(id, f) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try {
+      const sh = _sheet();
+      const values = sh.getDataRange().getValues();
+      for (let i = 1; i < values.length; i++) {
+        if (String(values[i][COL.Id]) !== String(id)) continue;
+        if (String(values[i][COL.Status]) !== 'open') return null;
+        const row = values[i].slice(0, HEADER.length);
+        const newId = nextRowId(values.slice(1).map(r => r[COL.Id]), 'L');
+        ['Owner', 'Counterpart', 'Ask', 'Channel', 'Contact', 'Due', 'Tag', 'Source', 'Audience'].forEach(h => {
+          const v = f[h.toLowerCase()];
+          if (v !== undefined && v !== '') row[COL[h]] = v;
+        });
+        row[COL.Id] = newId;
+        row[COL.Source] = [row[COL.Source], 'amends ' + id].filter(Boolean).join(' | ');
+        sh.appendRow(row);
+        sh.getRange(i + 1, COL.Status + 1).setValue('superseded');
+        sh.getRange(i + 1, COL.Closed + 1).setValue(new Date());
+        sh.getRange(i + 1, COL.Source + 1).setValue(
+          [values[i][COL.Source], 'superseded by ' + newId].filter(Boolean).join(' | '));
+        return { id: newId, supersedes: id };
+      }
+      return null;
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  return { HEADER, open, close, amend };
 })();
 
 const Record = (() => {
 
-  const HEADER = ['Id', 'Date', 'Kind', 'Who', 'Words', 'Source', 'Supersedes', 'Tag', 'Sensitive'];
-  const KINDS = ['ruling', 'meeting', 'finding'];
+  const HEADER = ['Id', 'Date', 'Kind', 'Who', 'Words', 'Source', 'Supersedes', 'Tag', 'Sensitive', 'Audience'];
+  // `event` is a dated gathering: Date is when it happens, Words is what, where and what time.
+  const KINDS = ['ruling', 'meeting', 'finding', 'event'];
 
   function _sheet() {
     const ss = SpreadsheetApp.openById(CONFIG_SHEET_ID);
@@ -101,6 +159,7 @@ const Record = (() => {
       sh = ss.insertSheet('Record');
       sh.appendRow(HEADER);
     }
+    ensureColumns(sh, HEADER);
     return sh;
   }
 
@@ -116,7 +175,7 @@ const Record = (() => {
       }
       const id = nextRowId(ids, 'R');
       sh.appendRow([id, f.date || new Date(), f.kind, f.who, f.words, f.source || '',
-        f.supersedes || '', f.tag || '', f.sensitive ? 'yes' : '']);
+        f.supersedes || '', f.tag || '', f.sensitive ? 'yes' : '', f.audience]);
       return id;
     } finally {
       lock.releaseLock();

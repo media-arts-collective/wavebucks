@@ -34,13 +34,15 @@
       "Bash(aedile/recap/call.sh setRecapEnabled:*)",
       "Bash(aedile/recap/call.sh trashMessage:*)",
       "Bash(aedile/recap/call.sh closeLoop:*)",
+      "Bash(aedile/recap/call.sh amendLoop:*)",
       "Bash(./call.sh scanInbox:*)",
       "Bash(./call.sh checkBumps:*)",
       "Bash(./call.sh sendReplyAll:*)",
       "Bash(./call.sh sendDraft:*)",
       "Bash(./call.sh setRecapEnabled:*)",
       "Bash(./call.sh trashMessage:*)",
-      "Bash(./call.sh closeLoop:*)"
+      "Bash(./call.sh closeLoop:*)",
+      "Bash(./call.sh amendLoop:*)"
     ],
     "deny": [
       "Bash(git push --force:*)",

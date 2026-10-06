@@ -108,15 +108,18 @@ the policy reviews like code and reaches Tyler and unattended runs alike.
 
 The split is the operating rule, not a convenience:
 
-- **allow** — reads and bookkeeping. `call.sh get`/`readThread`, `gh
-  issue` verbs, `git push`, `clasp pull`/`deployments`, the local test
-  suite. None of these can send mail, spend the krewe's API budget, or
-  change production.
-- **ask** — everything that can. `clasp push`/`deploy`/`version` (changes
-  what the live deployment runs), `call.sh scanInbox`/`checkBumps`
-  (spends the Anthropic budget and can auto-send within the allowlist),
-  `createDraft`/`sendReplyAll`/`setRecapEnabled`, and `redige.mjs`.
+- **allow** — reads, bookkeeping, and drafting. `call.sh get`/`readThread`/
+  `readInbox`, `gh issue` verbs, `git push`, `clasp pull`/`deployments`,
+  the local test suite, and (since 2026-10-06, below) `redige.mjs` and
+  `call.sh createDraft`. None of these can put mail in anyone's inbox.
+- **ask** — everything that can send, trash, or change what runs. `clasp
+  version`, `call.sh scanInbox`/`checkBumps` (metered `x-api-key` in
+  `AnthropicClient.js` and can auto-send within the allowlist),
+  `sendReplyAll`/`sendDraft`/`setRecapEnabled`/`trashMessage`.
 - **deny** — `git push --force` in any spelling.
+
+The rows above are the current state; the dated entries below are how it
+got there, and the older ones describe rows that have since moved.
 
 **`clasp push` promoted to `allow` (2026-09-25, human-directed).** Zach:
 *"I need you to be able to push unattended as a rule."* Asked again the
@@ -162,6 +165,34 @@ read as absent — verified 2026-09-28, when `trashMessage` was saved by
 `@HEAD` deployment because Apps Script serves HEAD at `/dev` behind an
 owner login. That is the standing "verify the copy that executes" rule
 with a deployment id attached.
+
+**`redige.mjs` and `call.sh createDraft` promoted to `allow`; the
+PreToolUse hook deleted (2026-10-06, human-directed).** Zach, on the
+hook: *"These bash blocks are killing me"*; on two regex repairs to it:
+*"The rule edit looks like a silly sed incantation. there should be
+something simpler"* and *"same incantation problem"*; on the
+recommendation that became this entry: *"ok I take your recommendation"*.
+
+The hook grepped the whole command for `redige\.mjs`, so a `grep` or
+`wc` that merely named the file prompted like a run. It existed because
+`Bash(aedile/recap/redige.mjs:*)` never matched `cd aedile/recap &&
+./redige.mjs` (commit `025dc45`). The replacement is no pattern at all:
+each gated verb is listed in both spellings, `aedile/recap/call.sh <verb>`
+and `./call.sh <verb>`.
+
+Why these two could move: neither sends. `redige.mjs` generates through
+the subscription `claude` CLI (`redige.mjs:169-171`, no API key) and with
+`--post` files a draft; `createDraft` files a draft. `sendDraft` stays in
+`ask` because it does send (`WriteApi.js:458`, first real send
+2026-10-06).
+
+**UNVERIFIED, and the hole to know about:** that an `ask` row matches the
+`./call.sh sendDraft` segment of a `cd … && ./call.sh sendDraft` chain
+was not tested — Zach was away and the test is a prompt. An env-prefixed
+or wrapped spelling (`X=1 ./call.sh …`, `timeout 60 ./call.sh …`)
+matches no row and falls to the session's permission mode. Until the
+test is run with a human present, invoke gated verbs from the repo root
+as `aedile/recap/call.sh <verb>`, the spelling the rows name outright.
 
 **Do not move a row from `ask` to `allow` to get unblocked mid-task.**
 The point of the `ask` list is that a human sees those specific actions

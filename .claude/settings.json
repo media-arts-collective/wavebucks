@@ -4,6 +4,10 @@
       "Bash(aedile/recap/call.sh get:*)",
       "Bash(aedile/recap/call.sh readThread:*)",
       "Bash(aedile/recap/call.sh readInbox:*)",
+      "Bash(aedile/recap/call.sh createDraft:*)",
+      "Bash(./call.sh createDraft:*)",
+      "Bash(aedile/recap/redige.mjs:*)",
+      "Bash(./redige.mjs:*)",
       "Bash(gh issue create:*)",
       "Bash(gh issue edit:*)",
       "Bash(gh issue list:*)",
@@ -20,28 +24,20 @@
       "Bash(clasp -u aedile version:*)",
       "Bash(aedile/recap/call.sh scanInbox:*)",
       "Bash(aedile/recap/call.sh checkBumps:*)",
-      "Bash(aedile/recap/call.sh createDraft:*)",
       "Bash(aedile/recap/call.sh sendReplyAll:*)",
       "Bash(aedile/recap/call.sh sendDraft:*)",
       "Bash(aedile/recap/call.sh setRecapEnabled:*)",
-      "Bash(aedile/recap/redige.mjs:*)"
+      "Bash(aedile/recap/call.sh trashMessage:*)",
+      "Bash(./call.sh scanInbox:*)",
+      "Bash(./call.sh checkBumps:*)",
+      "Bash(./call.sh sendReplyAll:*)",
+      "Bash(./call.sh sendDraft:*)",
+      "Bash(./call.sh setRecapEnabled:*)",
+      "Bash(./call.sh trashMessage:*)"
     ],
     "deny": [
       "Bash(git push --force:*)",
       "Bash(git push -f:*)"
-    ]
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "jq -r '.tool_input.command' | grep -qE 'redige\\.mjs|call\\.sh +(createDraft|sendReplyAll|sendDraft|trashMessage|scanInbox|checkBumps|setRecapEnabled)' && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"Spends the krewe API budget and can post or send mail from the aedile mailbox.\"}}' || true"
-          }
-        ]
-      }
     ]
   }
 }

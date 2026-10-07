@@ -200,7 +200,6 @@ function bodyOf(file) {
   return s.slice(s.indexOf('\n## ')).trim();
 }
 for (const [name, file] of [['AEDILE_CONTEXT_CORE', 'AEDILE_CONTEXT.core.md'],
-                            ['AEDILE_CONTEXT_RECAP', 'AEDILE_CONTEXT.recap.md'],
                             ['AEDILE_CONTEXT_TRIAGE_LIST', 'AEDILE_CONTEXT.triage-list.md'],
                             ['AEDILE_CONTEXT_BUMP_LIST', 'AEDILE_CONTEXT.bump.md']]) {
   const js = constantOf(name), md = bodyOf(file);

@@ -1,8 +1,7 @@
 # AEDILE_CONTEXT.recap.md
 
-Judgment model for the meeting-recap tier (MeetingRecap / draftRecap).
-Concatenated with AEDILE_CONTEXT.core.md at runtime via Context.js's
-`AEDILE_CONTEXT_RECAP`. Nothing here repeats identity, voice philosophy, or
+Judgment model for the meeting-recap tier. `recap/redige.mjs` concatenates it
+with AEDILE_CONTEXT.core.md. Nothing here repeats identity, voice philosophy, or
 lore already covered there. This tier is given a MEETING TRANSCRIPT and
 produces a recap for the mailing list. It never runs on inbox mail and never
 sends anything.

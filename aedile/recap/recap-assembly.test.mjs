@@ -2,35 +2,13 @@
 //
 //   node --test aedile/recap/recap-assembly.test.mjs
 //
-// checks.mjs grades what redige.mjs produced; MeetingRecap.appendOpenQuestions
-// runs afterwards, so this grades the assembled string. The function is read out
-// of MeetingRecap.js and evaluated, so there is no local copy to drift.
+// checks.mjs grades the model's body; appendOpenQuestions runs afterwards, so
+// this grades the assembled string.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { appendOpenQuestions as append } from './redige.mjs';
 
-const AEDILE = join(dirname(fileURLToPath(import.meta.url)), '..');
-
-/** The real function, lifted from the real file. */
-function loadAppendOpenQuestions() {
-  const src = readFileSync(join(AEDILE, 'MeetingRecap.js'), 'utf8');
-  const start = src.indexOf('function appendOpenQuestions');
-  assert.ok(start !== -1, 'appendOpenQuestions not found in MeetingRecap.js');
-  // Brace-match to the end of the function, so the extraction survives edits inside it.
-  let depth = 0, i = src.indexOf('{', start);
-  const from = i;
-  for (; i < src.length; i++) {
-    if (src[i] === '{') depth++;
-    else if (src[i] === '}') { depth--; if (depth === 0) break; }
-  }
-  const body = src.slice(from + 1, i);
-  return new Function('body', 'openQuestions', body);
-}
-
-const append = loadAppendOpenQuestions();
 const SIGNOFF_LINE = /^(?:(?:<3[ \t]*)+|(?:<3[ \t]*)*SM)$/;
 const lastLineOf = s => s.trimEnd().split('\n').pop().trim();
 const QS = ['Is the weekly social actually on Wednesday?', "What 'make the website more useful' means."];

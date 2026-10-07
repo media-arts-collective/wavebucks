@@ -22,8 +22,6 @@
 // Legacy trigger-actions (judgment runs in Apps Script):
 //   scanInbox    [dryRun=true]
 //   checkBumps   [dryRun=true] [ignoreDue=true]  ignoreDue evaluates every open loop
-//   draftRecap   [dryRun=true] + `transcript` form field. Never sends.
-//   setRecapEnabled [dryRun=true] + `enabled` form field ("true"|"false")
 //
 // dryRun and ignoreDue accept only the exact strings "true" and "false"; absent
 // means false, anything else is a 400. A misspelled safety flag must not mean "no safety".
@@ -33,12 +31,7 @@ const WRITE_API = (() => {
   const ACTIONS = {
     scanInbox: scanInbox,
     checkBumps: checkBumps,
-    draftRecap: draftRecap,
-    setRecapEnabled: setRecapEnabled,
   };
-
-  // Legacy actions that carry a payload, read from the POST form body, not the query string.
-  const PAYLOAD_ACTIONS = { draftRecap: 'transcript', setRecapEnabled: 'enabled' };
 
   // Absent is false; anything but "true"/"false" throws, so a misspelled dryRun
   // cannot run a real send.
@@ -352,13 +345,7 @@ const WRITE_API = (() => {
     }
 
     let result;
-    if (PAYLOAD_ACTIONS[action]) {
-      const payload = params[PAYLOAD_ACTIONS[action]];
-      if (!payload) {
-        return { status: 400, body: { ok: false, error: `${action} requires a "${PAYLOAD_ACTIONS[action]}" parameter. POST it as a form field, not in the query string.` } };
-      }
-      result = fn(payload, dryRun);
-    } else if (action === 'checkBumps') {
+    if (action === 'checkBumps') {
       result = fn(dryRun, ignoreDue);
     } else {
       result = fn(dryRun);

@@ -18,7 +18,3 @@ const AEDILE_SYSTEM_PROMPT_LIST = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_TR
 const AEDILE_SYSTEM_PROMPT_DM = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_TRIAGE_DM}${_testingOverride()}`;
 const AEDILE_BUMP_PROMPT_LIST = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_BUMP_LIST}${_testingOverride()}`;
 const AEDILE_BUMP_PROMPT_DM = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_BUMP_DM}${_testingOverride()}`;
-
-// The meeting-recap tier. Deliberately does not take _testingOverride(): it
-// has no seasonal behaviour to suspend.
-const AEDILE_RECAP_PROMPT = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_RECAP}`;

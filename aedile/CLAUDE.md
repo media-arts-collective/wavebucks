@@ -74,7 +74,7 @@ requires taste or would take a side in a human disagreement, it doesn't.
   Tyler). **`WriteApi`'s `createDraft` originate form is deliberately
   outside this** — it passes `params.to` through unchecked, because a draft
   cannot leave without a human opening and sending it, and the caller that
-  uses it (`MeetingRecap`/`redige.mjs`) hardcodes the list address. Zach,
+  uses it (`redige.mjs`) hardcodes the list address. Zach,
   2026-09-25: *"drafts are safe by construction."* This paragraph used to
   state the rule unconditionally, which read as though the code enforced it
   everywhere; it does not, and the gap was the sentence rather than the

@@ -5,8 +5,6 @@
 # The token never goes on argv, and there is no `curl -X POST`: it pins the
 # method across /exec's 302 and Google answers with a sign-in page.
 #
-#   ./call.sh setRecapEnabled enabled=false
-#   ./call.sh setRecapEnabled enabled=true dryRun=true
 #   ./call.sh scanInbox dryRun=true
 #   ./call.sh get messages limit=5
 #   ./call.sh get log limit=20

@@ -42,15 +42,8 @@ Tests: `aedile/test.sh`. Deploy: `aedile/deploy.sh "<description>"`.
   check it before assuming aedile is observing seasonal silence.
 - `MIGRATION_DRIVE_FILE_ID` — read only by the one-time, non-idempotent
   `migrateMessages()` archive import. Not part of any trigger path.
-- `RECAP_ENABLED` — gates the meeting-recap tier, independent of every switch
-  above. Off/unset means off. Note what it does *not* gate: nothing in that
-  tier can send, so this switch governs whether a draft is written, not
-  whether mail leaves. **The only switch here that `WriteApi` can flip**
-  (`action=setRecapEnabled`), and that is exactly why: the others gate paths
-  that put mail in other people's inboxes, this one gates a path that puts a
-  draft in ours.
 
-All ten live in Project Settings > Script Properties, not in code.
+All nine live in Project Settings > Script Properties, not in code.
 `checkGuardrails()` prints the first four.
 
 `installTrigger()` installs the hourly `scanInbox` trigger;

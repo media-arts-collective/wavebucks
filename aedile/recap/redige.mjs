@@ -182,21 +182,36 @@ export function leadTimeBlock(eventDate, beat, asOf) {
 
 // --- the sink ----------------------------------------------------------------
 
-// The default recipient: the Google Group, not the account aedile runs as. Keep
-// in step with MeetingRecap.js's RECAP_RECIPIENT. `--to` overrides it for a
-// reminder. A member address must never be committed: recipients come from argv.
+// The default recipient: the Google Group, not the account aedile runs as.
+// `--to` overrides it for a reminder. A member address must never be committed: recipients come from argv.
 const LIST_RECIPIENT = 'kreweofvaporwave@googlegroups.com';
 
 const SECRETS = process.env.AEDILE_SECRETS
   || [join(process.env.HOME || '', '.config/aedile/api-secrets'), '/srv/vaporwave-reports/aedile/.aedile-api-secrets']
     .find(f => existsSync(f)) || '';
 
-// Render open_questions the same way MeetingRecap.appendOpenQuestions does; the
-// two copies cannot share a function, keep them identical.
-function appendOpenQuestions(body, openQuestions) {
+// Renders open_questions into the body so what the meeting did not settle
+// survives into the draft.
+export function appendOpenQuestions(body, openQuestions) {
   if (!openQuestions || !openQuestions.length) return body;
   const items = openQuestions.map(q => `  - ${q}`).join('\n');
-  return `${body}\n\nStill open:\n${items}`;
+  const block = `Still open:\n${items}`;
+
+  // The sign-off stays last: the block goes above it.
+  const SIGNOFF_LINE = /^(?:(?:<3[ \t]*)+|(?:<3[ \t]*)*SM)$/;
+  const lines = body.replace(/\s+$/, '').split('\n');
+  const signOff = [];
+  // The sign-off can be one line (`<3 SM`) or two (`<3` then `SM`).
+  while (lines.length) {
+    const last = lines[lines.length - 1].trim();
+    if (last === '') { lines.pop(); continue; }
+    if (!SIGNOFF_LINE.test(last)) break;
+    signOff.unshift(last);
+    lines.pop();
+  }
+  // No sign-off to protect: append as before rather than inventing a position.
+  if (!signOff.length) return `${body}\n\n${block}`;
+  return `${lines.join('\n').replace(/\s+$/, '')}\n\n${block}\n\n${signOff.join('\n')}`;
 }
 
 // Reads the Log, where an originate's addressee is in the `From` column.
@@ -455,16 +470,12 @@ async function main(argv) {
   process.exit(blocking.length ? 6 : 0);
 }
 
-// What prints here is what the krewe receives. The open-questions rendering is
-// a copy of MeetingRecap.js's appendOpenQuestions: change one, change both.
+// What prints here is what the krewe receives.
 function render(d) {
-  const open = d.open_questions?.length
-    ? `\n\nStill open:\n${d.open_questions.map(q => `  - ${q}`).join('\n')}`
-    : '';
   return [
     `Subject: ${d.subject}`,
     '',
-    (d.body || '') + open,
+    appendOpenQuestions(d.body || '', d.open_questions),
     '',
     `[confidence: ${d.confidence}]`,
   ].join('\n');

@@ -349,25 +349,41 @@ export function dealGap(seed, genre) {
  *    0 of 33 begin "N. "
  *  The full "name. Sun. 1/4 @ 1pm, venue" form I had weighted heaviest is 2 of 14.
  *
- *  ERA: those 33 are the successor era. Abe-era subjects exist in no store, because
- *  the scraper discarded Subject: headers (#30) and the Office mailbox holds no mail
- *  before 2025. So this is the one dealer NOT calibrated on the voice the rest of
- *  this file imitates, and it says so rather than pretending otherwise.
+ *  ERA AND TYPE, since 2026-10-07. Those 33 were the successor era and one pool for
+ *  every kind of mail, which is how a recap came out titled like a calendar entry.
+ *  The topic scrape finished, so `subjectWeights(genre, beat)` now measures the Abe-era
+ *  subjects of THAT message type, read off the bodies they sat on. Zach, 2026-09-29:
+ *  "match the abe figures"; 2026-10-07: "should use RNG to deal a subject and be aware
+ *  of message type." Nothing here knows the types: it deals whatever `w` describes.
  */
 export function dealSubject(seed, w) {
   if (!w) return '';   // no measured weights pushed in: say nothing about the subject
   const rand = seed === undefined ? Math.random : rng(String(seed) + ':subject');
-  const take = p => rand() < p;
+  const take = p => rand() < (p || 0);
+  // Length is drawn across the middle half of the pool, not pinned to its median: a
+  // generator told "about 28 characters" every time writes 28 characters every time.
+  const lo = w.q1Chars ?? w.medianChars, hi = w.q3Chars ?? w.medianChars;
+  const chars = Math.round(lo + rand() * (hi - lo));
   const parts = [];
   if (take(w.dayWord)) parts.push('the day word (a weekday name, or today/tomorrow/tonight)');
   if (take(w.calDate)) parts.push('the calendar date as M/D');
   if (take(w.clockTime)) parts.push('the start time');
   if (take(w.venue)) parts.push('the venue');
-  const punct = take(w.colon) ? 'a colon' : take(w.fullStop ?? 0.21) ? 'a full stop' : 'no separator at all';
-  const lines = [`SUBJECT: about ${w.medianChars} characters. Name the thing, and include `
-    + (parts.length ? parts.join(', ') + '.' : 'no date, time or venue at all: just the thing.')];
-  lines.push(`Separate the parts with ${punct}. Never number the subject and never make it`
-    + ' the body\'s first line.');
+  const lines = [`SUBJECT: about ${chars} characters.`];
+  const seps = Object.entries(w.separators || {});
+  if (seps.length && take(w.multi)) {
+    let r = rand() * seps.reduce((s, [, c]) => s + c, 0);
+    const sep = (seps.find(([, c]) => (r -= c) < 0) || seps[0])[0];
+    lines.push(`Name two or three of the things this mail carries, a few words each, joined by "${sep}".`);
+    if (parts.length) lines.push(`Somewhere in it include ${parts.join(', ')}.`);
+  } else {
+    lines.push('Name one thing, and include '
+      + (parts.length ? parts.join(', ') + '.' : 'no date, time or venue at all: just the thing.'));
+    if (take(w.colon)) lines.push('Use a colon in it.');
+  }
+  lines.push('Never number the subject and never make it the body\'s first line.');
+  if (take(w.bang)) lines.push('End a part of it with an exclamation mark.');
+  if (take(w.question)) lines.push('Make it a question.');
   if (take(w.allCaps)) lines.push('Put one word of the subject in ALL-CAPS.');
   if (take(w.lowerOpen)) lines.push('Start the subject with a lowercase letter.');
   return lines.join(' ');

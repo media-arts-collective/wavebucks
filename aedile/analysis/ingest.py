@@ -220,7 +220,7 @@ date_iso (the true instant, with offset), to, cc, source.
 """
 
 import argparse, email, email.policy, email.utils, hashlib, json, mailbox
-import re, subprocess, sys
+import os, re, subprocess, sys, time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -274,13 +274,21 @@ def instant(iso):
     """An aware datetime out of either clock's spelling, or None."""
     if not iso:
         return None
-    return datetime.fromisoformat(str(iso).replace('Z', '+00:00'))
+    dt = datetime.fromisoformat(str(iso).replace('Z', '+00:00'))
+    # A scraped topic page renders no timezone, so its rows arrive naive. The page is
+    # drawn in the browser's zone and the scrape runs on this box, so naive means LOCAL.
+    # Returning it naive is what killed the first full merge on 2026-10-07, at the very
+    # last step, comparing a 2026 scraped row against the Log's UTC floor.
+    return dt if dt.tzinfo else dt.replace(tzinfo=LOCAL)
 
 
 def calendar_day(date):
     """Y-Mon-DD out of the legacy date spelling, 'Jan 29, 2024, 2:48:24 PM'."""
     m = re.match(r'(\w{3}) (\d{1,2}), (\d{4})', re.sub(r'\s+', ' ', str(date)).strip())
     return f'{m.group(3)}-{m.group(1)}-{int(m.group(2)):02d}' if m else '?'
+
+
+QUOTES = str.maketrans({'\u2018': "'", '\u2019': "'", '\u201c': '"', '\u201d': '"'})
 
 
 def merge_key(date, body, seq):
@@ -323,7 +331,15 @@ def merge_key(date, body, seq):
     chosen from the decay curve; it holds for two reasons and only one of
     them was reasoned about.
     """
-    text = re.sub(r'\s+', ' ', body or '').strip()[:PREFIX].lower()
+    # Quotes are folded before the cut. The legacy scrape wrote straight apostrophes and
+    # a topic page renders curly ones, so "I'm" and "I\u2019m" keyed apart: at full scrape
+    # coverage on 2026-10-07, 72 legacy rows sat beside their own scraped twins, same day,
+    # same words, as two messages.
+    # And two things only one side carries: the legacy scrape kept Google's icon glyphs
+    # (private-use codepoints, the same ones scrape-topics.py strips) and a topic page
+    # sometimes leads with a byte-order mark. 20 more pairs keyed apart on those.
+    text = re.sub(r'[\ue000-\uf8ff\ufeff]', '', (body or '').translate(QUOTES))
+    text = re.sub(r'\s+', ' ', text).strip()[:PREFIX].lower()
     if not text:
         return f'empty-body-{seq}'
     return hashlib.sha1(f'{calendar_day(date)}|{text}'.encode()).hexdigest()
@@ -407,7 +423,11 @@ def from_mbox(path, group=GROUP):
             'to': str(msg['To']) if msg['To'] else None,
             'cc': str(msg['Cc']) if msg['Cc'] else None,
             'body': body,
-            'topic_url': None,
+            # scrape-topics.py stamps each message with its topic. Dropping it here left
+            # the merged corpus unable to say which topics exist, and the scraper
+            # enumerates from exactly that.
+            'topic_url': (f"https://groups.google.com/g/{GROUP}/c/{msg['X-Topic-Id']}"
+                          if msg['X-Topic-Id'] else None),
             'source': 'mbox',
         }
     print(f'ingest: mbox {path}: kept {kept} list messages, '
@@ -572,7 +592,7 @@ def aedile_marker(log_rows):
 
 
 def call(action, **params):
-    """One retry, loudly, then die.
+    """Retry loudly, then die.
 
     The endpoint intermittently answers `Invalid or missing token` to a
     request whose token is fine -- /exec 302s to googleusercontent.com and
@@ -582,14 +602,20 @@ def call(action, **params):
     Every retry prints, so the flakiness stays visible instead of becoming a
     number nobody can see; twice in a row is a real failure and exits.
     """
-    for attempt in (1, 2):
+    # FIVE tries with a growing pause, not two. Measured 2026-10-07: a full merge makes
+    # a few hundred of these calls, and with two tries it died three runs out of three,
+    # each time on a different call, after the scrape itself had banked 628 of 628. Every
+    # call here is a READ, so repeating one cannot duplicate anything.
+    tries = 5
+    for attempt in range(1, tries + 1):
         body = _call_once(action, **params)
         if body.get('ok'):
             return body
-        if attempt == 1:
-            print(f'ingest: {action} {params} -> {body.get("error")!r}; '
-                  f'retrying once', file=sys.stderr)
-    raise SystemExit(f'ingest: {action} {params} failed twice: '
+        if attempt < tries:
+            print(f'ingest: {action} {params} -> {str(body.get("error"))[:80]!r}; '
+                  f'retry {attempt} of {tries - 1}', file=sys.stderr)
+            time.sleep(5 * attempt)
+    raise SystemExit(f'ingest: {action} {params} failed {tries} times: '
                      f'{json.dumps(body)[:400]}')
 
 
@@ -610,6 +636,34 @@ def _call_once(action, **params):
         return {'ok': False,
                 'error': f'unparseable response, {len(out.stdout)} bytes: '
                          f'{out.stdout[:120]!r}'}
+
+
+def read_thread(t):
+    """readThread, kept on disk when $INGEST_GMAIL_CACHE names a directory.
+
+    A merge reads a couple of hundred threads through an endpoint that on 2026-10-07
+    failed about three calls in four, so a run that restarts from zero never finishes
+    however many times each call is retried. Keyed on the thread AND its last message
+    date, so a thread that has grown since is read again and one that has not is free.
+    The files are members' mail: the directory belongs beside the mbox, never in the repo.
+    """
+    cache = os.environ.get('INGEST_GMAIL_CACHE')
+    if not cache:
+        return call('readThread', threadId=t['threadId'])
+    stamp = re.sub(r'\W', '', str(t.get('lastDate')))
+    path = os.path.join(cache, f"{t['threadId']}-{stamp}.json")
+    if os.path.exists(path):
+        return json.load(open(path))
+    # PACED. Back to back, these reads failed almost every time on 2026-10-07 (1 thread
+    # banked across three attempts); the same thread read by hand a minute later answered
+    # three times out of three. Three seconds is a guess that worked, not a measured floor.
+    time.sleep(3)
+    body = call('readThread', threadId=t['threadId'])
+    os.makedirs(cache, exist_ok=True)
+    with open(path + '.part', 'w') as fh:
+        json.dump(body, fh)
+    os.replace(path + '.part', path)
+    return body
 
 
 def from_gmail(query, year_from, year_to):
@@ -633,9 +687,18 @@ def from_gmail(query, year_from, year_to):
     for year in range(year_from, year_to + 1):
         q = f'{query} after:{year}/01/01 before:{year + 1}/01/01'
         for t in call('readInbox', q=q, limit=100)['threads']:
-            for m in call('readThread', threadId=t['threadId'])['messages']:
+            for m in read_thread(t)['messages']:
                 dt = datetime.fromisoformat(
                     m['date'].replace('Z', '+00:00')).astimezone(LOCAL)
+                # A SCHEDULED send is dated when it will go, and `-in:drafts` does not
+                # exclude it: the first full merge on 2026-10-07 carried three mails the
+                # list had not received yet, the latest dated ten days out. Same error as
+                # the draft leak above. The query now says -in:scheduled; this is the
+                # backstop that does not depend on Gmail's operator.
+                if dt > datetime.now(LOCAL):
+                    print(f"ingest: skipped a message dated {dt.date()}, in the future "
+                          f'(a scheduled send)', file=sys.stderr)
+                    continue
                 name, addr = email.utils.parseaddr(m['from'])
                 yield {
                     'author': name or addr,
@@ -743,7 +806,7 @@ def main():
                    help="set aedile_authored by cross-referencing aedile's Log; "
                         'costs one read call. See aedile_marker().')
     p.add_argument('--query',
-                   default='list:kreweofvaporwave.googlegroups.com -in:drafts',
+                   default='list:kreweofvaporwave.googlegroups.com -in:drafts -in:scheduled',
                    help='Gmail search. Keep -in:drafts unless you mean to '
                         'ingest unsent text; see from_gmail().')
     p.add_argument('--years', default='2019:2026', metavar='FROM:TO')

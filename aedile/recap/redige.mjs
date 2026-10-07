@@ -545,7 +545,7 @@ async function main(argv) {
   const typo = dealTypo();
   const signoff = dealSignoff();
   const gap = dealGap(undefined, genre);
-  const subjectShape = dealSubject(undefined, subjectWeights());
+  const subjectShape = dealSubject(undefined, subjectWeights(genre, beat));
   const dealt = Object.entries(hand).filter(([, v]) => v).map(([k]) => k);
   console.error(`-- genre: ${genre}${beat ? ` (beat: ${beat})` : ''}`);
   console.error(`-- devices: ${dealt.join(', ') || 'none'}; gap ${gap}`);

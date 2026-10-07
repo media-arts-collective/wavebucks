@@ -274,7 +274,12 @@ def instant(iso):
     """An aware datetime out of either clock's spelling, or None."""
     if not iso:
         return None
-    return datetime.fromisoformat(str(iso).replace('Z', '+00:00'))
+    dt = datetime.fromisoformat(str(iso).replace('Z', '+00:00'))
+    # A scraped topic page renders no timezone, so its rows arrive naive. The page is
+    # drawn in the browser's zone and the scrape runs on this box, so naive means LOCAL.
+    # Returning it naive is what killed the first full merge on 2026-10-07, at the very
+    # last step, comparing a 2026 scraped row against the Log's UTC floor.
+    return dt if dt.tzinfo else dt.replace(tzinfo=LOCAL)
 
 
 def calendar_day(date):

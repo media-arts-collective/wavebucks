@@ -26,7 +26,7 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { load } from './corpus.mjs';
+import { load, eventDay, dayNum } from './corpus.mjs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -88,31 +88,115 @@ export function corpusSubjects(opts = {}) {
 
 const pct = (n, d) => d ? Math.round(100 * n / d) : 0;
 
-/** Weights for the dealt subject shape, computed over the logistics-carrying human
- *  subjects. Pushed into devices.mjs by the caller, the way measuredRates() is, so
- *  no literal ever gets typed into the generator again. */
-export function subjectWeights() {
-  const pool = HUMAN.filter(carriesLogistics);
+// --- subjects by MESSAGE TYPE ------------------------------------------------
+//
+// Zach, 2026-09-29, on the 12-specimen weights: "agree that this is a problem due to
+// the bad subject generation. match the abe figures." And 2026-10-07: "a built subject
+// generator for our various message types ... should use RNG to deal a subject and be
+// aware of message type."
+//
+// The scrape finished, so every subject now arrives WITH ITS BODY, and the type is read
+// off the body rather than guessed from a day word in the subject:
+//
+//   recap             three or more numbered items. The digest.
+//   headsup:nudge     points at a day, and that day is the day it was sent.
+//   headsup:lock-in   points at a day, one to six days out.
+//   other             everything else. Not dealt from; reported so the split is visible.
+//
+// Abe era only (<=2024), for the reason given on corpusSubjects above: after that the
+// operator address also carries aedile's own mail.
+
+/** Ways a subject joins several topics. Measured separately because which one the
+ *  archive reaches for is the thing being dealt. */
+export const SEPARATORS = {
+  ' // ': s => /\s\/\/\s/.test(s),
+  ' / ':  s => /\s\/\s/.test(s),
+  '; ':   s => /;\s/.test(s),
+  ', ':   s => /,\s/.test(s),
+  ' + ':  s => /\s\+\s/.test(s),
+  ' & ':  s => /\s&\s/.test(s),
+};
+const isMulti = s => Object.values(SEPARATORS).some(fn => fn(s));
+
+const numberedItems = b => (b.match(/(?:^|\n)\s*-?\d+[.)]\s/g) || []).length;
+
+export function typeOf(m) {
+  if (numberedItems(m.body) >= 3) return 'recap';
+  const ev = eventDay(m);
+  if (ev === null) return 'other';
+  const lead = ev - dayNum(m._d);
+  if (lead === 0) return 'headsup:nudge';
+  if (lead >= 1 && lead <= 6) return 'headsup:lock-in';
+  return 'other';
+}
+
+/** One row per thread-starting operator subject, typed. A reply shares its topic's
+ *  subject on a scraped page, so the same subject inside one calendar month is kept
+ *  once, at its earliest message -- that is the message the subject was written for. */
+export function typedSubjects({ until = 2024 } = {}) {
+  const seen = new Set();
+  const out = [];
+  for (const m of load({ until }).sort((a, b) => a._d - b._d)) {
+    const subject = typeof m.subject === 'string' ? m.subject.trim() : '';
+    if (!subject || /^(re|fwd?):/i.test(subject)) continue;
+    const key = subject + '|' + m._d.toISOString().slice(0, 7);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ subject, type: typeOf(m) });
+  }
+  return out;
+}
+
+/** A type needs this many subjects before its own rates are dealt. Below it the pool
+ *  widens (beat -> genre -> every typed subject) and says so in `pool`, because a rate
+ *  off a dozen subjects is how this dealer went wrong the first time. */
+export const MIN_POOL = 20;
+
+/** Weights for the dealt subject, for one message type. Computed, never typed in. */
+export function subjectWeights(genre = 'recap', beat = null, rows = typedSubjects()) {
+  const want = genre === 'headsup' && beat ? `headsup:${beat}` : genre;
+  const pools = [
+    [want, rows.filter(r => r.type === want)],
+    [genre, rows.filter(r => r.type.split(':')[0] === genre)],
+    ['all typed', rows.filter(r => r.type !== 'other')],
+  ];
+  const [poolName, picked] = pools.find(([, p]) => p.length >= MIN_POOL) || pools[pools.length - 1];
+  const pool = picked.map(r => r.subject);
   const n = pool.length;
-  const count = fn => pool.filter(fn).length;
+  if (!n) return null;
+  const rate = fn => pool.filter(fn).length / n;
+  const chars = pool.map(s => s.length).sort((x, y) => x - y);
+  const multi = pool.filter(isMulti);
   return {
-    n,
-    dayWord: count(F.dayWord) / n,
-    clockTime: count(F.clockTime) / n,
-    calDate: count(F.calDate) / n,
-    venue: count(F.venue) / n,
-    bracket: count(F.bracket) / n,
-    allCaps: count(F.allCaps) / n,
-    bang: count(F.bang) / n,
-    lowerOpen: count(F.lowerOpen) / n,
-    pipeSlash: count(F.pipeSlash) / n,
-    colon: count(F.colon) / n,
-    medianChars: (() => { const a = pool.map(s => s.length).sort((x, y) => x - y);
-      return a[Math.floor(a.length / 2)]; })(),
+    pool: poolName, n,
+    dayWord: rate(F.dayWord), clockTime: rate(F.clockTime), calDate: rate(F.calDate),
+    venue: rate(F.venue), allCaps: rate(F.allCaps), bang: rate(F.bang),
+    question: rate(F.question), lowerOpen: rate(F.lowerOpen), colon: rate(F.colon),
+    multi: multi.length / n,
+    // Which joiner, among the subjects that join at all. Counts, so the dealer draws
+    // in proportion and a joiner the archive never used cannot be dealt.
+    separators: Object.fromEntries(Object.entries(SEPARATORS)
+      .map(([sep, fn]) => [sep, multi.filter(fn).length]).filter(([, c]) => c)),
+    medianChars: chars[Math.floor(n / 2)],
+    q1Chars: chars[Math.floor(n / 4)],
+    q3Chars: chars[Math.floor(3 * n / 4)],
   };
 }
 
-if (process.argv[1] && process.argv[1].endsWith('subject-shapes.mjs')) {
+if (process.argv[1] && process.argv[1].endsWith('subject-shapes.mjs') && process.argv.includes('--types')) {
+  const rows = typedSubjects();
+  const types = ['recap', 'headsup:lock-in', 'headsup:nudge', 'other'];
+  console.log(`thread-starting operator subjects, <=2024: ${rows.length}`);
+  for (const t of types) console.log(`  ${t.padEnd(16)} ${rows.filter(r => r.type === t).length}`);
+  const ws = [['recap', null], ['headsup', 'lock-in'], ['headsup', 'nudge']].map(([g, b]) => subjectWeights(g, b, rows));
+  console.log('\nfeature          recap   lock-in   nudge');
+  console.log(`  ${'pool n'.padEnd(14)} ${ws.map(w => String(w.n).padStart(5)).join('    ')}`);
+  for (const k of ['multi', 'dayWord', 'clockTime', 'calDate', 'venue', 'bang', 'question', 'allCaps', 'lowerOpen', 'colon']) {
+    console.log(`  ${k.padEnd(14)} ${ws.map(w => (pct(Math.round(w[k] * w.n), w.n) + '%').padStart(5)).join('    ')}`);
+  }
+  console.log(`  ${'chars q1/med/q3'.padEnd(14)} ${ws.map(w => `${w.q1Chars}/${w.medianChars}/${w.q3Chars}`).join('   ')}`);
+  console.log(`  joiners        ${ws.map(w => JSON.stringify(w.separators)).join('   ')}`);
+} else if (process.argv[1] && process.argv[1].endsWith('subject-shapes.mjs')) {
   const logi = HUMAN.filter(carriesLogistics);
   console.log(`real subjects: ${DATA.subjects.length}  human: ${HUMAN.length}  `
     + `(aedile's own excluded: ${DATA.subjects.length - HUMAN.length})`);

@@ -43,6 +43,10 @@ check('display keeps the masked form', m.group('display') if m else None, 'mburn
 # THE LOAD-BEARING CASE. A collapsed message has no address, so it must not parse -- that
 # is what makes a partial extraction detectable instead of silently banked short.
 check('collapsed header does NOT match', bool(st.HEADER_RE.match(COLLAPSED)), False)
+UNREAD = 'mburns70124<mburns70124@gmail.com>\nunread,\nApr 29, 2022, 11:08:42 AM\n\nI have a 4 runner.'
+check('never-opened message carries an `unread,` line and still matches',
+      (st.HEADER_RE.match(UNREAD) or [None]) and st.HEADER_RE.match(UNREAD).group('date'),
+      'Apr 29, 2022, 11:08:42 AM')
 check('masked-only sender does not match',
       bool(st.HEADER_RE.match('kreweofv...@gmail.com\nApr 29, 2022, 10:55:22 AM\n\nhi')), False)
 # The operator's own messages render both forms together; owner rights are what reveal it.

@@ -68,8 +68,15 @@ LEDGER = Path(os.environ.get(
 
 # `display<addr@host>` immediately followed by a date line. Google renders the masked display
 # form and the real address together, which is the whole reason owner rights matter.
+#
+# A message this account has never opened renders one more line, `unread,`, between the two.
+# Measured 2026-10-07: 12 of 12 topics that timed out waiting on "Expand all" rendered
+# `addr | unread, | date`, and all 12 banked on a second visit, because the first visit had
+# marked them read. That was every "the session went stale after N pages" stall this scrape
+# ever had; it was never the session and never the rate.
 HEADER_RE = re.compile(
     r'^(?P<display>[^\n<]{0,120})<(?P<addr>[^<>\s@]+@[^<>\s@]+)>\s*\n'
+    r'(?:\s*unread,\s*\n)?'
     r'\s*(?P<date>[A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d{2}:\d{2}\s*[AP]M)',
     re.M)
 

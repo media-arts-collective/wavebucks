@@ -186,9 +186,7 @@ instruction-following rather than a rate.
 **The heads-up form is computed, not written.** `analysis/headsup-form.mjs` measures it
 from the corpus every run and `redige.mjs` splices the result; `AEDILE_CONTEXT.headsup.md`
 keeps only the genre's purpose and the beats' functions. Its Form section was deleted
-because it was wrong twice in one session in the same direction. Every rate is checked three ways before it may become an instruction -- target
-pool, a differently-drawn neighbour pool, and a Wilson interval -- and an interval
-spanning 50% is reported as undecidable rather than rounded into a rule.
+because it was wrong twice in one session in the same direction.
 
 Device rates for a heads-up are **pushed in** from `measuredRates()`, not tabulated.
 That table has been wrong three ways: first `GENRE_OFF`, devices forced to false on the
@@ -491,16 +489,6 @@ exercised end-to-end in production Gmail):**
   and request-logging were before shipping.
 
 **Known bugs:**
-- **2026-07-17, since checked (2026-07-22):** the Triggers page confirms
-  both `scanInbox` (hourly) and `checkBumps` (daily) are actually installed
-  and firing — a manual `scanUnread()` run same-day logged "Reviewed 0 new
-  message(s)," confirming the earlier 4-message-thread gap was genuinely no
-  unread mail arriving in that window, not a dead trigger. `scanInbox`'s
-  ~10.65% error rate (visible on the Triggers page) is still unexplained
-  and worth a director skimming Apps Script's execution log for the actual
-  stack traces next time it's convenient — not urgent, since scanUnread's
-  per-message try/catch already isolates one bad message from killing a
-  whole run.
 - **2026-07-22, FIXED same day:** `thread.replyAll()`/`createDraftReply()`
   only address a reply to the LAST message in a thread's From/To/Cc, not
   the full thread history — but `isAllowlistEligible()` (the autosend

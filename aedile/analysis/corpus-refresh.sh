@@ -94,9 +94,19 @@ if [ "${1:-}" != --no-scrape ]; then
   done
 fi
 
-python3 aedile/analysis/ingest.py --mbox "$MBOX" --jsonl "$SOURCE" \
-  --gmail --years 2025:2026 --unmask --mark-aedile -o "$MERGED" \
-  || { status FAILED "merge failed; vault untouched"; exit 1; }
+# Eight goes, a minute apart, each resuming where the last died. The Gmail half reads
+# through /exec, which on 2026-10-07 failed about three calls in four (#54): the first
+# full run died here with all 628 topics banked, and three restarts from zero died too.
+# So ingest.py keeps each thread it has read under $CACHE/gmail-threads, and a retry
+# only reads what is missing. A read is safe to repeat.
+export INGEST_GMAIL_CACHE=$CACHE/gmail-threads
+merged=no
+for try in 1 2 3 4 5 6 7 8; do
+  python3 aedile/analysis/ingest.py --mbox "$MBOX" --jsonl "$SOURCE" \
+    --gmail --years 2025:2026 --unmask --mark-aedile -o "$MERGED" && { merged=yes; break; }
+  echo "=== merge attempt $try failed"; [ "$try" -lt 8 ] && sleep 60
+done
+[ "$merged" = yes ] || { status FAILED "merge failed eight times; vault untouched"; exit 1; }
 
 python3 aedile/analysis/ingest.py --audit "$SOURCE" > "$STATE/audit-before.txt"
 python3 aedile/analysis/ingest.py --audit "$MERGED" > "$STATE/audit-after.txt"

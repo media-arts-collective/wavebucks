@@ -220,7 +220,7 @@ date_iso (the true instant, with offset), to, cc, source.
 """
 
 import argparse, email, email.policy, email.utils, hashlib, json, mailbox
-import re, subprocess, sys
+import os, re, subprocess, sys, time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -572,7 +572,7 @@ def aedile_marker(log_rows):
 
 
 def call(action, **params):
-    """One retry, loudly, then die.
+    """Retry loudly, then die.
 
     The endpoint intermittently answers `Invalid or missing token` to a
     request whose token is fine -- /exec 302s to googleusercontent.com and
@@ -582,14 +582,20 @@ def call(action, **params):
     Every retry prints, so the flakiness stays visible instead of becoming a
     number nobody can see; twice in a row is a real failure and exits.
     """
-    for attempt in (1, 2):
+    # FIVE tries with a growing pause, not two. Measured 2026-10-07: a full merge makes
+    # a few hundred of these calls, and with two tries it died three runs out of three,
+    # each time on a different call, after the scrape itself had banked 628 of 628. Every
+    # call here is a READ, so repeating one cannot duplicate anything.
+    tries = 5
+    for attempt in range(1, tries + 1):
         body = _call_once(action, **params)
         if body.get('ok'):
             return body
-        if attempt == 1:
-            print(f'ingest: {action} {params} -> {body.get("error")!r}; '
-                  f'retrying once', file=sys.stderr)
-    raise SystemExit(f'ingest: {action} {params} failed twice: '
+        if attempt < tries:
+            print(f'ingest: {action} {params} -> {str(body.get("error"))[:80]!r}; '
+                  f'retry {attempt} of {tries - 1}', file=sys.stderr)
+            time.sleep(5 * attempt)
+    raise SystemExit(f'ingest: {action} {params} failed {tries} times: '
                      f'{json.dumps(body)[:400]}')
 
 
@@ -610,6 +616,30 @@ def _call_once(action, **params):
         return {'ok': False,
                 'error': f'unparseable response, {len(out.stdout)} bytes: '
                          f'{out.stdout[:120]!r}'}
+
+
+def read_thread(t):
+    """readThread, kept on disk when $INGEST_GMAIL_CACHE names a directory.
+
+    A merge reads a couple of hundred threads through an endpoint that on 2026-10-07
+    failed about three calls in four, so a run that restarts from zero never finishes
+    however many times each call is retried. Keyed on the thread AND its last message
+    date, so a thread that has grown since is read again and one that has not is free.
+    The files are members' mail: the directory belongs beside the mbox, never in the repo.
+    """
+    cache = os.environ.get('INGEST_GMAIL_CACHE')
+    if not cache:
+        return call('readThread', threadId=t['threadId'])
+    stamp = re.sub(r'\W', '', str(t.get('lastDate')))
+    path = os.path.join(cache, f"{t['threadId']}-{stamp}.json")
+    if os.path.exists(path):
+        return json.load(open(path))
+    body = call('readThread', threadId=t['threadId'])
+    os.makedirs(cache, exist_ok=True)
+    with open(path + '.part', 'w') as fh:
+        json.dump(body, fh)
+    os.replace(path + '.part', path)
+    return body
 
 
 def from_gmail(query, year_from, year_to):
@@ -633,7 +663,7 @@ def from_gmail(query, year_from, year_to):
     for year in range(year_from, year_to + 1):
         q = f'{query} after:{year}/01/01 before:{year + 1}/01/01'
         for t in call('readInbox', q=q, limit=100)['threads']:
-            for m in call('readThread', threadId=t['threadId'])['messages']:
+            for m in read_thread(t)['messages']:
                 dt = datetime.fromisoformat(
                     m['date'].replace('Z', '+00:00')).astimezone(LOCAL)
                 name, addr = email.utils.parseaddr(m['from'])

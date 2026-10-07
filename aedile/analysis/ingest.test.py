@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
-"""Cases for ingest.py. Run: python3 aedile/analysis/ingest.test.py
-
-The mbox path is the one that cannot be exercised against live data yet -- no
-mbox exists on this box, because producing one needs a Takeout from a mailbox
-that was actually subscribed to the list. So it gets a fixture with the four
-things that have already gone wrong in this corpus baked in: a timezone that
-is not UTC, a MIME multipart body, a non-ASCII charset, and a reply carrying
-In-Reply-To/References.
-"""
+"""Cases for ingest.py. Run: python3 aedile/analysis/ingest.test.py"""
 
 import json, os, subprocess, sys, tempfile
 
@@ -62,15 +54,8 @@ Your statement is available. Do not reply.
 '''
 
 LEGACY = [
-    # Same message as <root@...>, in the legacy shape: no headers, ellipsized
-    # author, null email, local wall-clock date. Must dedupe against the mbox
-    # row and lose to it.
-    # Deliberately NOT byte-identical to the mbox copy, in the three ways the
-    # real sources actually differ (measured): the send second is 40s off
-    # because Groups logs delivery and Gmail logs receipt; U+202F sits before
-    # PM where this tool writes a plain space; and the DOM-to-text pass
-    # re-flowed the body, so it diverges past the first 60 characters. It must
-    # still collapse onto the mbox row.
+    # Same message as <root@...>, in the legacy shape and deliberately NOT
+    # byte-identical to it. Must dedupe against the mbox row and lose to it.
     {"author": "kreweofv...@gmail.com", "email": None,
      "date": "Jan 29, 2024, 2:47:44\u202fPM",
      "body": "Hi\n\n\nthrows: 8640 Nelson Street, 5pm-10ish, Tuesday (tomorrow)\n\n\n"
@@ -106,9 +91,7 @@ with tempfile.TemporaryDirectory() as d:
             f.write(json.dumps(r) + '\n')
 
     rows = run('--mbox', mb)
-    # A Takeout mbox is the WHOLE ACCOUNT. The bank statement is addressed to
-    # the operator personally, not to the group, and must never reach a krewe
-    # corpus that gets read back to a model and quoted in reports.
+    # A Takeout mbox is the WHOLE ACCOUNT; personal mail must never reach the corpus.
     check('mbox row count, personal mail excluded', len(rows), 2)
     check('no non-list message survives',
           [r for r in rows if 'statement' in str(r['subject']).lower()], [])
@@ -117,25 +100,17 @@ with tempfile.TemporaryDirectory() as d:
     check('subject survives', root['subject'], 'Tuesday throws at 8640 Nelson')
     check('address is real, not ellipsized', root['email'], 'kreweofvaporwave@gmail.com')
     check('display name kept', root['author'], 'Krewe of Vaporwave')
-    # -0600 is the whole point: date_iso keeps the offset, `date` keeps the
-    # wall-clock hour the sender saw, and they are the same 2:48 PM.
     check('date_iso keeps the offset', root['date_iso'], '2024-01-29T14:48:24-06:00')
     check('legacy date spelling', root['date'], 'Jan 29, 2024, 2:48:24 PM')
     check('threading: in_reply_to', reply['in_reply_to'], '<root@mail.gmail.com>')
     check('threading: references', reply['references'], ['<root@mail.gmail.com>'])
-    # The part is latin-1 and says so. Getting 'cafÃ©' back would mean the
-    # charset was ignored -- the failure mode that puts mojibake in an archive.
+    # The part is latin-1 and says so.
     check('multipart picks text/plain, decoded per its charset',
           reply['body'].strip(), 'I will bring the caf\xe9 table.')
     check('source tagged', root['source'], 'mbox')
-    # message_id is the RFC header and gmail_id is Gmail's own; an mbox row
-    # has the first and never the second. Joining the two namespaces would
-    # return nothing and read as an empty overlap.
     check('mbox carries no gmail_id', root['gmail_id'], None)
 
-    # Merge: the legacy copy of the root message must collapse into the mbox
-    # one, and the mbox one must win -- otherwise a re-ingest silently
-    # reintroduces the redacted row alongside the good one.
+    # Merge: the legacy copy must collapse into the mbox one, and the mbox one must win.
     merged = run('--mbox', mb, '--jsonl', lg)
     check('merged row count', len(merged), 3)
     roots = [r for r in merged if 'throws: 8640 Nelson' in (r['body'] or '')]
@@ -155,8 +130,7 @@ with tempfile.TemporaryDirectory() as d:
 
 
 # --- aedile_marker ----------------------------------------------------------
-# Imported rather than driven through the CLI: the real marker reads the Log
-# over the network, and these cases are about the matching, not the fetch.
+# Imported, not driven through the CLI: the real marker reads the Log over the network.
 import importlib.util
 
 spec = importlib.util.spec_from_file_location('ingest', INGEST)
@@ -164,13 +138,10 @@ ingest = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ingest)
 
 LOG = [
-    # A real pair, verbatim from the Log: the send is 0.854s BEFORE its own
-    # log row, and the two are written in different offsets. Compared as
-    # strings that is False; they are the same instant.
+    # The send is BEFORE its own log row, and the two are written in different offsets.
     {'Timestamp': '2026-09-27T00:34:12.854Z', 'Action': 'headsup_draft_posted',
      'Subject': 'Laser harp build day. Sun 9/27 @ 1pm, 920 St. Mary'},
-    # Drafted on the 14th, sent by a human on the 16th. A symmetric 36h
-    # window called this one False, which was a miss and not skew.
+    # Drafted, then sent by a human days later.
     {'Timestamp': '2026-09-14T02:30:47.232Z', 'Action': 'recap_draft_posted',
      'Subject': 'Wings tonight at Half Moon'},
     {'Timestamp': '2026-07-22T05:44:00.000Z', 'Action': 'bump_auto_reply',
@@ -207,17 +178,13 @@ check('marker: krewe address, no matching row -- the alias-ambiguity case',
                'long meeting / laser harps 2027')), False)
 check('marker: older than the Log is None, NOT False',
       mark(row(KV, '2024-01-29T14:48:24-06:00', 'Tuesday throws')), None)
-# Dated after the earliest OUTBOUND row, so this is a real False and not an
-# out-of-window None: the no_action row is ignored, so it neither marks the
-# message nor lowers the floor.
+# Dated after the earliest OUTBOUND row, so this is a real False and not a None.
 check('marker: a no_action row is not evidence of authorship',
       mark(row(KV, '2026-08-01T00:00:30+00:00', 'Something a human wrote')), False)
 
 
 # --- unmask -----------------------------------------------------------------
-# The ambiguous case is the one that matters and it is real: in the archive
-# `kreweofv...@gmail.com` matches the operator AND kreweofvaporware@gmail.com,
-# a different member, so 85 rows must stay null rather than be attributed.
+# The ambiguous form matches two different members and must stay null.
 UNMASK = [
     {'author': 'rlco...@gmail.com', 'email': None, 'body': 'a'},
     {'author': 'r c', 'email': 'rlcolbert@gmail.com', 'body': 'b'},
@@ -242,8 +209,6 @@ check('unmask: and is not claimed as inferred',
 
 
 # --- on_the_list ------------------------------------------------------------
-# The filter is the difference between importing a mailing list and importing
-# someone's mail, so both directions get a case.
 import email.message
 import email.policy as _pol
 

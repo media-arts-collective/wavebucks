@@ -1,15 +1,10 @@
-/**
- * subject.test.mjs -- the dealt subject knows the message type, and the type is read
- * off the body.
- *
- *   node --test aedile/recap/subject.test.mjs
- *
- * No corpus, no network: weights are passed in, and the rows `subjectWeights` pools are
- * built here. The case worth pinning is the one that started this: on 2026-10-07 a recap
- * carrying seven items went out of the generator titled "Laser harp integration Supernova
- * opens", dealt from 12 calendar-shaped subjects, and Zach replaced it by hand with
- * "Harps and Snacks Sunday // Supernova RPF is out // More Wangs".
- */
+// subject.test.mjs -- the dealt subject knows the message type, and the type is
+// read off the body.
+//
+//   node --test aedile/recap/subject.test.mjs
+//
+// No corpus, no network: weights are passed in, and the rows `subjectWeights`
+// pools are built here.
 
 import test from 'node:test';
 import assert from 'node:assert';

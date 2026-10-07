@@ -1,39 +1,19 @@
-// aedile/brain/model.mjs
-//
-// Milestone-2 brain component B2 (issue #40): a reusable Node model client that
-// drives Claude via the *Claude subscription* — the locally logged-in `claude`
-// CLI's OAuth credentials (~/.claude/.credentials.json) — and returns a parsed
-// JSON decision. No ANTHROPIC_API_KEY: that metered key is out of credit and
-// won't be topped up (#48), which is the whole reason this exists.
-//
-// It generalizes the model seam that lives three places today:
-//   - AnthropicClient.getJsonDecision()  (Apps Script; UrlFetchApp -> api.anthropic.com)
-//   - recap/redige.mjs callModel/callModelAsync/parseDecision  (CLI/curl shell-out)
-// and mirrors the Apps Script seam's name + arg order (systemPrompt, userContent,
-// third arg) so the tiers (#41 recap, #42, #43) swap onto it unchanged.
-//
-// Transport: the Claude Agent SDK (@anthropic-ai/claude-agent-sdk), which spawns
-// the same `claude` CLI redige already shells out to, but behind a typed API.
-// Verified on this box (svc-vaporwave, SDK 0.1.77, claude 2.1.216): a single-shot
-// query() with ANTHROPIC_API_KEY unset authenticates via the ambient subscription
-// credentials and returns text — no key path is taken.
-//
-// Node-only (ESM, node_modules). It must never reach Apps Script — see
-// aedile/.claspignore (`brain/**`), same precedent as analysis/** and holon_fold.py.
+// aedile/brain/model.mjs -- Node model client: drives Claude through the
+// locally logged-in `claude` CLI's subscription credentials via the Agent SDK
+// and returns a parsed JSON decision. No ANTHROPIC_API_KEY.
+// Mirrors AnthropicClient.getJsonDecision's name and arg order.
+// Node-only: excluded from Apps Script by aedile/.claspignore (`brain/**`).
+// Smoke: node brain/model.mjs --smoke
 
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { fileURLToPath } from 'node:url';
 
-// Attempts default. Own namespace (not redige's REDIGE_ATTEMPTS) since this is
-// the brain's client, not the recap CLI.
 const DEFAULT_ATTEMPTS = Number(process.env.AEDILE_MODEL_ATTEMPTS || 3);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Port of redige.mjs's parseDecision, verbatim in behavior: strip an optional
-// ```json ... ``` fence, extract the outermost {...} when there's a preamble,
-// then JSON.parse. Throws with a truncated raw on failure — never returns junk.
-// Exported so redige/duel/judge's duplicates can later collapse onto this one.
+// Strip an optional ```json fence, extract the outermost {...}, then
+// JSON.parse. Throws with a truncated raw on failure.
 export function parseDecision(text) {
   const raw = String(text);
   let cleaned = raw
@@ -51,18 +31,9 @@ export function parseDecision(text) {
   try {
     return JSON.parse(cleaned);
   } catch (err) {
-    // ONE deterministic repair, and only after a strict parse has already failed:
-    // a literal newline inside a string literal. The model emits the body with
-    // real line breaks instead of \n, which is invalid JSON and lost 2 of 6
-    // recap generations on 2026-09-27 -- a third of the budget, each roll a
-    // paid call. A raw control character inside a JSON string is unambiguous:
-    // there is exactly one legal thing it could have meant, so escaping it
-    // recovers the message rather than guessing at it.
-    //
-    // Deliberately NOT a general-purpose JSON fixer. It touches nothing outside
-    // string literals, adds no missing braces, quotes or commas, and if the
-    // result still does not parse the original loud failure is what surfaces.
-    // Anything cleverer would start inventing structure the model did not send.
+    // One deterministic repair after a strict parse fails: a literal newline
+    // inside a string literal, which has exactly one legal meaning. Not a general
+    // JSON fixer: if the result still does not parse, the original failure surfaces.
     try {
       return JSON.parse(escapeControlsInStrings(cleaned));
     } catch {
@@ -71,10 +42,8 @@ export function parseDecision(text) {
   }
 }
 
-/** Escape raw newlines/tabs/CRs that appear INSIDE a JSON string literal. Walks
- *  the text tracking whether it is inside a string and whether the previous
- *  character was a backslash, so an already-escaped \n and a control character
- *  between tokens are both left exactly as they are. */
+// Escape raw newlines/tabs/CRs inside a JSON string literal; already-escaped
+// sequences and control characters between tokens are left alone.
 function escapeControlsInStrings(src) {
   const ESC = { '\n': '\\n', '\r': '\\r', '\t': '\\t' };
   let out = '', inString = false, escaped = false;
@@ -87,21 +56,16 @@ function escapeControlsInStrings(src) {
   return out;
 }
 
-// Seam-compat with AnthropicClient.getJsonDecision(systemPrompt, userContent,
-// maxTokens = 1000): its third arg is a numeric maxTokens (the recap call site
-// passes RECAP_MAX_TOKENS). The subscription/CLI transport has no max-tokens
-// knob, so a numeric third arg is tolerated for arg-order compatibility and has
-// no effect — documented here rather than silently coerced somewhere downstream.
+// AnthropicClient.getJsonDecision's third arg is a numeric maxTokens; this
+// transport has no such knob, so a number is tolerated and ignored.
 function normalizeOpts(opts) {
   if (opts == null) return {};
   if (typeof opts === 'number') return {}; // legacy positional maxTokens: no transport equivalent
   return opts;
 }
 
-// One SDK round-trip. allowedTools:[] + maxTurns:1 are load-bearing: a JSON
-// decision must not run tools or loop. permissionMode/bypass is belt-and-
-// suspenders — with no tools there's nothing to gate — and matches the SDK's
-// documented contract (bypassPermissions pairs with allowDangerouslySkipPermissions).
+// One SDK round-trip. allowedTools:[] + maxTurns:1: a JSON decision must not
+// run tools or loop.
 async function runQuery(systemPrompt, userContent, { model, timeoutMs }) {
   const options = {
     systemPrompt: String(systemPrompt),
@@ -119,9 +83,8 @@ async function runQuery(systemPrompt, userContent, { model, timeoutMs }) {
     timer = setTimeout(() => ac.abort(), timeoutMs);
   }
 
-  // Message stream is system -> assistant -> result. Prefer the terminal
-  // `result` message's `.result` string; fall back to accumulated assistant
-  // text blocks. A non-success result (is_error / error subtype) throws.
+  // Prefer the terminal `result` message's `.result`; fall back to accumulated
+  // assistant text. A non-success result throws.
   let assistantText = '';
   let resultText = null;
   let resultError = null;
@@ -153,9 +116,7 @@ async function runQuery(systemPrompt, userContent, { model, timeoutMs }) {
 }
 
 // callModel(systemPrompt, userContent, opts?) -> Promise<string>
-// opts: { model?, attempts?, timeoutMs? }. Async; throws on failure — never
-// process.exit (that was a redige-CLI convenience). Retry/backoff ported from
-// callModelAsync: linear i*5s backoff, `attempts` tries, then throw.
+// opts: { model?, attempts?, timeoutMs? }. Throws on failure, never process.exit.
 export async function callModel(systemPrompt, userContent, opts) {
   const { model, attempts = DEFAULT_ATTEMPTS, timeoutMs } = normalizeOpts(opts);
   let lastError;
@@ -175,16 +136,14 @@ export async function callModel(systemPrompt, userContent, opts) {
 }
 
 // getJsonDecision(systemPrompt, userContent, opts?) -> Promise<object>
-// Same name + arg order as AnthropicClient.getJsonDecision — the cut line in the
-// brain migration — so #41/#42/#43 call it unchanged.
+// Same name + arg order as AnthropicClient.getJsonDecision.
 export async function getJsonDecision(systemPrompt, userContent, opts) {
   return parseDecision(await callModel(systemPrompt, userContent, opts));
 }
 
-// --- CLI smoke: `node brain/model.mjs --smoke` ------------------------------
-// Proves the live subscription path end to end. Fails loud (non-zero exit) if
-// the parsed object isn't {ok:true}. Uses process.exitCode, not process.exit,
-// so stdio flushes.
+// --- CLI smoke: `node brain/model.mjs --smoke` ---
+// Fails loud if the parsed object isn't {ok:true}. process.exitCode, not
+// process.exit, so stdio flushes.
 async function smoke() {
   const decision = await getJsonDecision(
     'Return only compact JSON. No prose, no code fences.',

@@ -1,20 +1,5 @@
 #!/usr/bin/env python3
-"""Cases for scrape-topics.py. Run: python3 aedile/analysis/scrape-topics.test.py
-
-The browser half cannot be tested here and is not the risky half. What decides whether
-the corpus is right is the PARSING: which rendered text counts as a message header, what
-gets stripped out of a body, and how a cookie file becomes cookies a browser accepts.
-Every one of those functions is pure, and every case below is a defect that actually
-happened on 2026-09-27 rather than a shape someone imagined:
-
-  - a COLLAPSED message renders its sender with no address at all, and must not parse
-  - `TIME_RE` was written `r'\\d'` in a raw string, so it matched a literal backslash and
-    every topic "parsed zero messages" in 2-3 seconds
-  - Material Icons arrive as private-use codepoints and looked like body content
-  - the per-message action rail followed every body into the corpus
-  - a `__Host-` cookie is invalid with a Domain attribute and was being dropped silently
-  - an expiry outside 0 < e < 2**31 made Playwright reject the whole cookie set
-"""
+"""Cases for scrape-topics.py. Run: python3 aedile/analysis/scrape-topics.test.py"""
 
 import importlib.util, os, sys
 
@@ -40,8 +25,8 @@ m = st.HEADER_RE.match(EXPANDED)
 check('expanded header matches', bool(m), True)
 check('address is the real one', m.group('addr') if m else None, 'mburns70124@gmail.com')
 check('display keeps the masked form', m.group('display') if m else None, 'mburns70124')
-# THE LOAD-BEARING CASE. A collapsed message has no address, so it must not parse -- that
-# is what makes a partial extraction detectable instead of silently banked short.
+# A collapsed message has no address, so it must not parse -- that is what makes a
+# partial extraction detectable.
 check('collapsed header does NOT match', bool(st.HEADER_RE.match(COLLAPSED)), False)
 UNREAD = 'mburns70124<mburns70124@gmail.com>\nunread,\nApr 29, 2022, 11:08:42 AM\n\nI have a 4 runner.'
 check('never-opened message carries an `unread,` line and still matches',
@@ -94,8 +79,6 @@ rec = [{'subject': 'tomorrow 10am', 'addr': 'mburns70124@gmail.com',
         'display': 'mburns70124', 'date': 'Apr 29, 2022, 11:08:42 AM',
         'body': 'I have a 4 runner.'}]
 box = st.as_mbox(rec, 'TqKFCHIWJEw')
-# Emitting `masked <real>` made ingest.py read the MASKED name as the address, which is
-# the exact defect the scrape exists to remove.
 check('From: carries the real address alone', 'From: <mburns70124@gmail.com>' in box, True)
 check('the masked display name is NOT in the From header',
       'From: mburns70124<' in box, False)
@@ -132,8 +115,7 @@ check('the malformed line is skipped, not fatal', len(cs), 5)
 check('a normal cookie goes in by domain', cs['SID'].get('domain'), '.google.com')
 check('a host-only cookie goes in by url, never domain',
       ('url' in cs['HOSTONLY'], 'domain' in cs['HOSTONLY']), (True, False))
-# A `__Host-` cookie is INVALID with any Domain attribute; six of these were being
-# dropped silently, which is a session that looks complete and does not authenticate.
+# A `__Host-` cookie is INVALID with any Domain attribute.
 check('a __Host- cookie goes in by url even though the file says TRUE',
       ('url' in cs['__Host-X'], 'domain' in cs['__Host-X']), (True, False))
 check('expiry 0 (a session cookie) becomes -1', cs['SESSIONCOOKIE']['expires'], -1)

@@ -2,15 +2,8 @@
 # call.sh <action> [field=value ...]     -- call aedile's WriteApi (doPost).
 # call.sh get <scope> [field=value ...]  -- read aedile's ReadApi (doGet).
 #
-# Exists because the two things that make this call awkward by hand are the
-# ones you get wrong silently:
-#
-#   - the token must not go on argv, where /proc exposes it to any local
-#     account for as long as curl runs;
-#   - `curl -X POST` pins the method across /exec's 302 to
-#     googleusercontent.com, so curl re-POSTs with no body and Google answers
-#     with a sign-in PAGE at HTTP 200 -- which reads exactly like a missing
-#     version cut and is not one. --data-binary already means POST.
+# The token never goes on argv, and there is no `curl -X POST`: it pins the
+# method across /exec's 302 and Google answers with a sign-in page.
 #
 #   ./call.sh setRecapEnabled enabled=false
 #   ./call.sh setRecapEnabled enabled=true dryRun=true
@@ -21,14 +14,11 @@
 # Not pushed to Apps Script: aedile/.claspignore excludes recap/**.
 set -euo pipefail
 
-# Same deployment redige.mjs posts to -- the one the anonymous URL serves.
-# ReadApi's doGet and WriteApi's doPost are that same deployment; only the
-# tokens differ, deliberately, so read access and trigger access revoke
-# independently (README.md's env-var list).
+# The deployment redige.mjs posts to. Read and write tokens differ so they
+# revoke independently.
 URL="${AEDILE_EXEC_URL:-https://script.google.com/macros/s/AKfycbyyx1N_0hMP2-GG3z1gM_EgNL0RXFB83yvrY57JOKPQ026a2y2hOARKjGc-lKF-qj7s5w/exec}"
 
-# Environment first, like redige.mjs, because the file below lives under
-# /srv/vaporwave-reports and that tree is being retired.
+# Environment first, like redige.mjs.
 SECRETS="${AEDILE_SECRETS:-}"
 for f in "$HOME/.config/aedile/api-secrets" /srv/vaporwave-reports/aedile/.aedile-api-secrets; do
   [ -z "$SECRETS" ] && [ -r "$f" ] && SECRETS=$f

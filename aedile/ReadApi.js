@@ -1,55 +1,18 @@
-/**
- * ReadApi.js
- * A read-only, token-gated Web App endpoint for pulling Aedile's own
- * bookkeeping tabs (OpenLoops, Messages, Log, Requests) out as JSON, so an
- * outside dev-ops workflow can read institutional-memory state on demand
- * without Sheets/Gmail credentials. Mirrors the doGet-returns-JSON pattern
- * the rest of this ecosystem's trackers already use (see the web intake
- * contract), but strictly READ-ONLY: nothing here mutates a sheet, sends
- * mail, marks a thread, or touches a guardrail. It is purely a viewer over
- * data the triage/bump tiers already wrote.
- *
- * SECURITY — this exposes raw mailing-list archive content (message bodies).
- * Treat the deployed URL *and* the token as secrets together.
- *   - Gated by the `READ_API_TOKEN` Script Property. If that property is
- *     unset, the endpoint refuses every request (fail closed) — deploying
- *     the code is not enough; a token must be set deliberately.
- *   - Deploy as: Execute as = me (the krewe account), Who has access =
- *     "Anyone with the link". Access is really controlled by the token in
- *     the query string, not by Google's anonymous-link setting.
- *   - Independent of AEDILE_ENABLED / AUTOSEND_ENABLED / BUMP_ENABLED —
- *     this is not part of the trigger-driven path and has no kill switch of
- *     its own beyond removing the token (which disables it) or deleting the
- *     deployment.
- *
- * DEPLOY:
- *   1. clasp push
- *   2. In the Apps Script editor: Project Settings > Script Properties, add
- *      READ_API_TOKEN = <a long random string>.
- *   3. Deploy > New deployment > Web app (Execute as: me, Access: anyone
- *      with the link). Copy the /exec URL.
- *   4. Call: <exec-url>?token=<READ_API_TOKEN>&scope=openloops
- *
- * SCOPES (all GET):
- *   ?scope=openloops[&open=true]
- *       OpenLoops rows. open=true returns only currently-open loops.
- *   ?scope=messages[&q=<kw>][&threadId=<id>][&limit=<n>]
- *       Raw Messages archive. q filters case-insensitively over From/
- *       Subject/Body; threadId filters to one thread. Newest first.
- *       limit default 50, hard cap 500.
- *   ?scope=log[&limit=<n>]        Recent Log rows, newest first (cap 500).
- *   ?scope=requests[&status=open] Requests rows; status filters.
- *
- * Every scope here reads a SHEET. Live Gmail reads are deliberately NOT here
- * (#35): a thread body is more sensitive than an archived row, and this
- * endpoint puts its token in a query string, where it reaches server logs,
- * browser history and /proc. `action=readThread` lives on WriteApi's doPost
- * instead — POST-only, write-token-gated, nothing in a URL.
- */
+// ReadApi.js -- read-only, token-gated Web App endpoint over Aedile's
+// bookkeeping tabs. Mutates nothing.
+// Exposes raw message bodies: treat the deployed URL and the token as secrets
+// together. Gated by the READ_API_TOKEN Script Property; fails closed if unset.
+//
+// Call: GET <exec-url>?token=<READ_API_TOKEN>&scope=<scope>
+//   scope=openloops [open=true]
+//   scope=messages  [q=<kw>] [threadId=<id>] [limit=<n>]   newest first
+//   scope=log       [limit=<n>]                            newest first
+//   scope=requests  [status=open]
+//
+// Every scope reads a sheet. Live Gmail reads are on WriteApi's doPost instead:
+// this endpoint's token rides in a query string.
 
-// Column layouts mirror the writers: MessageLog.js, OpenLoops.js,
-// Config.js (Log), Requests.js. Kept here as a local read-map so this file
-// never has to reach into those modules' private COL objects.
+// Column layouts mirror the writers: MessageLog.js, OpenLoops.js, Config.js (Log), Requests.js.
 const READ_API = (() => {
 
   const MAX_LIMIT = 500;
@@ -111,7 +74,7 @@ const READ_API = (() => {
     return rows;
   }
 
-  // #84. `open=true` keeps only rows still open.
+  // `open=true` keeps only rows still open.
   function loops(p) {
     let rows = _rows('Loops');
     if (p.open === 'true') rows = rows.filter(r => String(r.Status) === 'open');
@@ -142,11 +105,8 @@ const READ_API = (() => {
   return { handle };
 })();
 
-/**
- * Web App entry point. Apps Script has no real HTTP status codes for
- * ContentService, so the status is echoed inside the JSON body instead;
- * callers should check `ok`, not rely on the HTTP code.
- */
+// Web App entry point. ContentService has no real HTTP status, so it is echoed
+// in the JSON body; callers check `ok`.
 function doGet(e) {
   const params = (e && e.parameter) || {};
   let result;

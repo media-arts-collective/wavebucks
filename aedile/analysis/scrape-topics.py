@@ -2,37 +2,11 @@
 """scrape-topics.py -- read the group's own topic pages and emit real mbox.
 
     python3 aedile/analysis/scrape-topics.py --limit 1 --verbose   # the session gate
-    python3 aedile/analysis/scrape-topics.py                       # all 628, resumable
+    python3 aedile/analysis/scrape-topics.py                       # all topics, resumable
     python3 aedile/analysis/scrape-topics.py --out /path/x.mbox
 
-WHAT THIS FIXES. `messages.jsonl` has no `subject` field at all, `email` is null on 325 of
-1099 rows with `author` ellipsized on 802 more, and 28% of bodies are ~101-character Google
-Groups list PREVIEWS rather than messages. All three come from scraping the wrong page. A
-rendered topic page carries the real subject, the unmangled sender, a timestamp and the full
-body -- verified on topic `-13eA6RehIM`:
-
-    <title>  'event promo NEED HELP / throws tomorrow`NEED HELP'
-    sender   kreweofv...@gmail.com<kreweofvaporwave@gmail.com>   <- owner rights unmangle it
-    date     Jan 29, 2024, 2:48:24 PM
-    body     "throws: 8640 Nelson Street, 5pm-10ish, Tuesday (tomorrow) ..."
-
-ENUMERATION IS ALREADY SOLVED, which is why this is small. The corpus carries `topic_url` on
-every row: 628 distinct topic IDs. There is no list to paginate, no `_escaped_fragment_`, and
-no AJAX crawl -- the fragile half of every Google Groups scraper is simply not needed. Both
-published tools for this are dead anyway; see `scrape-paths.md`.
-
-WHY FIREFOX AND NOT CHROMIUM. The session comes out of a Firefox container and Chromium
-refused it through three separate cookie-semantics fixes. Playwright's Firefox build accepts
-it. Not worth re-litigating: use the browser the cookies came from.
-
-WHY TEXT AND NOT SELECTORS. `[data-message-id]` matches menu buttons here -- three of them,
-all carrying the same id, with bodies of "Delete" and "Copy link". The message text is in the
-page's rendered text, so this splits that on the header pattern Google renders for every
-message (`display<address>` then a date line). That survives a Boq DOM reshuffle in a way a
-jsname selector does not.
-
-NEVER WRITES THE VAULT. Output is an mbox at `--out`; merging is `ingest.py`'s job and it
-writes a new file.
+Firefox, because that is the browser the cookies came from. NEVER WRITES THE VAULT:
+output is an mbox at `--out`; merging is `ingest.py`'s job.
 """
 
 import argparse
@@ -51,29 +25,15 @@ COOKIES = Path('/srv/vaporwave-reports/aedile/.groups-cookies.txt')
 GROUP = 'kreweofvaporwave'
 # Consecutive post-refresh denials that mean the SESSION died rather than the topic.
 MAX_DENIED_IN_A_ROW = 6
-# A run of topics that bank NOTHING, whatever the individual symptom. Measured 2026-09-27:
-# 70 consecutive topics failed the same way over 40 minutes while the ledger sat still and
-# the log looked busy. Refreshing the session is the cheap thing that has fixed every such
-# run so far, so it is tried on a schedule; a run that survives the refresh is a real stop.
+# A run of topics that bank NOTHING. A run that survives a session refresh is a real stop.
 REFRESH_AFTER_BARREN = 8
 MAX_BARREN = 28
-# Overridable so a SECOND worker can run concurrently over the same 628 topics from the
-# other end of the list (`--reverse`) with its own ledger and its own mbox. The two never
-# write the same file, so there is no lock and no race; they meet in the middle, and the
-# handful of topics both reach are fused by ingest.py's merge key (day + first 60 body
-# characters), which reports 0 collisions on this corpus. Halves wall-clock on a run whose
-# per-topic cost is dominated by waiting on Google, not on this box.
+# Overridable so a second worker (`--reverse`) can run with its own ledger and mbox.
 LEDGER = Path(os.environ.get(
     'SCRAPE_LEDGER', Path(__file__).resolve().parent / '.scrape-used.json'))
 
-# `display<addr@host>` immediately followed by a date line. Google renders the masked display
-# form and the real address together, which is the whole reason owner rights matter.
-#
-# A message this account has never opened renders one more line, `unread,`, between the two.
-# Measured 2026-10-07: 12 of 12 topics that timed out waiting on "Expand all" rendered
-# `addr | unread, | date`, and all 12 banked on a second visit, because the first visit had
-# marked them read. That was every "the session went stale after N pages" stall this scrape
-# ever had; it was never the session and never the rate.
+# `display<addr@host>` immediately followed by a date line. A message this account has
+# never opened renders one more line, `unread,`, between the two.
 HEADER_RE = re.compile(
     r'^(?P<display>[^\n<]{0,120})<(?P<addr>[^<>\s@]+@[^<>\s@]+)>\s*\n'
     r'(?:\s*unread,\s*\n)?'
@@ -82,11 +42,8 @@ HEADER_RE = re.compile(
 
 
 def load_cookies(path):
-    """Netscape cookies.txt -> Playwright cookie dicts.
-
-    Host-only cookies go in by `url`, not `domain`: a `__Host-` cookie is INVALID with any
-    Domain attribute and the browser drops it silently. Six of these are `__Host-`.
-    """
+    """Netscape cookies.txt -> Playwright cookie dicts. Host-only cookies go in by `url`:
+    a `__Host-` cookie is INVALID with any Domain attribute and is dropped silently."""
     out = []
     for line in path.read_text().splitlines():
         if not line.strip() or line.startswith('#'):
@@ -115,23 +72,11 @@ def load_cookies(path):
 
 
 def refresh_cookies(ctx):
-    """Re-export the live container session into the browser context.
-
-    THE COOKIE FILE IS A SNAPSHOT OF A ROTATING CREDENTIAL. Measured 2026-09-27: a run
-    scraped 18 topics, then every subsequent page came back as the signed-out shell. A
-    fresh export of the SAME container made the SAME topic (`jx04kDZAANg`) scrape
-    immediately -- so the session had not been revoked and this was not rate limiting; a
-    throttled host does not hand you a working credential one second later. Google rotates
-    the session cookies, Firefox writes the new values, and the exported file goes stale
-    where it sits. Any run longer than a few dozen pages outlives its own credential.
-
-    So the export is re-run mid-scrape rather than being a precondition. It reads the
-    live browser's cookie DB, which is the only place the current values exist.
-    """
+    """Re-export the live container session into the browser context. Google rotates
+    the session cookies, so the exported file goes stale where it sits."""
     import subprocess
     exporter = Path(__file__).resolve().parent / 'container-cookies.py'
-    # Fail loud: a refresh that quietly did nothing would restore the exact silent
-    # stall this exists to end.
+    # Fail loud: a refresh that quietly did nothing would be a silent stall.
     subprocess.run([sys.executable, str(exporter)], check=True,
                    stdout=subprocess.DEVNULL)
     ctx.clear_cookies()
@@ -152,8 +97,7 @@ def topic_ids(path=VAULT_JSONL):
 
 
 def parse_date(s):
-    """'Jan 29, 2024, 2:48:24 PM' -> RFC2822. No timezone is rendered, so none is claimed:
-    the archive's own dates are bare local strings too and `corpus.mjs` documents that."""
+    """'Jan 29, 2024, 2:48:24 PM' -> RFC2822. No timezone is rendered, so none is claimed."""
     for fmt in ('%b %d, %Y, %I:%M:%S %p', '%b %d, %Y, %I:%M %p'):
         try:
             return email.utils.format_datetime(datetime.strptime(s.strip(), fmt))
@@ -162,12 +106,9 @@ def parse_date(s):
     return None
 
 
-# Material Icons render as private-use codepoints in inner_text, so a raw body arrives
-# starting "\ue83a\ue15f\ue5d4" -- three icon buttons, indistinguishable from content to
-# anything downstream.
+# Material Icons render as private-use codepoints in inner_text.
 PUA_RE = re.compile(r'[\ue000-\uf8ff]')
-# The per-message action rail follows every body. Cutting at the first of these is what
-# keeps "Reply all / Reply to author / Forward" out of the corpus.
+# The per-message action rail follows every body. Cut at the first of these.
 TAIL_RE = re.compile(
     r'\n\s*(?:Reply all|Reply to author|Forward|Copy link|Report message|Delete|'
     r'Show original|Unsubscribe|You received this message because)\b')
@@ -186,12 +127,8 @@ def clean_body(raw):
 
 MSG_SEL = 'section[aria-expanded]'
 
-# READINESS IS A CONTENT TEST, NOT A SELECTOR TEST. `section[aria-expanded]` alone is
-# matched by non-message chrome that renders BEFORE the conversation does, so waiting on
-# the selector returned after ~2 seconds on a page with no messages in it yet: 111 topics
-# in one run reported "no messages parsed" in 2-3s each while interleaved topics
-# succeeded. A message section carries a timestamp whether it is collapsed or expanded,
-# so that is the signal.
+# Readiness is a content test: `section[aria-expanded]` alone is matched by chrome that
+# renders BEFORE the conversation does. A message section carries a timestamp.
 TIME_RE = re.compile(r'\d{1,2}:\d{2}:\d{2}')
 
 READY_JS = ("() => [...document.querySelectorAll('section[aria-expanded]')]"
@@ -206,29 +143,9 @@ def section_texts(page):
 
 
 def expand_all(page):
-    """Expand every message in the topic before reading it.
-
-    THIS IS THE WHOLE SCRAPE. A COLLAPSED message renders its sender MASKED with no
-    address at all (`mburns70124`) and its body TRUNCATED mid-sentence ("ESPECIALLY if
-    you have a") -- the same ~101-character preview defect this file exists to eliminate,
-    reappearing one page deeper than the list view where it was first found. Google
-    expands only the LAST message of a topic, so reading the page as rendered keeps
-    single-message topics and drops every discussion: 27 topics banked, all `1 msg`, while
-    every multi-message topic "parsed to zero". Measured on `TqKFCHIWJEw`: `mburns70124`
-    becomes `mburns70124<mburns70124@gmail.com>` and the three bodies come out 308, 846
-    and 493 characters instead of one preview.
-
-    THE EXPAND BUTTON IS WAITED FOR ONLY WHEN SOMETHING IS ACTUALLY COLLAPSED. An earlier
-    version asked `is_visible()` and returned early if the button had not rendered yet,
-    which turned a slow render into a silently dropped topic -- 32 of 47 topics in one
-    pass failed that way in 2-3 seconds each. But waiting for a button unconditionally
-    costs 15s on every single-message topic, and those are the majority. A collapsed
-    message is detectable directly: its section carries a timestamp but no address for
-    HEADER_RE to match. So that is the test, and the wait is paid only when it is owed.
-
-    `Show trimmed content` is deliberately NOT clicked -- that expands the quoted reply
-    trail, which is not the message and which `normalizeBody` strips everywhere else.
-    """
+    """Expand every message in the topic before reading it: a COLLAPSED message renders
+    its sender masked and its body truncated. `Show trimmed content` is deliberately
+    NOT clicked -- that expands the quoted reply trail."""
     if all(HEADER_RE.match(t) for t in section_texts(page)):
         return  # nothing collapsed: a single-message topic arrives expanded
     btn = page.wait_for_selector('[aria-label="Expand all"]', state='visible',
@@ -236,14 +153,10 @@ def expand_all(page):
     try:
         btn.click(timeout=10000)
     except Exception:
-        # An obscured or shifting button fails Playwright's actionability checks rather
-        # than the click itself. `force` skips those checks; if the click genuinely does
-        # nothing, the all-expanded wait below still fails and the topic is still lost
-        # loudly, so this cannot quietly bank a truncated message.
+        # `force` skips the actionability checks. If the click does nothing, the
+        # all-expanded wait below still fails loudly.
         btn.click(force=True, timeout=10000)
-    # Waiting on the attribute, not a guessed sleep: the sections expand asynchronously
-    # and a fixed delay reads some of them still masked and truncated, which is the
-    # failure mode above wearing a smaller number.
+    # Waiting on the attribute, not a guessed sleep: the sections expand asynchronously.
     page.wait_for_function(
         "() => [...document.querySelectorAll('section[aria-expanded]')]"
         ".every(s => s.getAttribute('aria-expanded') === 'true')",
@@ -251,14 +164,7 @@ def expand_all(page):
 
 
 def messages_on_page(page, subject):
-    """One record per message, read from its own section element.
-
-    Per section rather than a regex over the whole page: each section's text STARTS with
-    the header, so message boundaries come from the DOM instead of being inferred from
-    where the next header happens to match. `section[aria-expanded]` is also a far better
-    handle than `[data-message-id]`, which matches three menu buttons here, all carrying
-    the same id, with bodies of "Delete" and "Copy link".
-    """
+    """One record per message, read from its own section element."""
     texts = section_texts(page)
     out = []
     for t in texts:
@@ -272,11 +178,8 @@ def messages_on_page(page, subject):
             'date': m.group('date').strip(),
             'body': clean_body(t[m.end():]),
         })
-    # The count of message-shaped sections comes back too. A record per section or the
-    # topic does not land: a COLLAPSED message parses to nothing (it renders no address
-    # for HEADER_RE to match), so without this a 3-message topic could bank only its one
-    # auto-expanded message and enter the ledger looking complete. That is the snippet
-    # defect's exact shape -- quiet, plausible, and only visible in aggregate.
+    # The count of message-shaped sections comes back too: a COLLAPSED message parses
+    # to nothing, and without this a topic could bank short and look complete.
     return out, len(texts)
 
 
@@ -288,9 +191,7 @@ def as_mbox(records, topic_id):
         body = r['body'].replace('\nFrom ', '\n>From ')  # mbox From_ escaping
         head = [
             f"From {r['addr']} {time.asctime()}",
-            # Real address only. Emitting `masked <real>` made ingest.py read the MASKED
-            # display name as the address, reintroducing the ellipsized form this whole
-            # scrape exists to eliminate.
+            # Real address only: ingest.py reads a masked display name as the address.
             f"From: <{r['addr']}>",
             f"Subject: {r['subject']}",
             f"List-ID: <{GROUP}.googlegroups.com>",
@@ -323,7 +224,7 @@ def scrape(limit=None, out_path=None, verbose=False, headless=True, reverse=Fals
     done = failed = messages = 0
     # Consecutive access denials. One is a bad topic; a run of them is a lost session.
     denied = 0
-    # Consecutive topics that banked nothing, by any route. See the loop head.
+    # Consecutive topics that banked nothing, by any route.
     barren, last_done = 0, 0
     with sync_playwright() as pw:
         browser = pw.firefox.launch(headless=headless)
@@ -332,11 +233,7 @@ def scrape(limit=None, out_path=None, verbose=False, headless=True, reverse=Fals
         page = ctx.new_page()
         try:
             for n, tid in enumerate(todo, 1):
-                # BARREN RUN DETECTION, in one place because every failure path leads
-                # here. Compared against `done` rather than counted in each `except`:
-                # there are five ways for a topic to bank nothing and they are not worth
-                # five copies of this. A frozen ledger under a busy log is the single
-                # symptom every session failure in this scrape has produced.
+                # Compared against `done` so every failure path is covered in one place.
                 if done == last_done:
                     barren += 1
                 else:
@@ -355,38 +252,19 @@ def scrape(limit=None, out_path=None, verbose=False, headless=True, reverse=Fals
                 url = f'https://groups.google.com/g/{GROUP}/c/{tid}'
                 t0 = time.monotonic()
                 try:
-                    # THE SESSION GATE, checked every page and not just the first, with one
-                    # refresh-and-retry. A lapsed session renders the public shell, which
-                    # parses to zero messages and is indistinguishable from an empty topic,
-                    # so 600 pages of nothing look exactly like a slow scrape. Two gated
-                    # reads in a row on the SAME topic means the refresh did not help and it
-                    # stops -- no third attempt, no evasion.
+                    # THE SESSION GATE, checked every page: a lapsed session renders the
+                    # public shell, which is indistinguishable from an empty topic.
                     for attempt in (0, 1):
                         page.goto(url, wait_until='domcontentloaded', timeout=60000)
-                        # Wait on the message sections, not on a header regex over the
-                        # page text. The old poll could not tell "still loading" from
-                        # "loaded, but every message is collapsed", so it burned its full
-                        # 26-second budget on every multi-message topic and then reported
-                        # zero messages.
+                        # Wait on the message sections, not on the page text.
                         try:
                             page.wait_for_function(READY_JS, timeout=25000)
                         except PWTimeout:
                             pass
                         text = page.inner_text('body')
                         subject = (page.title() or '').strip()
-                        # A TOPIC-LEVEL ACCESS ERROR LOOKS EXACTLY LIKE A DEAD SESSION.
-                        # Google redirects an inaccessible topic to
-                        # `groups.google.com/access-error`, and renders that page in
-                        # SIGNED-OUT chrome: "Sign in", no "My groups", 169 characters,
-                        # "try switching accounts". So the page cannot tell you which of
-                        # the two it is -- and reading it as a dead session aborted a
-                        # whole pass on one bad topic, at the NEWEST topic in the list,
-                        # while the forward worker ran on happily.
-                        #
-                        # The refresh below is the right move for either cause and costs
-                        # one re-export, so it runs first. What distinguishes them is
-                        # whether it KEEPS happening: one topic is a bad topic, many in a
-                        # row is a lost session. That is the counter in the caller.
+                        # A topic-level access error renders the same page as a dead
+                        # session. One is a bad topic; many in a row is a lost session.
                         if not ('Sign in' in text and 'My groups' not in text):
                             break
                         if attempt == 0:
@@ -422,10 +300,7 @@ def scrape(limit=None, out_path=None, verbose=False, headless=True, reverse=Fals
                         continue
                     if not records:
                         failed += 1
-                        # The page text, not just the count. A zero-message topic is
-                        # indistinguishable from a stall by the ledger alone -- the ledger
-                        # only grows on success -- and every guess about WHY was wrong until
-                        # this printed what actually rendered.
+                        # The page text: the ledger alone cannot tell this from a stall.
                         if verbose:
                             samp = ' / '.join(PUA_RE.sub('', text).split('\n')[:6])[:200]
                             print(f'  [{n}/{len(todo)}] {tid}: no messages parsed '
@@ -447,11 +322,9 @@ def scrape(limit=None, out_path=None, verbose=False, headless=True, reverse=Fals
                 except KeyboardInterrupt:
                     raise
                 except Exception as e:
-                    # One topic dying costs one topic. duel.mjs learned this the hard way.
+                    # One topic dying costs one topic.
                     failed += 1
-                    # The exception's first line, not just its class. `TimeoutError` alone
-                    # cannot tell a 60s page load from a section that refused to expand,
-                    # and those want different fixes.
+                    # The exception's first line, not just its class.
                     why = (str(e).splitlines() or [''])[0][:120]
                     print(f'  [{n}/{len(todo)}] {tid}: FAILED {type(e).__name__}: {why}',
                           flush=True)

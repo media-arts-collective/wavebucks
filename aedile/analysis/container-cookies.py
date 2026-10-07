@@ -5,35 +5,8 @@
     python3 aedile/analysis/container-cookies.py --list      # show containers, export nothing
     python3 aedile/analysis/container-cookies.py --stdout    # print to stdout instead of the file
 
-WHY THIS IS IN THE REPO. `henryk/gggd` scrapes a Google Group through its internal web RPC
-endpoints using an authenticated session, and it wants that session as a Netscape
-`cookies.txt` (it drives lynx, whose jar is that format). The session already exists: the
-krewe's Google identity lives in a Firefox Multi-Account Container called
-`kreweofvaporwave`. Zach, 2026-09-26: *"The firefox container kreweofvaporwave should be
-owned by this repo."* So the extraction is a versioned, reviewable script rather than a
-remembered click path through a browser add-on.
-
-WHY THE CONTAINER MATTERS AND IS NOT A DETAIL. Firefox partitions cookies per container
-via `originAttributes`, so the same `host` appears once per identity. An export that
-ignores that silently grabs whichever Google session happens to be in the default
-container -- a personal account, most likely -- and the scrape then runs as the wrong
-identity and returns either less data or someone else's. This filters on
-`userContextId` parsed as a field, never as a substring: `userContextId=8` must not match
-`userContextId=80`, which is exactly the class of bug that put a different member's mail
-into an operator pool earlier the same day.
-
-WHAT IT DELIBERATELY DOES NOT DO. It never prints a cookie value, not even truncated, and
-its summary is counts and hostnames only. The output goes to a 0600 file OUTSIDE the repo,
-alongside `.aedile-api-secrets`, because a cookie file inside the repo would not be
-ignored by `.gitignore` -- there is no secret pattern there. A guard for that is being
-added alongside this, so the mistake becomes impossible rather than merely avoided.
-
-Firefox holds a write lock on `cookies.sqlite` while running, so the DB is copied to a
-private temp file first and opened read-only. Nothing about this writes to the browser.
-
-The exported file is a live credential for the krewe's Google account. It expires on its
-own, it can be revoked by signing that container out, and it should be deleted once the
-scrape is done.
+The exported file is a live credential: it is written 0600 OUTSIDE the repo, never
+committed, and should be deleted once the scrape is done.
 """
 
 import argparse
@@ -49,8 +22,7 @@ from pathlib import Path
 PROFILE = Path.home() / '.mozilla/firefox/6z5w2rl8.default'
 DEFAULT_CONTAINER = 'kreweofvaporwave'
 DEFAULT_OUT = Path('/srv/vaporwave-reports/aedile/.groups-cookies.txt')
-# The scrape only ever talks to Google. Exporting anything else would put unrelated
-# sessions in a file whose whole purpose is one group.
+# The scrape only ever talks to Google.
 DOMAINS = ('google.com', 'googlegroups.com', 'googleusercontent.com')
 
 
@@ -63,12 +35,8 @@ def containers(profile=PROFILE):
 
 
 def context_id_of(origin_attributes):
-    """Parse userContextId out of Firefox's originAttributes, as a FIELD.
-
-    The string looks like `^userContextId=8` or
-    `^firstPartyDomain=example.test&userContextId=8&partitionKey=...`. Substring matching
-    would make `userContextId=8` match `userContextId=80`.
-    """
+    """Parse userContextId out of Firefox's originAttributes, as a FIELD. Substring
+    matching would make `userContextId=8` match `userContextId=80`."""
     for part in str(origin_attributes or '').lstrip('^').split('&'):
         key, _, value = part.partition('=')
         if key == 'userContextId':
@@ -104,16 +72,8 @@ def export(container, out_path, to_stdout=False):
     if not src.exists():
         sys.exit(f'no cookie store at {src}')
 
-    # Copied because Firefox holds a write lock while running. Opened read-only, and the
-    # copy lives in a 0700 temp dir that is removed on the way out.
-    #
-    # THE -wal FILE MUST COME TOO. cookies.sqlite is in WAL journal mode, so with Firefox
-    # running the newest writes live in cookies.sqlite-wal (688 KB when this was found) and
-    # the main file alone is a STALE snapshot. The first version of this script copied only
-    # the main file, exported 55 cookies that looked complete, and produced a session that
-    # did not authenticate -- Google served the public SPA shell and the Groups page said
-    # "Content unavailable / try switching accounts" in both Chromium and Firefox. Nothing
-    # about the export announced the staleness; the count looked right.
+    # Copied because Firefox holds a write lock while running. The -wal file must come
+    # too: in WAL journal mode the main file alone is a stale snapshot.
     tmpdir = tempfile.mkdtemp(prefix='cookie-export-')
     os.chmod(tmpdir, stat.S_IRWXU)
     tmp = Path(tmpdir) / 'cookies.sqlite'
@@ -123,8 +83,7 @@ def export(container, out_path, to_stdout=False):
             side = src.with_name(src.name + suffix)
             if side.exists():
                 shutil.copy2(side, tmp.with_name(tmp.name + suffix))
-        # NOT mode=ro: SQLite must be able to replay the WAL into the copy, which is a
-        # write. The copy is disposable; the browser's own files are never touched.
+        # NOT mode=ro: SQLite must be able to replay the WAL into the copy.
         con = sqlite3.connect(str(tmp))
         try:
             rows = con.execute(

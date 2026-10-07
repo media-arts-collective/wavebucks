@@ -1,65 +1,25 @@
-/**
- * schedule.mjs -- which bump beats an event gets, dealt at a measured rate.
- *
- *   node aedile/recap/schedule.mjs <notes> [--as-of YYYY-MM-DD] [--seed S]
- *
- * Zach, 2026-09-27, choosing early-plus-day-before: "stochastically dealed based on
- * the archive but also content aware. some get more bumps then others because
- * they're more important right?"
- *
- * He is right that the archive varies, and the variation turns out to be measurable.
- * Over 113 pre-2025 events (92 with one notice, 21 with two or more), on the features
- * of the EARLIEST notice:
- *
- *     feature                     one-notice   two-plus
- *     event falls on Sunday              39%        71%
- *     has a street address               54%        81%
- *     event falls midweek                29%        10%
- *     mentions build/work                38%        38%
- *     median words in first notice       252        250
- *
- * So "important" is not length and not subject matter -- a build day and a party are
- * both 38%. It is a SUNDAY GATHERING AT A REAL ADDRESS, noticed early. As per-event
- * odds that is P(second beat) = 0.29 for a Sunday, 0.07 midweek, and those two
- * reconcile with the 18% pooled figure `when.mjs --sequences` prints for all
- * weekdays -- which is how I know the cut is real and not an artefact of slicing.
- *
- * THE RECAP IS ALREADY THE EARLY NOTICE. It goes out ~13 days ahead naming every
- * event, which is outside when.mjs's lead 0-10 window entirely, so the [4] half of
- * the commonest two-beat set [4,1] is spent before this runs. What is left to
- * schedule is the day-before nudge -- the commonest single-beat set, [1] x9 -- plus a
- * dealt earlier lock-in.
- *
- * NOT a scheduler. Nothing here fires anything: it prints which drafts to make and
- * which day each is to be READ on, and a human arms each one with Gmail's own
- * scheduled send. A Gmail draft cannot hold a send time -- GmailDraft is
- * deleteDraft/getId/getMessage/getMessageId/send/update and nothing else -- so the
- * human is not a formality here, they are the mechanism.
- */
+// schedule.mjs -- which bump beats an event gets, dealt at a measured rate.
+//
+//   node aedile/recap/schedule.mjs <notes> [--as-of YYYY-MM-DD] [--seed S]
+//
+// The recap is already the early notice; this schedules the day-before nudge
+// plus a dealt earlier lock-in.
+// Not a scheduler: it prints which drafts to make and which day each is to be
+// read on. A human arms each one; a Gmail draft cannot hold a send time.
 
 import { readFileSync } from 'node:fs';
 
 import { datesIn, DAYS } from './dates.mjs';
 import { rng } from './devices.mjs';
 
-/** Measured above. Sunday gatherings get a second notice; midweek ones rarely do. */
+// Sunday gatherings get a second notice; midweek ones rarely do.
 export const SECOND_BEAT_ODDS = { sunday: 0.29, midweek: 0.07, other: 0.18 };
 
 const iso = d => d.toISOString().slice(0, 10);
 
-/** A date the notes have not actually settled must not be announced.
- *
- *  The first run of this file cheerfully scheduled nudges for BOTH 11/25 and 11/29 --
- *  the two candidate Evangelion dates, one of which will happen, with Chris still
- *  asking the venue. Two nudges would have announced two screenings. A dealt beat for
- *  a date nobody has picked is worse than no beat.
- *
- *  Two signals, both taken from how the notes actually read:
- *    - the date sits in an either/or pair: "11/25 or 11/29", "Wednesday the 25th or
- *      Sunday the 29th". One of two is not a date yet.
- *    - its line hedges: not settled, tbd, maybe, asking, or a bare question mark.
- *  Deliberately conservative -- a false "unsettled" costs a bump nobody sent, a false
- *  "settled" costs the list a notice about a gathering that is not happening. */
+// A date the notes have not settled must not be announced: it sits in an
+// either/or pair, or its line hedges. Conservative: a false "unsettled" costs a
+// bump, a false "settled" announces a gathering that is not happening.
 const HEDGE_LINE = /\b(?:not settled|unsettled|tbd|to be confirmed|maybe|asking|proposed|either)\b|\?/i;
 
 export function unsettled(notes, date) {
@@ -81,12 +41,8 @@ export function oddsFor(date) {
   return SECOND_BEAT_ODDS.other;
 }
 
-/** One row per draft to generate: the event it is about, the beat, and the day it is
- *  meant to be READ. `asOf` is that read-day, which is what makes "tomorrow" correct
- *  on the day it is scheduled for rather than on the day it is written.
- *
- *  Events already past `today` are dropped: a nudge for a day that has gone is the
- *  worst kind of noise, and the notes keep old dates in them. */
+// One row per draft to generate: the event, the beat, and the day it is meant
+// to be read (`asOf`). Events already past `today` are dropped.
 export function schedule(notes, { today = new Date(), seed = 'aedile' } = {}) {
   const rand = rng(`${seed}:beats`);
   const rows = [];
@@ -100,7 +56,7 @@ export function schedule(notes, { today = new Date(), seed = 'aedile' } = {}) {
     const odds = oddsFor(event);
     const roll = rand();
     if (roll < odds) {
-      // Lead 4: the commonest early lead that co-occurs with a day-before ([4,1] x5).
+      // Lead 4: the commonest early lead that co-occurs with a day-before.
       const early = shift(event, -4);
       if (early > today) {
         rows.push({ event: iso(event), dow: DAYS[event.getDay()], beat: 'lock-in', asOf: iso(early), lead: 4, dealt: { odds, roll: Number(roll.toFixed(3)) } });

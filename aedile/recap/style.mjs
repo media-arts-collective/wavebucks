@@ -1,46 +1,16 @@
 #!/usr/bin/env node
-/**
- * style.mjs -- measure the generator against the archive, and rank what is off.
- *
- *   ./style.mjs [burst.json] [--all]
- *
- * THESE ARE DIAGNOSTICS, NOT AN OBJECTIVE FUNCTION (#29). They were built to find tells by
- * comparing a BURST against the archive. Hand-editing one draft until this table goes green
- * is Goodhart's law and it converges on flattened prose in about four passes -- measured:
- * four iterations took `mean paragraph chars` to +1% of the archive (155 against 156) by
- * cutting long paragraphs into even ones, which moved paragraph spread from 0.70 to 0.54
- * against an archive at ~0.9. The draft it started from was ALREADY closer. Tune the prompt
- * and the deal, then measure; do not tune the specimen.
- *
- * That failure is now visible in the output rather than invisible: the SPREAD family ranks
- * a dispersion collapse as a finding, so "every mean matched" can no longer hide it.
- *
- * Zach, after the first burst came back 33%: "is there a general punctuation
- * frequency, capitalization frequency, numbering frequency, etc. we can
- * measure? or like when jokes happen, what percentage, where in the message?"
- *
- * So this does not pick metrics by hand. Every punctuation mark that appears in
- * either corpus becomes a metric automatically, and everything is ranked by how
- * far the generator sits from the archive. Choosing what to measure is how you
- * miss the thing you did not think of: the em-dash was found by a human eye in
- * a duel, not by a metric anyone had written.
- *
- * Four families:
- *
- *   RATE      per 1,000 characters, averaged per message
- *   SHARE     what fraction of messages do this at all
- *   SHAPE     structure: list lengths, sentence lengths, paragraph counts
- *   POSITION  WHERE in the message it happens, 0.0 = first line, 1.0 = sign-off
- *
- * POSITION is the one that answers the "where do jokes happen" half. Humour is
- * not mechanically detectable, but its carriers are: parenthetical asides,
- * exclamation clusters, and very short sentences. Where those sit in a message
- * is measurable, and a generator that puts its one joke in the same place every
- * time is as detectable as one that never jokes at all.
- *
- * With no burst it profiles the archive alone, which is how you get the
- * baseline before there is anything to compare.
- */
+// style.mjs -- measure the generator against the archive, and rank what is off.
+//
+//   ./style.mjs [burst.json] [--all]
+//
+// Diagnostics, not an objective function: tune the prompt and the deal, then
+// measure; do not tune the specimen. Every punctuation mark in either corpus
+// becomes a metric automatically. With no burst it profiles the archive alone.
+//
+//   RATE      per 1,000 characters, averaged per message
+//   SHARE     what fraction of messages do this at all
+//   SHAPE     structure: list lengths, sentence lengths, paragraph counts
+//   POSITION  where in the message it happens, 0.0 = first line, 1.0 = sign-off
 
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -51,24 +21,7 @@ import { isOperator } from '../analysis/corpus.mjs';
 const VAULT = process.env.KREWE_VAULT
   || '/srv/vaporwave-reports/obsidian-vault/mailing-list-archive';
 
-/** The same pool duel.mjs draws from, so the comparison is like for like.
- *
- *  SENDER TEST ROUTED THROUGH corpus.mjs (#72). This matched
- *  `email === 'kreweofvaporwave@gmail.com'` locally, which drops 93 of the operator's
- *  573 messages because the old scraper nulled `email` while redacting `author` to an
- *  ellipsized form. #72 warned that widening it would move greeting, numberedList,
- *  allCaps, parenthetical, crude and semicolon simultaneously, since every probability in
- *  devices.mjs's DEVICES table was measured on the narrow pool and live checks are
- *  thresholded against them.
- *
- *  MEASURED, AND IT IS A NO-OP HERE: pool 164 before and 164 after, every rate identical,
- *  output byte-identical. The sign-off filter below is why -- it admits only messages
- *  ending `<3 MS`, and 92 of those 93 recoverable messages are ~101-character preview
- *  snippets, cut long before any sign-off. They were never in this pool to begin with.
- *
- *  So this is safe HERE and is not safe generally: cadence.mjs has no sign-off filter, so
- *  the same widening hands it 93 messages of which 92 are snippets, which would make its
- *  body-derived figures worse rather than better. That one needs isFullBody alongside. */
+// The same pool duel.mjs draws from, so the comparison is like for like.
 function corpus() {
   const path = join(VAULT, 'messages.jsonl');
   if (!existsSync(path)) { console.error(`style: no corpus at ${path}`); process.exit(3); }
@@ -76,12 +29,7 @@ function corpus() {
     .filter(m => isOperator(m) && typeof m.body === 'string')
     .filter(m => m.body.length >= 400 && m.body.length <= 4000)
     .filter(m => /<3[\s\S]{0,4}MS\s*$/.test(m.body))
-    // Through the SAME normalizer the duel puts both sides through. Without
-    // this the tool compares raw archive against normalized output and invents
-    // findings: curly apostrophes read as -100% and straight quotes as -82%,
-    // purely because normalize.mjs had already flattened them on one side and
-    // not the other. A measurement that does not compare like with like is
-    // worse than no measurement, because it is quoted with a number on it.
+    // Through the same normalizer the duel uses, so both sides compare like with like.
     .map(m => normalize(m.body));
 }
 
@@ -175,20 +123,8 @@ function battery(punct) {
     ['first person I',           /\bI\b/g],
   ];
 
-  // DISPERSION, not just central tendency (#29). Every row above is a mean or a share,
-  // so the cheapest way to make the table go green is to write UNIFORMLY -- which is the
-  // exact tell the duel exists to find. Measured: tuning a real recap against this tool
-  // moved `mean paragraph chars` to +1% of the archive (155 vs 156) by cutting long
-  // paragraphs into even ones, and in doing so took paragraph spread from 0.70 to 0.54
-  // against the archive's 0.85. The hand-edited draft was already closer and the tuning
-  // moved it away. Nothing in the output said so, because a collapsed distribution with a
-  // matched average reads as a win.
-  //
-  // So spread is its own family and ranks on its own divergence. sd/mean (coefficient of
-  // variation) is used rather than sd because it is scale-free, which is what makes it
-  // comparable across a 200-word and a 900-word message. Computed WITHIN each message and
-  // then averaged, because the trait is "he writes uneven blocks", not "his messages
-  // differ from each other".
+  // Dispersion, not just central tendency: matched means can hide uniform prose.
+  // sd/mean because it is scale-free; computed within each message, then averaged.
   const SPREAD = [
     ['paragraph chars sd/mean', t => cv(t.split(/\n\s*\n/).filter(x => x.trim()).map(x => x.length))],
     ['sentence words sd/mean',  t => cv(sentences(t).map(x => words(x).length))],
@@ -202,8 +138,7 @@ function battery(punct) {
 
 const mean = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0;
 const meanOf = (c, f) => mean(c.map(f));
-/** Sample sd, and sd/mean. NaN below two data points: one paragraph has no spread, and
- *  reporting 0 there would read as "perfectly uniform" rather than "not measurable". */
+// Sample sd, and sd/mean. NaN below two data points: 0 would read as "perfectly uniform".
 const sd = a => {
   if (a.length < 2) return NaN;
   const m = mean(a);
@@ -246,9 +181,8 @@ const rows = [];
 const add = (family, name, r, a, unit) => rows.push({ family, name, r, a, unit, d: divergence(r, a) });
 
 for (const [name, f] of RATE) add('RATE', name, meanOf(real, f), ai ? meanOf(ai, f) : NaN, '/1k');
-// A SHARE over ONE generated message is a presence bit, not a percentage (#29): every row
-// reads 0% or 100% and lands in the ranking as a confident -100% or "new". Suppressed
-// rather than ranked, so a single specimen cannot be over-fitted against a coin flip.
+// A SHARE over one generated message is a presence bit, not a percentage:
+// suppressed rather than ranked.
 const shareIsNoise = !!ai && ai.length < 2;
 if (!shareIsNoise) {
   for (const [name, f] of SHARE) add('SHARE', name, shareOf(real, f), ai ? shareOf(ai, f) : NaN, '%');
@@ -281,10 +215,8 @@ if (ai) {
   // Rank by how wrong, not by how interesting. A metric nobody chose can win.
   const scored = rows
     .filter(r => !isNaN(r.d) && (Math.abs(r.d) >= 0.4 || !isFinite(r.d)))
-    // A mark that appears twice in the whole archive is not a style. Without
-    // this floor the ranking fills with `~`, `=`, `&` at 0.06 per 1,000 chars,
-    // each reading as a confident -100%, and the findings that matter get
-    // pushed off the bottom.
+    // A mark vanishingly rare in both is not a style; without this floor it
+    // ranks as a confident finding.
     .filter(r => Math.max(r.r, r.a) >= (r.unit === '%' ? 5 : 0.15))
     .sort((x, y) => (isFinite(y.d) ? Math.abs(y.d) : 1e9) - (isFinite(x.d) ? Math.abs(x.d) : 1e9));
 

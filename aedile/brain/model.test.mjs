@@ -1,10 +1,7 @@
-// aedile/brain/model.test.mjs
-// Offline unit tests — no model call, no network, no ANTHROPIC_API_KEY.
+// aedile/brain/model.test.mjs -- offline unit tests: no model call, no network,
+// no ANTHROPIC_API_KEY.
 // Run: node --test aedile/brain/model.test.mjs
-//
-// Covers parseDecision's four contract cases (the ported redige guard) plus the
-// module's exported shape. The live subscription path is covered separately by
-// `node brain/model.mjs --smoke`, which is intentionally not a unit test.
+// The live subscription path is covered by `node brain/model.mjs --smoke`.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -42,8 +39,7 @@ test('parseDecision: throws on empty string', () => {
   assert.throws(() => parseDecision(''), /not valid JSON/);
 });
 
-// The failure that cost 2 of 6 recap generations on 2026-09-27: the body arrives
-// with real line breaks where \n belongs. Recovered, with the breaks intact.
+// The body arrives with real line breaks where \n belongs. Recovered, with the breaks intact.
 test('parseDecision: recovers raw newlines inside a string literal', () => {
   const d = parseDecision('{"subject":"wings 10/14","body":"Hi all,\n\n\n1. Wing Wednesday.\n"}');
   assert.equal(d.subject, 'wings 10/14');

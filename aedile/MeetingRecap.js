@@ -1,52 +1,23 @@
-/**
- * MeetingRecap.js
- * Third tier: turns a meeting transcript into a recap DRAFT addressed to the
- * krewe mailing list, for a director to read, edit and send.
- *
- * WHAT MAKES THIS DIFFERENT FROM THE OTHER TWO TIERS, and why it is allowed:
- *
- *   - It ORIGINATES a thread. AEDILE_CONTEXT_CORE forbids that. The carve-out
- *     (Zach, 2026-09-06) is bounded by never sending: this file's only Gmail
- *     mutation is GmailApp.createDraft(). A director opens the draft and
- *     presses send, so the human originates the thread and Aedile drafted it
- *     for them. AEDILE_CONTEXT.recap.md states the same rule to the model, so
- *     it is not left reconciling a contradiction on its own.
- *
- *   - It writes to a recipient outside AUTOSEND_ALLOWLIST. That is fine
- *     precisely because it never sends: the allowlist governs auto-send, and
- *     nothing here can auto-send. Note the allowlist could not evaluate this
- *     recipient anyway — isAllowlistEligible matches every individual
- *     participant, and a Google Group hides its ~40 members behind one string,
- *     so adding the list address to the allowlist would read as "everyone
- *     matches" while masking exactly the fan-out the allowlist exists to
- *     bound. Do not do that.
- *
- *   - It does NOT call MessageLog.append. Every triage and bump call injects a
- *     rolling MESSAGE_LOG_WINDOW_DAYS window of the Messages tab, so anything
- *     logged there is re-read by every model call for a year. A 40-minute
- *     transcript is thousands of tokens of verbatim speech; ten meetings would
- *     be a third of the archive's annual growth, carried forever, for no
- *     benefit. The RECAP is institutional memory. The transcript is not.
- *     (Zach, 2026-09-06.)
- */
+// MeetingRecap.js -- turns a meeting transcript into a recap DRAFT addressed to
+// the krewe list, for a director to read, edit and send.
+// It originates a thread and writes to a recipient outside AUTOSEND_ALLOWLIST;
+// both are allowed only because its one Gmail mutation is GmailApp.createDraft().
+// Do not add the list address to the allowlist: a Google Group hides its members
+// behind one string and would mask the fan-out the allowlist exists to bound.
+// It does not call MessageLog.append: the recap is institutional memory, the
+// transcript is not.
 
-// Where a recap is addressed. The list, not the Workspace account Aedile runs
-// as — those are different addresses and confusing them sends krewe mail to
-// Aedile's own inbox.
+// The list, not the Workspace account Aedile runs as.
 const RECAP_RECIPIENT = 'kreweofvaporwave@googlegroups.com';
 
-// Own kill switch. AEDILE_ENABLED gates scanInbox and BUMP_ENABLED gates
-// checkBumps; neither covers this tier, so without its own switch a director
-// could not stop it without stopping something else. Off/unset means off.
+// Own kill switch: AEDILE_ENABLED and BUMP_ENABLED do not cover this tier.
+// Off/unset means off.
 const RECAP_ENABLED_PROPERTY = 'RECAP_ENABLED';
 
-// A recap is a long-form document, not a JSON verdict — the other tiers ask
-// for a decision plus a sentence and run comfortably in 1000.
+// A recap is a long-form document, not a JSON verdict.
 const RECAP_MAX_TOKENS = 4000;
 
-// Guards against an empty or truncated transcript producing a confident recap
-// of nothing. A real meeting transcribes to far more than this; the number is
-// a floor for "something clearly went wrong upstream", not a quality bar.
+// Floor against an empty or truncated transcript producing a confident recap of nothing.
 const MIN_TRANSCRIPT_CHARS = 500;
 
 const MeetingRecap = (function () {
@@ -55,29 +26,18 @@ const MeetingRecap = (function () {
     return PropertiesService.getScriptProperties().getProperty(RECAP_ENABLED_PROPERTY) === 'true';
   }
 
-  /**
-   * Renders the model's open_questions into the body, so what the meeting did
-   * NOT settle survives into the draft instead of being quietly dropped. The
-   * recap context tells the model to report these rather than resolve them;
-   * dropping them here would undo that.
-   */
+  // Renders open_questions into the body so what the meeting did not settle
+  // survives into the draft.
   function appendOpenQuestions(body, openQuestions) {
     if (!openQuestions || !openQuestions.length) return body;
     const items = openQuestions.map(q => `  - ${q}`).join('\n');
     const block = `Still open:\n${items}`;
 
-    // THE SIGN-OFF STAYS LAST (#23). This used to return `${body}\n\nStill open:...`,
-    // which put seven bullets AFTER `<3 SM` on every recap that surfaced open questions.
-    // All twelve human specimens on the duel page end with the sign-off and nothing
-    // follows it. `checks.mjs` grades the model's output and is positional about this, but
-    // it cannot see the defect because the append happens HERE, in Apps Script, after the
-    // JSON has crossed the wire -- nothing graded the artifact that is actually delivered.
-    // So the fix belongs at the sink, not in the check.
+    // The sign-off stays last: the block goes above it.
     const SIGNOFF_LINE = /^(?:(?:<3[ \t]*)+|(?:<3[ \t]*)*SM)$/;
     const lines = body.replace(/\s+$/, '').split('\n');
     const signOff = [];
-    // The sign-off can be one line (`<3 SM`) or two (`<3` then `SM`), so take every
-    // trailing sign-off line rather than assuming one.
+    // The sign-off can be one line (`<3 SM`) or two (`<3` then `SM`).
     while (lines.length) {
       const last = lines[lines.length - 1].trim();
       if (last === '') { lines.pop(); continue; }
@@ -90,13 +50,7 @@ const MeetingRecap = (function () {
     return `${lines.join('\n').replace(/\s+$/, '')}\n\n${block}\n\n${signOff.join('\n')}`;
   }
 
-  /**
-   * One transcript in, one Gmail draft out.
-   *
-   * dryRun runs the full model call and reports what it would have drafted,
-   * without creating the draft or writing to Log — same meaning as WriteApi's
-   * dryRun on the other two tiers.
-   */
+  // One transcript in, one Gmail draft out. dryRun runs the model call and creates nothing.
   function draftRecap(transcript, dryRun) {
     if (!isEnabled()) {
       Logger.log(`⏸️ Meeting recap is disabled (Script Property ${RECAP_ENABLED_PROPERTY} is not "true"). Skipping.`);
@@ -134,9 +88,7 @@ const MeetingRecap = (function () {
     }
 
     // The ONLY Gmail mutation in this file. Never .send(), never replyAll().
-    // Plain body, no htmlBody: the archive is plain text (628 threads, one
-    // carries markup and it is a forwarded message from outside), and HTML
-    // actively costs us -- `<3` has to be escaped to survive a tag stripper.
+    // Plain body, no htmlBody: `<3` would need escaping.
     GmailApp.createDraft(RECAP_RECIPIENT, decision.subject, body);
 
     Config.logEvent(
@@ -149,49 +101,18 @@ const MeetingRecap = (function () {
     return { drafted: true, decision, recipient: RECAP_RECIPIENT };
   }
 
-  // The recap SINK — putting an already-written recap from redige.mjs into the
-  // drafts folder — used to live here as MeetingRecap.createDraft, a second
-  // draft path that assembled the body in Apps Script. #41 replaced it with the
-  // single reusable WriteApi createDraft primitive (originate form): redige.mjs
-  // now assembles the finished plain-text body itself and POSTs it, so there is
-  // one draft sink, not one per tier. draftRecap below (the in-Apps-Script
-  // transcript path) is untouched, and is what still uses appendOpenQuestions.
-
-  // appendOpenQuestions is exposed only so aedile/recap/recap-assembly.test.mjs can
-  // grade the DELIVERED shape; nothing else calls it from outside (#23).
+  // appendOpenQuestions is exposed only for aedile/recap/recap-assembly.test.mjs.
   return { draftRecap, isEnabled, appendOpenQuestions };
 })();
 
-/**
- * Entry point for WriteApi's setRecapEnabled action: flip RECAP_ENABLED from
- * outside the editor, both directions.
- *
- * WHY THIS ONE PROPERTY AND NOT A GENERAL SETTER. The objection to a
- * remotely-flippable kill switch is real but it is not uniform, and the
- * difference is what can happen while the switch is on:
- *
- *   AEDILE_ENABLED gates scanInbox, which can auto-send mail via replyAll()
- *   to anyone clearing AUTOSEND_ALLOWLIST. A remote flip there puts mail in
- *   other people's inboxes and no human sees it first. It stays editor-only.
- *
- *   RECAP_ENABLED gates a tier whose only Gmail mutation is createDraft().
- *   The worst a wrongly-flipped switch does here is put an unwanted draft in
- *   the krewe's own drafts folder, where a director sees it and deletes it.
- *   Nothing leaves. That is a mess, not an incident.
- *
- * So: one named property, not `action=setProperty&key=...`. A general setter
- * would reach AEDILE_ENABLED and AUTOSEND_ENABLED, and the argument above
- * would no longer hold. (Zach, 2026-09-06, overriding an earlier refusal of
- * mine that had not made this distinction.)
- *
- * Being able to turn it OFF from here is the half that improves safety: the
- * tier can now be stopped without a browser.
- */
+// Entry point for WriteApi's setRecapEnabled action. One named property, not a
+// general setter: RECAP_ENABLED gates a tier that can only createDraft(), while
+// a general setter would reach AEDILE_ENABLED and AUTOSEND_ENABLED, which gate
+// auto-send and stay editor-only.
 function setRecapEnabled(enabled, dryRun) {
   let want;
   try {
-    // Same strict parse as dryRun/ignoreDue: "true"/"false" and nothing else.
-    // `enabled=1` or `enabled=ture` is refused rather than read as "off".
+    // Strict parse: "true"/"false" and nothing else.
     want = WRITE_API.strictBool(enabled, 'enabled');
   } catch (err) {
     Logger.log(`[setRecapEnabled] ${err.message} — switch not touched.`);
@@ -225,11 +146,7 @@ function disableMeetingRecap() {
   Logger.log('⏸️ Meeting recap disabled.');
 }
 
-/**
- * Entry point for WriteApi's draftRecap action (and for a manual run from the
- * editor, though pasting a 40-minute transcript into the editor is nobody's
- * idea of a good time). No time-driven trigger: meetings are not a cadence.
- */
+// Entry point for WriteApi's draftRecap action. No time-driven trigger.
 function draftRecap(transcript, dryRun) {
   return MeetingRecap.draftRecap(transcript, dryRun);
 }

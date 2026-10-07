@@ -1,32 +1,13 @@
-/**
- * BumpChecker.js
- * Daily tier that revisits threads InboxProcessor's regular triage call
- * flagged as open loops (see OpenLoops.js) and are now due for a recheck.
- * Makes one Claude call per due thread — the same draft/flag/no_action
- * decision shape as triage, via AEDILE_BUMP_PROMPT_LIST/_DM (split by
- * InboxProcessor.classifyAudience on the thread's last message, same as
- * triage — see SystemPrompt.js) — and always re-upserts
- * OpenLoops with the model's fresh open_loop/recheck_after_days call,
- * whether or not it decides to actually bump.
- *
- * A draft_reply bump auto-sends under the same allowlist condition as
- * InboxProcessor's auto-send exception (InboxProcessor.isAllowlistEligible)
- * — the allowlist itself is the safety boundary (every participant on the
- * thread has to already be Zach, Tyler, and/or the krewe address), so
- * reusing it here doesn't widen the blast radius, just extends where the
- * same closed-loop condition applies. Runs its own per-run auto-send cap
- * (_autosendCountThisRun / MAX_BUMP_AUTOSEND_PER_RUN below), separate from
- * InboxProcessor's, since checkBumps() fires on its own daily trigger.
- */
+// BumpChecker.js -- daily tier that revisits threads triage flagged as open
+// loops (OpenLoops.js) and that are now due. One Claude call per due thread;
+// always re-upserts OpenLoops with the fresh decision.
+// A draft_reply bump auto-sends only under InboxProcessor.isAllowlistEligible,
+// with its own per-run cap (MAX_BUMP_AUTOSEND_PER_RUN).
 
 const BUMP_ENABLED_PROPERTY = 'BUMP_ENABLED';
-// Its own per-run cap, same reasoning as MAX_MESSAGES_PER_RUN /
-// MAX_AUTOSEND_PER_RUN in InboxProcessor.js.
+// Its own per-run cap.
 const MAX_BUMPS_PER_RUN = 10;
-// Auto-send cap for this tier specifically — deliberately separate from
-// InboxProcessor's MAX_AUTOSEND_PER_RUN / _autosendCountThisRun, since the
-// two tiers run on independent triggers and sharing a counter would make
-// one tier's cap depend on unrelated timing from the other.
+// Separate from InboxProcessor's auto-send cap: the two tiers run on independent triggers.
 const MAX_BUMP_AUTOSEND_PER_RUN = 5;
 
 const BumpChecker = (function () {
@@ -36,12 +17,8 @@ const BumpChecker = (function () {
     return PropertiesService.getScriptProperties().getProperty(BUMP_ENABLED_PROPERTY) === 'true';
   }
 
-  /**
-   * Same shape as InboxProcessor's buildUserContent, but framed around a
-   * stalled thread rather than a new message — includes how long it's been
-   * quiet and whether/when it was last bumped, so the model can weigh
-   * "already tried this" instead of nudging on repeat.
-   */
+  // Like InboxProcessor's buildUserContent, framed around a stalled thread: how
+  // long it has been quiet and whether it was last bumped.
   function buildBumpUserContent(thread, loopRow, idleDays) {
     const historyBlock = MessageLog.buildHistoryBlock(MESSAGE_LOG_WINDOW_DAYS);
     const statusBlock = `THREAD STATUS: quiet for ${idleDays} day(s) since the last message. `
@@ -52,14 +29,9 @@ const BumpChecker = (function () {
     return `${historyBlock}\n\n${'='.repeat(20)}\n\n${statusBlock}\n\nTHREAD BEING CHECKED FOR A BUMP:\n\n${threadContent}`;
   }
 
-  /**
-   * One due thread: ask Claude whether it's worth a nudge, act on the
-   * decision (draft, or auto-send if the thread passes
-   * InboxProcessor.isAllowlistEligible and this run is under
-   * MAX_BUMP_AUTOSEND_PER_RUN, or flag), and re-upsert OpenLoops either way
-   * so a "no, still fine" call still pushes the next check out rather than
-   * re-asking every single day.
-   */
+  // One due thread: ask whether it is worth a nudge, act (draft, auto-send if
+  // allowlist-eligible and under the cap, or flag), and re-upsert OpenLoops
+  // either way so the next check is pushed out.
   function reviewForBump(loopRow, dryRun) {
     const threadId = loopRow.threadId;
 
@@ -120,9 +92,8 @@ const BumpChecker = (function () {
       thread.addLabel(InboxProcessor.getFlaggedLabel());
     }
 
-    // Not a new message — LastMessageDate is carried forward unchanged so
-    // idleDays keeps counting from the actual last real activity, not from
-    // this check.
+    // Not a new message: LastMessageDate is carried forward so idleDays counts
+    // from the last real activity.
     OpenLoops.upsert(threadId, {
       open: !!decision.open_loop,
       lastMessageDate: loopRow.lastMessageDate,
@@ -141,21 +112,16 @@ const BumpChecker = (function () {
     return { threadId, decision, autoSend: !!autoSend };
   }
 
-  /**
-   * Entry point for the daily trigger. Reads OpenLoops for threads due for
-   * a recheck, caps the batch at MAX_BUMPS_PER_RUN (excess picked up next
-   * run, not dropped), and reviews each one independently — one thread's
-   * failure doesn't stop the rest.
-   */
+  // Entry point for the daily trigger. Caps the batch at MAX_BUMPS_PER_RUN
+  // (excess is picked up next run); one thread's failure does not stop the rest.
   function checkBumps(dryRun, ignoreDue) {
     if (!isEnabled()) {
       Logger.log('⏸️ Bump checking is disabled (Script Property BUMP_ENABLED is not "true"). Skipping run.');
       return { skipped: 'disabled' };
     }
 
-    // Same guard, same reason as InboxProcessor.scanUnread() — an
-    // overlapping run must not get its own fresh _autosendCountThisRun.
-    // Shared script lock, so a bump run and a scan run also can't overlap.
+    // Same lock as InboxProcessor.scanUnread(): an overlapping run must not get
+    // a fresh _autosendCountThisRun.
     const lock = LockService.getScriptLock();
     if (!lock.tryLock(10000)) {
       Logger.log('⏸️ checkBumps skipped — could not acquire the script lock (another run is still in progress).');
@@ -194,12 +160,7 @@ function checkBumps(dryRun, ignoreDue) {
   return BumpChecker.checkBumps(!!dryRun, !!ignoreDue);
 }
 
-/**
- * One-time setup: installs a daily time-driven trigger for checkBumps().
- * Safe to re-run — clears any existing checkBumps trigger first so this
- * never creates duplicates. Separate from installTrigger() (InboxProcessor's
- * hourly scanInbox trigger) so the two cadences are independent.
- */
+// One-time setup: installs a daily trigger for checkBumps(). Safe to re-run.
 function installBumpTrigger() {
   ScriptApp.getProjectTriggers()
     .filter(t => t.getHandlerFunction() === 'checkBumps')

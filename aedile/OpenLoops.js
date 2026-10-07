@@ -1,19 +1,8 @@
-/**
- * OpenLoops.js
- * Sheet helper for the "OpenLoops" tab — tracks, per thread, whether the
- * regular triage call flagged an unresolved question or commitment worth
- * checking back on, and when. Populated by InboxProcessor.reviewMessage()
- * after every triage decision; read by BumpChecker.js's daily pass to find
- * threads due for a recheck without rescanning the whole raw archive.
- *
- * This is purely mechanical bookkeeping — an open/closed flag plus a next-
- * check date — not a revival of the retired Threads/Shards summarization
- * tier. It doesn't store a summary, entities, or participants, and doesn't
- * do any fuzzy cross-thread matching.
- *
- * Columns: ThreadId | Open | LastMessageDate | RecheckAfterDays |
- * NextCheckDate | LastBumpDate | UpdatedAt
- */
+// OpenLoops.js -- sheet helper for the "OpenLoops" tab: per thread, whether
+// triage flagged something worth checking back on, and when. Written by
+// InboxProcessor.reviewMessage(), read by BumpChecker.js.
+// Columns: ThreadId | Open | LastMessageDate | RecheckAfterDays |
+// NextCheckDate | LastBumpDate | UpdatedAt
 
 const OpenLoops = (() => {
 
@@ -29,9 +18,7 @@ const OpenLoops = (() => {
     UPDATED_AT: 6
   };
 
-  // Guards against a missing/garbage recheck_after_days from the model —
-  // clamped, not trusted outright, same reasoning as any other model output
-  // that drives a scheduling decision.
+  // recheck_after_days is model output driving a schedule: clamped, not trusted.
   const MIN_RECHECK_DAYS = 1;
   const MAX_RECHECK_DAYS = 60;
   const DEFAULT_RECHECK_DAYS = 3;
@@ -52,15 +39,9 @@ const OpenLoops = (() => {
     return Math.min(n, MAX_RECHECK_DAYS);
   }
 
-  /**
-   * Insert or update the OpenLoops row for threadId from the latest triage
-   * (or bump-check) decision. Always overwrites Open/LastMessageDate/
-   * RecheckAfterDays/NextCheckDate rather than merging — the model sees the
-   * whole thread on every call, so its latest open_loop call supersedes
-   * whatever it said last time (a reply can close a loop that was open, or
-   * reopen one that looked closed). LastBumpDate is untouched here — only
-   * markBumped() writes it.
-   */
+  // Insert or update the row for threadId. Always overwrites rather than
+  // merging: the latest decision supersedes the last. LastBumpDate is only
+  // written by markBumped().
   function upsert(threadId, { open, lastMessageDate, recheckAfterDays }) {
     const sh = _sheet();
     const rows = sh.getDataRange().getValues();
@@ -81,14 +62,8 @@ const OpenLoops = (() => {
     sh.appendRow([threadId, open, lastMessageDate, recheckDays, nextCheckDate, '', now]);
   }
 
-  /**
-   * Open threads whose NextCheckDate has arrived, for BumpChecker.checkBumps().
-   * `ignoreDue: true` returns every currently-open loop regardless of its
-   * scheduled NextCheckDate — for re-evaluating existing loops against
-   * improved judgment (e.g. a prompt tuning) without waiting out a schedule
-   * set before the improvement existed. Not the normal path; BumpChecker's
-   * daily trigger always calls this without ignoreDue.
-   */
+  // Open threads whose NextCheckDate has arrived. `ignoreDue: true` returns
+  // every open loop; not the normal path.
   function getDue(now, { ignoreDue } = {}) {
     const rows = _sheet().getDataRange().getValues().slice(1);
     return rows

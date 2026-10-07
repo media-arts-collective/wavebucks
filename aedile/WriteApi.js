@@ -1,163 +1,35 @@
-/**
- * WriteApi.js
- * A token-gated Web App endpoint that lets an external caller drive Aedile's
- * Gmail side on demand. It serves two eras at once:
- *
- *   1. LEGACY trigger-actions (scanInbox, checkBumps, draftRecap,
- *      setRecapEnabled) — the pre-brain-in-repo shape, where judgment runs IN
- *      Apps Script: the endpoint kicks off the same worker a time trigger
- *      would. Kept until the tier cutovers (#42/#43) move judgment to the Node
- *      brain and #46 decommissions them. NOT the target topology.
- *
- *   2. EXECUTE-ONLY primitives (createDraft, sendReplyAll, addLabel,
- *      trashMessage) — the target topology (milestone #2, #36). Apps Script drops to a pure Gmail
- *      I/O layer: the server-side brain does ALL the judgment (reads context,
- *      calls the model, writes the text) and POSTs a finished action here. Each
- *      primitive decides nothing, reads no institutional-memory context, and
- *      calls no model — it enacts exactly one Gmail mutation. This is the SINGLE
- *      reusable draft sink: the recap generator (aedile/recap/redige.mjs, #41)
- *      and the triage/bump tiers (#42/#43) all enact through createDraft rather
- *      than each carrying their own Apps-Script sink.
- *
- * SECURITY — unlike ReadApi.js, this endpoint can cause REAL side effects.
- * Both eras go through the same gate:
- *   - Requires its own `WRITE_API_TOKEN` Script Property (deliberately not
- *     shared with READ_API_TOKEN — read access and write access are
- *     independently revocable). Fails closed if unset.
- *   - POST only (not doGet) so a bare link/prefetch can't trigger anything.
- *   - Kill switches (AEDILE_ENABLED, AUTOSEND_ENABLED, BUMP_ENABLED) and the
- *     autosend allowlist still apply. Judgment no longer runs the guardrails
- *     in-process for the primitives, so the one primitive that can actually
- *     send (sendReplyAll) re-runs the guardrail last line Apps-Script-side and
- *     fails closed — see primSendReplyAll below and the "guardrail invariant"
- *     in the milestone #2 roadmap. (Per-run/day cap re-enforcement and the full
- *     read/write auth audit are #37/#38.) createDraft can only DRAFT, never
- *     send — a draft in the krewe's own drafts folder is "a mess, not an
- *     incident" — so it is not gated the way sendReplyAll is.
- *   - The legacy workers additionally take a script-wide LockService lock, so
- *     an invocation here that overlaps a running trigger is refused with
- *     { skipped: 'locked' } rather than starting a second run with its own
- *     fresh auto-send counter. (The primitives are single Gmail mutations with
- *     no per-run counter of their own, so they don't take the lock.)
- *
- * DEPLOY:
- *   1. clasp push
- *   2. In the Apps Script editor: Project Settings > Script Properties, add
- *      WRITE_API_TOKEN = <a long random string, different from READ_API_TOKEN>.
- *   3. Deploy > Manage deployments > edit the existing Web app deployment (or
- *      New deployment) so it picks up doPost. Execute as: me, Access: anyone
- *      with the link.
- *   4. Call: POST <exec-url> -d token=<WRITE_API_TOKEN> -d action=<action>
- *
- * READS (POST; dryRun meaningless and ignored):
- *   ?action=readThread&threadId=<id>[&html=true]
- *       Every message on that thread — from/to/cc/date/subject/plain body —
- *       read or unread. html=true adds the HTML body, which is the one to
- *       re-draft from (#78). The only live-Gmail read in this project (#35). It is
- *       on this endpoint rather than ReadApi because ReadApi is a doGet whose
- *       token rides in a query string; a thread body should not be reachable
- *       by a URL someone can paste, log or prefetch. See readThread below.
- *   ?action=readInbox[&q=<gmail query>][&limit=<n>]
- *       Gmail search. Returns thread id, subject, last sender/date, message
- *       count and a 300-char snippet — identity, not bodies. Default query
- *       `in:inbox`, limit 20, hard cap 100. Pair with readThread for the one
- *       thread that matters, so a broad query cannot export the mailbox.
- *
- * EXECUTE-ONLY PRIMITIVES (all POST; all honor dryRun):
- *   ?action=createDraft   Drafts finished text. Never sends, never marks read.
- *       Body: exactly one of `body` (plain text) or `htmlBody`. Recap drafts
- *       are plain text on purpose (the archive is plain text; HTML costs an
- *       escape on `<3`); triage/bump replies are HTML. Two shapes, exactly one
- *       per call:
- *       reply form:     -d threadId=<id> --data-urlencode htmlBody@body.html
- *           Drafts a reply on that thread's last message, cc'ing the full
- *           historical participant set (getRecipientCompletion) so nobody who
- *           was on an earlier message is silently dropped.
- *       originate form: -d to=<addr> -d subject=<subj> --data-urlencode body@recap.txt
- *           A brand-new-thread draft — the recap sink (redige.mjs posts here
- *           with to=<the list>). A human opens the draft and sends; Aedile
- *           never originates a live send.
- *       Optional `logLabel` (+ `logNote`) writes one audit row to the Log tab
- *           via Config.logEvent (action='createDraft', the caller's label +
- *           note) — #53: the CALLER names the genre, e.g. redige posts
- *           logLabel=recap_draft_posted. Omit it and the draft is filed
- *           without a Log row.
- *   ?action=sendReplyAll  -d threadId=<id> --data-urlencode htmlBody@body.html
- *           The ONLY primitive that can send. Fail-closed: refuses (ok:false +
- *           a `refused` reason, nothing sent) unless the guardrail last line
- *           passes — AEDILE_ENABLED on AND every thread participant inside
- *           AUTOSEND_ALLOWLIST with AUTOSEND_ENABLED on
- *           (InboxProcessor.isAllowlistEligible). The brain deciding to send
- *           does not bypass this.
- *   ?action=addLabel      -d threadId=<id> -d label=<name>
- *           Adds a Gmail label to a thread (creating it if missing). Inert —
- *           never drafts, never sends. The enact half of a triage `flag`.
- *   ?action=sendDraft     -d messageId=<draft's message id> -d sha256=<of its html>
- *           Sends ONE existing draft, only if every participant is in
- *           AUTOSEND_ALLOWLIST and the body still hashes to what was armed.
- *           The send half of a timer that lives outside Gmail (#74).
- *   ?action=trashMessage  -d messageId=<id>
- *           Moves ONE message to the trash. Exists to answer #74: a Gmail
- *           scheduled send cannot be created or edited by any API, but it
- *           carries an ordinary message id, so whether trashing it CANCELS
- *           the send is a separate, untested question. Message-scoped so a
- *           probe cannot take a thread's replies with it; no inverse verb,
- *           because the reversal is the Gmail UI's 30-day trash. Delete this
- *           if the probe answers no — it has no other caller.
- *
- * LEGACY TRIGGER-ACTIONS (all POST; judgment runs in Apps Script):
- *   ?action=scanInbox[&dryRun=true]                   Runs scanInbox() (= InboxProcessor.scanUnread()).
- *   ?action=checkBumps[&dryRun=true][&ignoreDue=true]  Runs checkBumps() (= BumpChecker.checkBumps()).
- *       ignoreDue=true evaluates every currently-open loop regardless of its
- *       scheduled NextCheckDate — for re-checking existing loops against
- *       improved judgment without waiting out a schedule set before the
- *       improvement existed. Not the normal daily-trigger path.
- *   ?action=draftRecap[&dryRun=true]  + a `transcript` form field
- *       Drafts a meeting recap to the krewe mailing list, running the model IN
- *       Apps Script (MeetingRecap.js). Superseded for real use by redige.mjs +
- *       the createDraft primitive; kept until #46. The transcript goes in the
- *       POST BODY as a form field, not the query string:
- *
- *         curl -X POST "<exec-url>" \
- *           -d token=<WRITE_API_TOKEN> -d action=draftRecap \
- *           --data-urlencode transcript@transcript.txt
- *
- *       Never sends. Its only Gmail effect is GmailApp.createDraft().
- *   ?action=setRecapEnabled[&dryRun=true]  + an `enabled` form field
- *       Flips RECAP_ENABLED, both directions, without the editor. Scoped to
- *       that ONE property on purpose -- see MeetingRecap.js for why the same
- *       is deliberately not offered for AEDILE_ENABLED, which gates a path
- *       that auto-sends mail. `enabled` takes the exact strings "true" and
- *       "false" and nothing else.
- *
- *         curl -sL "<exec-url>" --data-binary @form   # token/action/enabled
- *
- * dryRun and ignoreDue accept ONLY the exact strings "true" and "false".
- * Absent or empty means false, so no existing caller changes behaviour, but a
- * value this endpoint cannot read is refused with a 400 rather than guessed
- * at. It used to be `String(params.dryRun) === 'true'`, which read every
- * unrecognised value as false — so `dryRun=1`, `dryRun=yes` and `dryRun=ture`
- * each executed a REAL run that can auto-send mail. A misspelled safety flag
- * meaning "no safety" is the wrong direction for this endpoint to fail in,
- * and it disagreed with the token check above, which fails closed.
- *
- * dryRun=true on the legacy workers runs the full pipeline — Claude
- * decision-making, eligibility/cap checks — but suppresses every real side
- * effect (no replyAll(), no createDraftReply(), no Gmail labels, no Sheets
- * writes). dryRun=true on a primitive runs its validation and — for
- * sendReplyAll — the guardrail last line, then reports what it WOULD do
- * without the Gmail mutation. The worker functions and primitives return a
- * result object describing what happened or would have happened, which this
- * endpoint relays back in its JSON response.
- */
+// WriteApi.js -- token-gated Web App endpoint (POST only) driving Aedile's Gmail side.
+// Unlike ReadApi.js this causes real side effects. WRITE_API_TOKEN is its own
+// Script Property, separate from READ_API_TOKEN; fails closed if unset. Kill
+// switches (AEDILE_ENABLED, AUTOSEND_ENABLED, BUMP_ENABLED) and the autosend
+// allowlist still apply.
+//
+// Call: POST <exec-url> -d token=<WRITE_API_TOKEN> -d action=<action>
+//
+// Reads (dryRun ignored):
+//   readThread   threadId=<id> [html=true]      every message on the thread; html adds the HTML body
+//   readInbox    [q=<gmail query>] [limit=<n>]  thread identity plus a snippet, not bodies
+// Primitives (all honor dryRun):
+//   createDraft  body=|htmlBody= (exactly one), with threadId=<id> (reply) or
+//                to=<addr> subject=<subj> (originate); optional logLabel, logNote.
+//                Never sends.
+//   sendReplyAll threadId=<id> htmlBody=   sends; refused unless AEDILE_ENABLED and
+//                every participant is in AUTOSEND_ALLOWLIST with AUTOSEND_ENABLED on
+//   sendDraft    messageId=<id> sha256=<of its html>   sends one armed draft; same gate
+//   addLabel     threadId=<id> label=<name>
+//   trashMessage messageId=<id>
+//   openLoop, closeLoop, amendLoop, appendRecord
+// Legacy trigger-actions (judgment runs in Apps Script):
+//   scanInbox    [dryRun=true]
+//   checkBumps   [dryRun=true] [ignoreDue=true]  ignoreDue evaluates every open loop
+//   draftRecap   [dryRun=true] + `transcript` form field. Never sends.
+//   setRecapEnabled [dryRun=true] + `enabled` form field ("true"|"false")
+//
+// dryRun and ignoreDue accept only the exact strings "true" and "false"; absent
+// means false, anything else is a 400. A misspelled safety flag must not mean "no safety".
 
 const WRITE_API = (() => {
 
-  // --- Legacy trigger-actions (judgment runs in Apps Script). Removed at #46.
-  // NOTE: createDraft is deliberately NOT here — it is a primitive (below), the
-  // single reusable draft sink. redige.mjs's recap sink used to be a separate
-  // ACTIONS.createDraft that assembled the body in Apps Script; #41 replaced it
-  // with the primitive rather than layering a second draft path beside it. ---
   const ACTIONS = {
     scanInbox: scanInbox,
     checkBumps: checkBumps,
@@ -165,29 +37,11 @@ const WRITE_API = (() => {
     setRecapEnabled: setRecapEnabled,
   };
 
-  // The legacy actions that carry a payload rather than just flipping switches.
-  // draftRecap reads e.parameter.transcript, setRecapEnabled reads
-  // e.parameter.enabled — for a POST these are the form-encoded body, NOT the
-  // query string, so a 40-minute transcript is fine and no URL length applies.
+  // Legacy actions that carry a payload, read from the POST form body, not the query string.
   const PAYLOAD_ACTIONS = { draftRecap: 'transcript', setRecapEnabled: 'enabled' };
 
-  /**
-   * Strictly parse a boolean query parameter, defaulting to false when absent.
-   *
-   * The old form was `String(params.dryRun) === 'true'`, which treated every
-   * value it did not recognise as false. `dryRun=1`, `dryRun=yes` and
-   * `dryRun=ture` all read as "not a dry run" and executed a REAL run — one
-   * that can auto-send mail via replyAll() with no human between the decision
-   * and delivery. A misspelled safety flag quietly meaning "no safety" is the
-   * wrong direction for this endpoint to fail in, and it disagreed with the
-   * token check two lines up, which fails closed.
-   *
-   * Absent still means false, so no existing caller changes behaviour; a value
-   * this function cannot read is now refused instead of guessed at. Exposed on
-   * the returned object so the payload actions (top-level functions outside
-   * this closure, e.g. setRecapEnabled) parse booleans the same way doPost does
-   * rather than each growing a looser copy.
-   */
+  // Absent is false; anything but "true"/"false" throws, so a misspelled dryRun
+  // cannot run a real send.
   function strictBool(value, name) {
     if (value === undefined || value === null || value === '') return false;
     const s = String(value);
@@ -204,25 +58,14 @@ const WRITE_API = (() => {
   function respondBad(error) {
     return { status: 400, body: { ok: false, error } };
   }
-  /**
-   * A LOUD, expected refusal (not an error, not a silent no-op): the guardrail
-   * last line said no and nothing was sent. Status 200 so it reads as a
-   * handled outcome, but ok:false + a `refused` reason so a caller can't
-   * mistake it for a send. Matches "prefer noisy failures over silent guards."
-   */
+  // An expected refusal: status 200 but ok:false + `refused`, so a caller cannot
+  // mistake it for a send.
   function respondRefused(action, reason) {
     return { status: 200, body: { ok: false, action, refused: reason } };
   }
 
-  // --- Pure decision helpers (factored out so TestsLocal.js covers the real
-  //     branching, not a drifting copy — same posture as strictBool) ---
+  // --- Pure decision helpers, exposed so TestsLocal.js covers the real branching ---
 
-  /**
-   * Which createDraft shape a set of params describes. Reply (threadId) and
-   * originate (to+subject) are mutually exclusive; anything ambiguous or
-   * incomplete returns an { error } instead of guessing. Body presence is
-   * checked separately by chooseBody.
-   */
   function chooseDraftForm(params) {
     const hasThread = !!params.threadId;
     const hasOriginate = !!params.to || !!params.subject;
@@ -237,13 +80,6 @@ const WRITE_API = (() => {
     return { error: 'createDraft requires either threadId (reply) or to+subject (originate).' };
   }
 
-  /**
-   * Which body a createDraft call carries: exactly one of `body` (plain text)
-   * or `htmlBody`. Plain and HTML are mutually exclusive — a call that sets
-   * both is refused rather than silently preferring one. Recap drafts are plain
-   * (the archive is plain text; HTML would force escaping `<3`); triage/bump
-   * replies are HTML. Empty string counts as absent.
-   */
   function chooseBody(params) {
     const hasHtml = params.htmlBody !== undefined && params.htmlBody !== '';
     const hasPlain = params.body !== undefined && params.body !== '';
@@ -253,12 +89,7 @@ const WRITE_API = (() => {
     return { error: 'createDraft requires a body (plain text) or htmlBody (POST it as a form field).' };
   }
 
-  /**
-   * The send guardrail last line, as a pure function of its two inputs, so the
-   * decision is testable without Gmail. Returns a refusal reason string, or
-   * null when the send may proceed. Master kill switch is checked before the
-   * allowlist so a director flipping AEDILE_ENABLED off stops sends outright.
-   */
+  // The master kill switch is checked before the allowlist.
   function sendGate(aedileEnabled, allowlistEligible) {
     if (!aedileEnabled) return 'AEDILE_ENABLED is not "true" — master kill switch is off.';
     if (!allowlistEligible) {
@@ -279,16 +110,7 @@ const WRITE_API = (() => {
     return thread;
   }
 
-  /**
-   * Optional audit row for a draft (#53). The primitive is genre-blind by
-   * design, so the CALLER (the brain) supplies the Log action + provenance it
-   * wants recorded: a recap posts logLabel='recap_draft_posted', a future
-   * heads-up would post its own — instead of every draft being hardcoded as a
-   * recap the way the removed MeetingRecap.createDraft sink was. No logLabel
-   * means the caller opted out of a row. Wrapped like InboxProcessor.logResult:
-   * a bad Log write must not undo a draft that already happened. Real runs
-   * only — a dry run creates nothing to log.
-   */
+  // A bad Log write must not undo a draft that already happened.
   function logDraft(ctx, params) {
     if (!params.logLabel) return;
     try {
@@ -298,14 +120,9 @@ const WRITE_API = (() => {
     }
   }
 
-  // --- Execute-only primitives (#36; createDraft generalized to plain/HTML in #41) ---
+  // --- Execute-only primitives ---
 
-  /**
-   * createDraft — the single dumb draft sink. Never sends. One Gmail mutation:
-   * createDraftReply (reply form) or createDraft (originate form), plain-text or
-   * HTML per chooseBody. The recap generator (redige.mjs) and the triage/bump
-   * tiers all enact through this one function.
-   */
+  // createDraft: the single draft sink. Never sends.
   function primCreateDraft(params, dryRun) {
     const bodyChoice = chooseBody(params);
     if (bodyChoice.error) return respondBad(bodyChoice.error);
@@ -337,16 +154,9 @@ const WRITE_API = (() => {
     return respondOk('createDraft', dryRun, { form: 'originate', to: params.to, subject: params.subject, recipient: params.to, drafted: true, logged: !!params.logLabel });
   }
 
-  /**
-   * sendReplyAll — the ONLY primitive that can send, and the reason the
-   * guardrail last line has to live Apps-Script-side. Fail-closed: the gate
-   * runs even in dryRun (so a dry run reports whether a real one WOULD be
-   * refused), and a refusal returns without sending. cc's the full historical
-   * participant set so eligibility and delivery can't disagree (the
-   * 2026-07-22 bug). Per-run/day caps are #37 — the allowlist itself is the
-   * blast-radius boundary that must hold now. HTML body only: its consumers
-   * (#42/#43) send HTML; the recap tier never sends.
-   */
+  // sendReplyAll: can send. Fail-closed: the gate runs even in dryRun, and a
+  // refusal returns without sending. cc's the full participant set so
+  // eligibility and delivery cannot disagree.
   function primSendReplyAll(params, dryRun) {
     if (!params.htmlBody) return respondBad('sendReplyAll requires htmlBody (POST it as a form field).');
     const thread = requireThread(params.threadId);
@@ -363,11 +173,6 @@ const WRITE_API = (() => {
     return respondOk('sendReplyAll', dryRun, { threadId: params.threadId, cc, sent: true });
   }
 
-  /**
-   * addLabel — inert marker. Adds a Gmail label to a thread (creating it if it
-   * doesn't exist). Never drafts, never sends. The enact half of a triage
-   * `flag` decision once the brain makes it.
-   */
   function primAddLabel(params, dryRun) {
     if (!params.label) return respondBad('addLabel requires a label name.');
     const thread = requireThread(params.threadId);
@@ -378,36 +183,12 @@ const WRITE_API = (() => {
     return respondOk('addLabel', dryRun, { threadId: params.threadId, label: params.label, labeled: true });
   }
 
-  /**
-   * trashMessage — the probe for #74, and nothing more.
-   *
-   * The question it exists to answer: Gmail's scheduled send cannot be
-   * CREATED or EDITED through any API (measured — the v1 discovery document
-   * carries no send-time field anywhere, and a pending-send message is not a
-   * draft, so drafts.update cannot reach it). Whether it can be CANCELLED is
-   * a separate code path nobody has tested. A scheduled message carries an
-   * ordinary message id, so moveToTrash() can address it; what Gmail does in
-   * response is undocumented either way.
-   *
-   * Message-scoped, not thread-scoped, on purpose. A scheduled beat is one
-   * message that usually sits alone on a thread, and trashing the THREAD
-   * would take any real reply with it. A probe that can destroy a
-   * conversation is not a probe.
-   *
-   * No untrash verb, deliberately. GmailMessage exposes moveToTrash() and no
-   * inverse — the reversal lives in the Gmail UI, where trash is recoverable
-   * for 30 days. Writing a thread-scoped "untrash" to pair with a
-   * message-scoped trash would be an asymmetry that restores more than it
-   * removed. No permanent-delete verb either, for the same reason: this verb
-   * is safe only because Gmail keeps what it takes.
-   *
-   * If the probe answers no, delete this. It has no other caller.
-   */
+  // trashMessage: moves one message to the trash. Message-scoped so it cannot
+  // take a thread's replies with it. No untrash or permanent-delete verb: the
+  // reversal is the Gmail UI's trash.
   function primTrashMessage(params, dryRun) {
     if (!params.messageId) return respondBad('trashMessage requires a messageId.');
-    // Deliberately unguarded: an unreachable id throws and the 500 IS the
-    // answer. A probe that swallowed the error would report "nothing
-    // happened" for both "cancelled cleanly" and "could not find it".
+    // Deliberately unguarded: an unreachable id throws, and the 500 is the answer.
     const message = GmailApp.getMessageById(params.messageId);
     if (!message) return respondBad('trashMessage: no message with id ' + params.messageId);
     const before = message.isInTrash();
@@ -418,24 +199,9 @@ const WRITE_API = (() => {
     return respondOk('trashMessage', dryRun, { messageId: params.messageId, inTrashBefore: before, inTrashAfter: message.isInTrash() });
   }
 
-  /**
-   * sendDraft — send one existing draft, unmodified since it was armed (#74).
-   *
-   * Gmail's scheduled send cannot be created through any API, so the timer
-   * lives outside Gmail (a systemd timer on the server) and calls this when
-   * the hour arrives. Two things make that safe to leave unattended:
-   *
-   *   - the same gate as sendReplyAll. A draft to anyone outside
-   *     AUTOSEND_ALLOWLIST is refused, so this cannot reach the list until
-   *     someone widens that property on purpose.
-   *   - sha256 of the HTML body, taken when a human armed it. An edit after
-   *     arming is a send nobody approved; a mismatch refuses, and the beat
-   *     quietly not going out is the failure in the right direction.
-   *
-   * Safe to call twice: a sent draft is no longer a draft, so the second call
-   * finds nothing. That matters because /exec loses responses (#54) and a
-   * caller cannot tell a lost reply from a lost request.
-   */
+  // sendDraft: sends one existing draft. Same gate as sendReplyAll, so a draft
+  // to anyone outside AUTOSEND_ALLOWLIST is refused; a sha256 mismatch (edited
+  // after arming) is refused. Safe to call twice: a sent draft is no longer a draft.
   function primSendDraft(params, dryRun) {
     if (!params.messageId) return respondBad('sendDraft requires a messageId.');
     if (!params.sha256) return respondBad('sendDraft requires sha256 of the html body it was armed with.');
@@ -460,11 +226,7 @@ const WRITE_API = (() => {
     return respondOk('sendDraft', dryRun, { messageId: params.messageId, to: ctx.from, subject: ctx.subject, sent: true });
   }
 
-  /**
-   * openLoop / closeLoop / appendRecord (#84) -- rows in the private Loops and
-   * Record tabs. No Gmail call, so no send guardrail applies; the only gate is
-   * the token. `sensitive` is strictBool like dryRun.
-   */
+  // No Gmail call, so the only gate is the token.
   function primOpenLoop(params, dryRun) {
     if (!params.owner || !params.ask) return respondBad('openLoop requires owner and ask.');
     if (AUDIENCES.indexOf(params.audience) === -1) return respondBad('audience must be one of: ' + AUDIENCES.join(', '));
@@ -519,31 +281,9 @@ const WRITE_API = (() => {
     appendRecord: primAppendRecord,
   };
 
-  /**
-   * readThread — the one READ on this endpoint (#35). It reads and mutates
-   * nothing, so dryRun is meaningless and ignored.
-   *
-   * Why it is here and not on ReadApi, which is the read endpoint: a thread's
-   * message bodies are more sensitive than an archived row, and ReadApi is a
-   * doGet whose token rides in a query string — into server logs, browser
-   * history and /proc. This endpoint is POST-only precisely so a bare link or
-   * a prefetch cannot reach it, and its token is the one already treated as
-   * higher-trust (#38). Nothing about the read wants a URL.
-   *
-   * It exists because a thread is sometimes the only copy. A director sending
-   * under the kreweofvaporwave@ alias from their own mailbox leaves the Sent
-   * copy in THAT mailbox, never the krewe's, and mail already read never
-   * reaches the Messages tab once the triage trigger stops — as it has since
-   * 2026-07-18. getMessages() returns the whole thread regardless of read
-   * state, which is the point: unread replies were already findable, the root
-   * message was not.
-   *
-   * html=true adds each message's getBody(). `body` is NOT the message: for
-   * anything composed or edited in the Gmail UI it is Gmail's text/plain
-   * alternative, hard-wrapped near 72 columns with bold flattened to
-   * *asterisks*. Re-drafting from it bakes Gmail's wrap in as if the author
-   * had typed it (#78). Anything that will be re-posted reads html.
-   */
+  // readThread: mutates nothing. On this POST-only endpoint, not ReadApi, so a
+  // thread body is not reachable by a URL. html=true adds getBody(); `body` is
+  // Gmail's hard-wrapped text/plain alternative, so a re-draft reads html.
   function readThread(params) {
     const thread = requireThread(params.threadId);
     const withHtml = params.html === 'true';
@@ -559,18 +299,7 @@ const WRITE_API = (() => {
     return { status: 200, body: { ok: true, action: 'readThread', threadId: params.threadId, count: messages.length, messages } };
   }
 
-  /**
-   * readInbox — Gmail search, the other half of #35. readThread can only
-   * answer about a thread whose id you already hold, which is useless for
-   * "is anything scheduled" questions: the thread nobody has seen is exactly
-   * the one with no id to pass. This runs a Gmail query and returns thread
-   * IDENTITY plus a short snippet — not full bodies. Follow up with
-   * readThread on the one that matters, so a broad search cannot become a
-   * bulk export of the mailbox in one call.
-   *
-   * Default query is `in:inbox`; pass q for anything else, using Gmail's own
-   * search syntax. Mutates nothing, calls no model, reads no sheet.
-   */
+  // Identity plus a snippet, not bodies, so a broad query cannot export the mailbox.
   function readInbox(params) {
     const query = params.q ? String(params.q) : 'in:inbox';
     const raw = parseInt(params.limit, 10);
@@ -607,22 +336,15 @@ const WRITE_API = (() => {
       return { status: 400, body: { ok: false, error: String(err.message) } };
     }
 
-    // Reads (#35): no mutation, no model call, no kill switch — there is
-    // nothing for one to gate. Checked before the mutating dispatch so a read
-    // can never fall through into it.
+    // Reads: checked before the mutating dispatch so a read can never fall through into it.
     if (READS[action]) {
       return READS[action](params);
     }
 
-    // Execute-only primitives (#36): the brain POSTs finished text, these enact
-    // one Gmail mutation. Each handler validates its own params and returns a
-    // fully-formed { status, body } (including its own refusals).
     if (PRIMITIVES[action]) {
       return PRIMITIVES[action](params, dryRun);
     }
 
-    // Legacy trigger-actions — judgment runs in Apps Script. Kept until the
-    // tier cutovers (#42/#43) and removed at #46. Not the target topology.
     const fn = ACTIONS[action];
     if (!fn) {
       const known = Object.keys(READS).concat(Object.keys(PRIMITIVES), Object.keys(ACTIONS)).join(', ');

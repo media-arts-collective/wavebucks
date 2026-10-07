@@ -5,37 +5,6 @@
  *
  *   node aedile/analysis/headsup-form.mjs            # the report
  *   node aedile/analysis/headsup-form.mjs --block    # the prompt block it emits
- *
- * Zach, 2026-09-26: "so we're going to fix heads up today using actual statistical
- * measures, triple checked, three different ways".
- *
- * Why three. AEDILE_CONTEXT.headsup.md asserted a form in prose and was wrong twice
- * in one session in the same direction: it called both beats "terse" (the Sunday
- * gathering's day-before message is a median 134 words, middle half 52 to 279) and
- * said numbering "is NOT a lock-in trait" (44% of them are numbered, CI [25, 66]).
- * Both errors came from generalising one population to another.
- *
- * The same trap caught the summary that prompted this file: reading two specimens
- * by hand produced "each item carries its own time range" and "Abe names people in
- * nearly every bump", which measure 22% and 6%. Two documents and one pair of eyes
- * all failed the same way, so no property gets encoded on a single estimate.
- *
- * The three ways are deliberately different KINDS of check, not three flavours of
- * the same one:
- *
- *   A. POOL          the target population: Sunday meetings, lead 0-1 day, pre-2025.
- *   B. NEIGHBOUR     a differently-drawn population -- every pre-2025 announcement
- *                    at lead 0-1 day, Sunday or not, meeting or not. If a property
- *                    is about the BEAT it survives here; if it only holds for A it
- *                    is about the event type, and saying so matters.
- *   C. INTERVAL      Wilson 95% on A. n=18 makes some rates unlearnable, and a
- *                    width of +/-20 points is a fact about the rule, not a footnote.
- *
- * A property is ESTABLISHED when A and B agree inside A's interval. It is
- * EVENT-SPECIFIC when they disagree and A is the relevant one. It is UNDERPOWERED
- * when the interval spans the decision (roughly, contains 50%), and an
- * underpowered property must not become an instruction -- at best it becomes a
- * dealt probability, which is what devices.mjs is for.
  */
 
 import {
@@ -43,13 +12,11 @@ import {
   isFullBody,
 } from './corpus.mjs';
 
-const ERA_UNTIL = 2024;   // Abe. See corpus.mjs: one account, two authors.
+const ERA_UNTIL = 2024;   // Abe.
 
 // --- the three pools --------------------------------------------------------
 
-// Snippets excluded: 28% of the corpus is a ~101-char Google Groups preview, and two
-// of them were in this pool, holding the length target at 134 words when the full
-// bodies give 173. See isFullBody in corpus.mjs for the histogram.
+// Snippets excluded: a preview is short by construction and biases length down.
 const all = load({ until: ERA_UNTIL }).filter(isFullBody);
 const anns = all.filter(m => isAnnouncement(m.body));
 
@@ -67,9 +34,7 @@ const NEIGHBOUR = withLead.filter(x => x.lead >= 0 && x.lead <= 1);
 // --- properties -------------------------------------------------------------
 
 const GREET_A = b => /^\s*(hi|hello|hey|hiya|yo|good (morning|evening|afternoon)|greetings|dear|friends|happy|ok|okay)\b/i.test(b);
-// A second, independent operationalisation: a short opening line that is not a
-// sentence about the event. Used to check the greeting rate is not an artifact of
-// the word list above.
+// A second, independent detector: the greeting rate must not be an artifact of the word list.
 const GREET_B = b => { const first = b.trim().split('\n')[0] || ''; return first.length <= 24 && !/\d/.test(first); };
 
 const PROPS = {
@@ -104,11 +69,7 @@ for (const [name, fn] of Object.entries(PROPS)) {
   rows.push({ name, A, B, agrees, verdict });
 }
 
-// ONLY WHEN INVOKED. This condition used to be `!argv.includes('--block')` with no check
-// that the file was the entry point, so ANY import printed the whole report: `redige.mjs`
-// imports `formBlock`/`measuredRates` directly, so every generator run emitted this
-// measurement to stdout ahead of its own output, and so did every test whose import chain
-// reached here. Same class as judge.mjs's unguarded CLI (#22).
+// ONLY WHEN INVOKED: `redige.mjs` imports this file, and an import must not print.
 const INVOKED = !!process.argv[1] && process.argv[1].endsWith('headsup-form.mjs');
 if (INVOKED && !process.argv.includes('--block')) {
   console.log(`era: <=${ERA_UNTIL} (Abe)   operator messages: ${all.length}   announcements: ${anns.length}`);
@@ -139,18 +100,7 @@ if (INVOKED && !process.argv.includes('--block')) {
 }
 
 /** The device rates for this genre, measured. Exported so devices.mjs does not have
- *  to carry them as literals.
- *
- *  They WERE literals: `GENRE_P = { greeting: 0.67, numberedList: 0.44, ... }`, typed
- *  into devices.mjs by reading this file's output and rounding. Correct on the day
- *  and a snapshot forever after -- the same defect as a prose prompt, one indirection
- *  removed. A re-scrape of the corpus is in progress in another worktree, and it
- *  would have updated formBlock() while leaving those four numbers frozen and
- *  nothing would have failed.
- *
- *  Only rates that were re-measured on this subpool are returned. A device absent
- *  here keeps the 400-4000 char pool's value in devices.mjs, which is a known
- *  approximation rather than a silent one. */
+ *  to carry them as literals. A device absent here keeps its value in devices.mjs. */
 export function measuredRates() {
   const get = n => rows.find(r => r.name === n);
   return {
@@ -163,9 +113,7 @@ export function measuredRates() {
 
 // --- the emitted prompt block ----------------------------------------------
 
-/** The form section, computed. This replaces the hand-written Form rules in
- *  AEDILE_CONTEXT.headsup.md: those were a snapshot, and the snapshot was wrong.
- *  A number here cannot drift from the corpus because it is read from it. */
+/** The form section, computed: a number here cannot drift from the corpus. */
 export function formBlock() {
   const wA = POOL.map(x => words(x.m.body));
   const sorted = [...wA].sort((x, y) => x - y);
@@ -179,21 +127,11 @@ export function formBlock() {
     `about a Sunday gathering, up to ${ERA_UNTIL}. Percentages are of those messages.`,
     '');
 
-  // The median is the TARGET. An earlier version of this block offered the
-  // interquartile range as "real latitude", which is how a 55-word draft got
-  // written and posted against a 134-word norm: a spread quoted as permission.
   const itemLens = POOL.flatMap(x => x.m.body.split(/(?=(?:^|\n)\s*-?\d+\.\s)/)
     .filter(t => /^\s*-?\d+\.\s/.test(t)).map(t => words(t)));
   const paras = POOL.map(x => x.m.body.split(/\n\s*\n/).filter(t => t.trim()).length);
-  // Computed, not typed. "Only 3 of 18 first lines contain a number" was a literal in
-  // this function -- a hand-copied count inside the very block written to stop numbers
-  // being hand-copied, and it went stale the moment the pool changed size.
   const digitsFirst = POOL.filter(x => /\d/.test(x.m.body.trim().split('\n')[0])).length;
-  // Both directions matter and they were in tension. "The target, not a floor" was
-  // written to stop 55-word drafts; then the truncation turned out to be strongly
-  // length-biased, which makes the measured median a LOWER BOUND on the real one. So
-  // the instruction is now: at least this, and the truth is higher. Saying only
-  // "target" would have capped the generator at a figure known to be too low.
+  // The measured median is a LOWER BOUND: the truncation is length-biased.
   say.push(`- **Write at least ${median(wA)} words, and longer is closer to right.** Half of these`,
     `  messages fall between ${q1} and ${q3} words. ${median(wA)} is a FLOOR, not a centre: about`,
     '  a third of the archive survives only as ~100-character previews, the truncation hit',
@@ -207,14 +145,8 @@ export function formBlock() {
     `- **Do not open with digits.** Only ${digitsFirst} of ${POOL.length} first lines contain a`,
     '  number. The opening is a greeting or a short framing line; logistics follow it.');
 
-  // Phrasing follows the RATE, not the verdict. A well-established 6% is still a
-  // reason NOT to do something, and an earlier version of this function printed
-  // "Name the people involved" as a bold instruction off a 6% rate because it
-  // confused "we are confident about this number" with "the number is high".
-  //
-  // Devices dealt in devices.mjs (greeting, numbering, ALL-CAPS, questions) are
-  // deliberately absent: they are coin-flips, the dealer already draws them at these
-  // same measured rates, and instructing on them here would fight the hand.
+  // Phrasing follows the RATE, not the verdict: a well-established low rate is a
+  // reason NOT to do something. Devices dealt in devices.mjs are deliberately absent.
   const band = (name, high, mid, low) => {
     const r = get(name);
     if (!r) return;

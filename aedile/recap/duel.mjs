@@ -1,35 +1,11 @@
 #!/usr/bin/env node
-/**
- * duel.mjs -- build a burst of real-vs-generated pairs for the voice duel.
- *
- *   ./duel.mjs [--n 12] [--out pairs.json] [--used .duel-used.json] [--seed 7]
- *
- * The generator has never been measured against the voice it claims to write
- * in. checks.mjs grades truthfulness -- invented names, invented figures,
- * swallowed uncertainty -- and nothing grades voice. This produces the evidence:
- * a real Abe email and a generated one, side by side, same facts, and a human
- * says which is which. Indistinguishable means the human is right half the time.
- *
- * Two steps per pair, because a pair has to be content-matched:
- *
- *   A. de-voice   the real email -> bare factual bullets, no phrasing kept.
- *   B. regenerate those bullets through the SAME prompt redige.mjs builds.
- *
- * Step A is the load-bearing one. If it leaks Abe's phrasing, step B echoes it
- * back and the duel is rigged in the generator's favour -- so the prompt is
- * written to be aggressive and every pair is checked for shared 6-word runs
- * before it is allowed into the burst.
- *
- * This IMPORTS redige.mjs rather than shelling out to it. Shelling out hits
- * four separate walls: redige exits 6 on any blocking finding even without
- * --post (and the strict invented-name/figure checks make that the common
- * case, so a loop dies mid-burst); its default --out path is derived from the
- * input, so every run in a loop overwrites the last; `claude -p` can hang on a
- * first-run trust prompt with no timeout; and its 500-char input floor rejects
- * step A's bullets. Importing also means one copy of the prompt assembly --
- * Context.js already drifted from its mirror once and broke draftRecap
- * silently, and a third copy is that bug queued up again.
- */
+// duel.mjs -- build a burst of real-vs-generated pairs for the voice duel.
+//
+//   ./duel.mjs [--n 12] [--out pairs.json] [--used .duel-used.json] [--seed 7]
+//
+// Per pair: (A) de-voice the real email to bare factual bullets, (B) regenerate
+// those through the same prompt redige.mjs builds. Imports redige.mjs rather
+// than shelling out, so there is one copy of the prompt assembly.
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -44,17 +20,13 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const VAULT = process.env.KREWE_VAULT
   || '/srv/vaporwave-reports/obsidian-vault/mailing-list-archive';
 
-/** The krewe's own account. 480 of the archive's 1099 messages; the voice the
- *  list has read for a decade, and the one aedile is trying to continue. */
+// The krewe's own account.
 const MS_ACCOUNT = 'kreweofvaporwave@gmail.com';
 
-/** Below 400 characters there is no prose to judge -- much of the archive is
- *  `6:30, 4501 N Galvez Pizza & Beer`. Above 4000 is a different reading task. */
+// Below MIN there is no prose to judge; above MAX is a different reading task.
 const MIN_CHARS = 400, MAX_CHARS = 4000;
 
-/** The two threads hardcoded as few-shot examples in redige.mjs. The generator
- *  has them verbatim in its prompt; duelling against one is not a test. The
- *  sign-off filter below already excludes both, this is belt and braces. */
+// The threads hardcoded as few-shot examples in redige.mjs: duelling against one is not a test.
 const FEWSHOT_URLS = ['PpYQ3C6toiQ', 'IO3RQJWWafk'];
 
 /** Where the burst data is spliced into the committed template. */
@@ -66,13 +38,8 @@ const idOf = body => createHash('sha1').update(body).digest('hex').slice(0, 10);
 
 // --- the pool ----------------------------------------------------------------
 
-/** MS-authored, long enough to judge, and ending in `<3` + initials.
- *
- *  That last filter is load-bearing rather than fussy: normalize.mjs keeps the
- *  `<3` and strips only the initials, because the archive signs `<3 MS` and
- *  checks.mjs makes the generator sign `<3 SM` -- two characters that would
- *  otherwise decide every round. Keeping the `<3` preserves a real part of the
- *  register, and is only safe if every specimen has one to keep. */
+// MS-authored, long enough to judge, and ending in `<3` + initials: normalize.mjs
+// keeps the `<3` and strips the initials, which is only safe if every specimen has one.
 function pool() {
   const path = join(VAULT, 'messages.jsonl');
   if (!existsSync(path)) die(`no corpus at ${path} (set KREWE_VAULT)`, 3);
@@ -132,21 +99,8 @@ put together and what order they put it in, must still be there.
 
 Output the bullets and nothing else.`;
 
-/** Verbatim word-runs the generated email shares with the real one.
- *
- *  Measured on the GENERATED BODY, not on the intermediate notes: what matters
- *  is whether Abe's phrasing reaches the reader, and one of the first three
- *  pairs had zero overlap in its notes and eight in its email. The notes are
- *  not the channel.
- *
- *  Ten words, not six, and that is measured rather than chosen. A
- *  content-matched pair GUARANTEES some overlap -- both texts describe the
- *  same facts in ordinary English, so `set up the led array on the canal` and
- *  `92,000 lumen gobo projectors to integrate into` show up on both sides
- *  because there is no other way to say them. Across the first burst the
- *  longest shared run was nine words and every one of them was fact-carrying;
- *  at ten the overlap was zero on every pair. So ten catches a lifted sentence
- *  and stops flagging the design working correctly. */
+// Verbatim word-runs the generated body shares with the real one. The default n
+// is long because a content-matched pair shares shorter fact-carrying runs by construction.
 export function leaks(source, text, n = 10) {
   const grams = s => {
     const w = String(s).toLowerCase().match(/[a-z0-9']+/g) || [];
@@ -163,37 +117,20 @@ export function leaks(source, text, n = 10) {
 const STOP = new Set(['a', 'an', 'the', 'of', 'in', 'on', 'at', 'to', 'and', 'or',
   'for', 'with', 'is', 'are', 'be', 'will', 'we', 'our', 'it', 'this', 'that',
   'from', 'by', 'as', 'up', 'out', 'over', 'into', 'there', 'their', 'some',
-  // Connectives the de-voicing strips and grammar puts straight back. `both`
-  // cost a false positive on its own: the notes said "emails on Mailchimp and
-  // Google Groups until end of month" and the generated line said "on both
-  // Mailchimp and Google Groups until the end of the month", which is the only
-  // way to write it once you have the fact.
+  // Connectives the de-voicing strips and grammar puts straight back.
   'both', 'until', 'then', 'after', 'before', 'all', 'any', 'each', 'so',
   'but', 'if', 'when', 'while', 'have', 'has', 'had', 'been', 'was', 'were']);
 
 const content = s => (String(s).toLowerCase().match(/[a-z0-9']+/g) || [])
   .filter(w => !STOP.has(w));
 
-/** Did the notes already carry this run's CONTENT?
- *
- *  The generator only ever sees the notes, so it cannot lift anything from the
- *  real email except through them. When the notes say `hang clip lights in
- *  rafters of Brake Tag Station` and the generator writes `hang clip lights in
- *  the rafters of the Brake Tag Station`, it has restored the articles and
- *  landed on Abe's exact sentence -- because there is no other way to write
- *  it. Comparing with stopwords in, that reads as a ten-word lift; comparing
- *  content words only, it is plainly a preserved fact.
- *
- *  Only a run the notes did NOT carry is worth a human's attention. */
+// Did the notes already carry this run's content? The generator only sees the
+// notes, so a run matching them once stopwords are dropped is a preserved fact.
 export const carriedByNotes = (run, notes) =>
   content(notes).join(' ').includes(content(run).join(' '));
 
-/** Structural units: a blank-line block, or each list item inside one.
- *
- *  The witness for step A keeping the original's shape. De-voicing used to sort
- *  facts into a taxonomy, so eleven lumpy paragraphs arrived as six tidy topics
- *  and the generator wrote a tidy email because it was handed a tidy plan. If
- *  the notes track the source's unit count, the lumping survived. */
+// Structural units: a blank-line block, or each list item inside one. The
+// witness that step A kept the original's shape.
 export const units = s => String(s).split(/\n\s*\n/)
   .flatMap(b => {
     const items = b.split('\n').filter(l => /^\s*(?:[-*\u2022]|\d+[.)])\s+/.test(l));
@@ -206,11 +143,8 @@ export const units = s => String(s).split(/\n\s*\n/)
 async function buildPair(specimen, systemPrompt, seed) {
   const notes = (await callModelAsync(DEVOICE_PROMPT, specimen.body)).trim();
 
-  // The shipping prompt, plus one addendum: the target length. A systematic
-  // length gap is a tell with nothing to do with voice, and the generator has
-  // no other way to know how long this one should be. Nothing else is added --
-  // the point is to test the prompt the product actually uses.
-  // Seeded on the specimen so a burst reproduces its hands exactly from --seed.
+  // The shipping prompt plus the target length: a length gap is a tell unrelated to voice.
+  // Seeded on the specimen so a burst reproduces its hands from --seed.
   const hand = dealDevices(`${seed}:${specimen.id}`);
   const flourish = dealFlourish(`${seed}:${specimen.id}`);
   const typo = dealTypo(`${seed}:${specimen.id}`);
@@ -243,18 +177,13 @@ async function buildPair(specimen, systemPrompt, seed) {
 }
 
 
-/** Fill the committed template with a burst and write a playable page.
- *
- *  The page is generated, never committed: it carries verbatim private
- *  messages by named krewe members and wavebucks is a public repo. duel.html
- *  in the tree stays an empty template. */
+// Fill the template with a burst and write a playable page. Generated, never
+// committed: it carries verbatim private messages and this repo is public.
 function writePage(pairs, seed, out) {
   const tpl = readFileSync(join(HERE, 'duel.html'), 'utf8');
   if (!tpl.includes(PAGE_SLOT)) die('duel.html has no injection point', 4);
-  // `<` is escaped because the payload is spliced INSIDE a <script> block: one
-  // `</script>` anywhere in a fifteen-year archive would end the script early
-  // and render the bench blank with the rest of the email as loose text.
-  // `\u003c` is valid in a JS string and decodes back to `<`, so `<3` survives.
+  // `<` is escaped because the payload is spliced inside a <script> block;
+  // `<` decodes back to `<`, so `<3` survives.
   const payload = JSON.stringify({ seed, pairs: pairs.map(p => ({
     id: p.id, date: p.date, real: p.real, ai: p.ai,
   })) }).replace(/</g, '\\u003c');
@@ -279,8 +208,7 @@ async function main(argv) {
     process.exit(2);
   }
 
-  // Rebuild a page from a burst already on disk -- after a template edit, or
-  // when the burst was built by an older copy of this file. No model calls.
+  // Rebuild a page from a burst already on disk. No model calls.
   const from = arg(args, '--from', null);
   if (from) {
     const burst = JSON.parse(readFileSync(from, 'utf8'));
@@ -309,10 +237,7 @@ async function main(argv) {
   const systemPrompt = buildSystemPrompt(vault);
   console.error(`-- vault: ${Object.keys(vault.motifs).length} motifs, ${vault.examples.length} examples, seed ${seed}, ${jobs} at a time`);
 
-  // A bounded pool, not a serial loop. Each pair is two calls of forty to
-  // sixty seconds and the pairs do not depend on each other, so running them
-  // one at a time cost about twenty-five minutes a burst for no reason. Only
-  // the two steps INSIDE a pair are ordered.
+  // A bounded pool: pairs are independent; only the two steps inside a pair are ordered.
   const done = new Array(take.length).fill(null);
   let next = 0, finished = 0;
 
@@ -334,7 +259,7 @@ async function main(argv) {
           + `  units ${pair.units.real}/${pair.units.notes}/${pair.units.ai}`
           + (pair.unexplained.length ? `  UNEXPLAINED:${pair.unexplained.length}` : ''));
       } catch (err) {
-        // One specimen dying should cost one specimen. It used to end the burst.
+        // One specimen dying costs one specimen.
         finished++;
         console.error(`-- [${finished}/${take.length}] ${specimen.id} FAILED: ${String(err.message || err).split('\n')[0]}`);
       }
@@ -353,8 +278,7 @@ async function main(argv) {
   // Only what actually produced a pair; a failed specimen returns to the pool.
   writeFileSync(usedPath, JSON.stringify([...used, ...pairs.map(p => p.id)], null, 2));
 
-  // The burst report. Every one of these is a way the game can be decided by
-  // the harness instead of the writing, so it is printed before anyone plays.
+  // The burst report: ways the game can be decided by the harness instead of the writing.
   const raggedAi = pairs.filter(p => isRagged(p.ai)).length;
   const raggedReal = pairs.filter(p => isRagged(p.real)).length;
   const skewed = pairs.filter(p => {
@@ -366,9 +290,8 @@ async function main(argv) {
 
   console.error(`\n-- burst: ${pairs.length} pairs -> ${out}`);
   console.error(`-- ragged spacing: real ${raggedReal}/${pairs.length}, generated ${raggedAi}/${pairs.length}`);
-  // Step A's fidelity, reported before anyone plays: if the notes flatten the
-  // source's lumping the generated email cannot get it back, and no device
-  // dealt afterwards reaches the structure.
+  // Step A's fidelity: if the notes flatten the source's lumping, the generated
+  // email cannot get it back.
   const withUnits = pairs.filter(p => p.units);
   if (withUnits.length) {
     const mean = f => (withUnits.reduce((a, p) => a + f(p), 0) / withUnits.length).toFixed(1);

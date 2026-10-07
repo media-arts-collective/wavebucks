@@ -1,12 +1,8 @@
-/**
- * dates.test.mjs -- the calendar shared by `weekday-mismatch` and `dateBlock`.
- *
- *   node --test aedile/recap/dates.test.mjs
- *
- * No corpus, no network. Every case is a real string from the 2026-09-27 session,
- * because the two bugs this file exists to pin were both found by rendering the
- * block against the real notes and counting what came out, not by reading it.
- */
+// dates.test.mjs -- the calendar shared by `weekday-mismatch` and `dateBlock`.
+//
+//   node --test aedile/recap/dates.test.mjs
+//
+// No corpus, no network.
 
 import test from 'node:test';
 import assert from 'node:assert';
@@ -33,11 +29,7 @@ test('a 31st of a 30-day month resolves to nothing, not to the 1st of the next',
   assert.equal(resolve(3, 31, ASOF), null);      // April 31
 });
 
-// THE BUG. "New Marigny Theater 11/25" -- `Theater 11` matched a `[A-Za-z]{3,9}`
-// month branch, resolved to nothing, and consumed the text, so the scan resumed at
-// "/25" and the date vanished. Reordering the alternation did NOT fix it: order
-// only decides between branches at the same start position, and `Theater` starts
-// earlier. Only refusing to match a non-month does.
+// "Theater 11/25": a non-month word must not match the month branch and consume the date.
 test('a word before a number does not swallow an M/D date', () => {
   const got = datesIn('New Marigny Theater 11/25 or 11/29 ask', ASOF).map(iso);
   assert.deepEqual(got, ['2026-11-25', '2026-11-29']);
@@ -64,7 +56,6 @@ test('the resolved weekdays are the real ones', () => {
 });
 
 test('a wrong weekday is reported with the right one', () => {
-  // The draft's lead item, three generations running, in capitals.
   const [p] = weekdayPairs('LASER HARP INTEGRATION DAY IS SATURDAY OCTOBER 11TH', ASOF);
   assert.equal(p.claimed, 'saturday');
   assert.equal(p.actual, 'sunday');
@@ -94,9 +85,8 @@ test('times keep the notes own spelling', () => {
 test('the block states each date, its weekday, and the times verbatim', () => {
   const b = dateBlock('* Laser harp integration day Oct. 11th\n  * food at 1, meeting a 3', ASOF);
   assert.match(b, /2026-10-11 is a SUNDAY/);
-  // Assert on the times LINE, not the whole block: the instruction below it quotes
-  // "3pm" on purpose, as the counter-example. A whole-block /3pm/ assertion fails
-  // on the block's own teaching -- which is what the first version of this test did.
+  // Assert on the times line, not the whole block: the instruction below it
+  // quotes "3pm" on purpose, as the counter-example.
   const times = b.split('\n').find(l => l.startsWith("Times, in the notes' own spelling"));
   assert.match(times, /meeting a 3/);
   assert.doesNotMatch(times, /3pm/);       // the figure invented-figure blocked
@@ -106,9 +96,7 @@ test('an input with no date and no time adds nothing to the prompt', () => {
   assert.equal(dateBlock('Solder pins on the Pis and DACs. Partnerships. Outreach.', ASOF), '');
 });
 
-// The notes say "Oct 14th", the dealer instructs "include the calendar date as
-// M/D", the draft writes "10/14" -- one day, no shared substring, and
-// invented-figure blocked the subject the dealer had asked for.
+// The notes say "Oct 14th" and the draft writes "10/14": one day, no shared substring.
 test('a date restated as M/D is forgiven when the notes name that day', () => {
   const notes = '* Next Wing Wednesday Oct 14th\n* Rapid Rewards Brunch: Sunday Oct 18th';
   const got = dateNumerals('wings 10/14, brunch 10/18', notes, ASOF);

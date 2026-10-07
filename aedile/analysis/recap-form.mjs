@@ -5,32 +5,13 @@
  *
  *   node aedile/analysis/recap-form.mjs            # the report
  *   node aedile/analysis/recap-form.mjs --block    # the prompt block it emits
- *
- * WHY THIS EXISTS. `analysis/headsup-form.mjs` computes the heads-up's form every
- * run, and `redige.mjs` appends it -- but only for `--genre headsup`. A recap got
- * the two quoted example recaps and the prose in AEDILE_CONTEXT.recap.md, and
- * nothing that measured anything about its shape. Zach, 2026-09-27, on a draft
- * carrying seven thin items: "Is this level of detail right? what's measurable in
- * the archive and how is that mechanically wired into the redige script already?"
- * For the recap the answer was: nothing was. The draft ran 7 items at 28 words
- * each against an archive median of 5 items at 42 words, i.e. it was not too
- * detailed, it was too SUBDIVIDED -- a shape no reader had a number for.
- *
- * The property is established the way headsup-form.mjs demands: it holds on both
- * sides of the Abe/successor split (43 words per item to 2024, 42 from 2025), so
- * it is about the genre and not about one author.
- *
- * POOL: operator-authored, signed, 400-4000 characters -- the same pool
- * devices.mjs measured its device rates on, so a figure here and a rate there
- * describe the same population.
  */
 
 import { load, median } from './corpus.mjs';
 
 const MIN = 400, MAX = 4000;
 
-/** `<3 MS` / `, MS` / a trailing `MS` line. Same test cadence.mjs uses: a recap
- *  is a signed message, and an unsigned fragment is usually a snippet. */
+/** `<3 MS` / `, MS` / a trailing `MS` line. An unsigned fragment is usually a snippet. */
 const signed = b => {
   const t = b.trim().slice(-60);
   return /<3/.test(t) || /(^|\n)\s*(MS|SM)\s*$/.test(t) || /,\s*(MS|SM)\s*$/.test(t);
@@ -38,35 +19,21 @@ const signed = b => {
 
 const words = s => s.split(/\s+/).filter(Boolean).length;
 
-/** HAND-CURATED, and the only figure in this file that is not derived. Three
- *  automatic sources were tried on 2026-09-27 and all three are wrong:
- *  `people/` filenames are mangled email local-parts (`Tylernomacorg`,
- *  `Cragmailcom`), so Tyler, Chris, Josh, Kevin, Brandon and Daryll are absent
- *  and the rate came out 5%; the `author` display names survive for only 11
- *  people, giving 3%; and taking every mid-sentence capitalised token gave 47%
- *  by counting Canal, Esplanade, Raspberry and Need as people.
- *
- *  So this list is eyeballed off the mid-sentence frequency table, and the rate
- *  it produces is an UPPER BOUND -- a place or a thing wrongly kept inflates it.
- *  That is good enough for the finding it supports, because the finding survives
- *  all three name sets: 3%, 25% and 47% are each far below the 86-88% the
- *  generator was writing. Direction, not decimal. */
+/** HAND-CURATED, and the only figure in this file that is not derived. The rate
+ *  it produces is an UPPER BOUND -- a place or a thing wrongly kept inflates it. */
 export const NAMES = ['Abraham', 'Adam', 'Alex', 'Asha', 'Ben', 'Brandon', 'Chuck', 'Dan', 'Elliot',
   'Elliott', 'Fran', 'Francesca', 'George', 'Haley', 'Ingrid', 'Izze', 'Jacob', 'Jake', 'Jeff', 'Joe',
   'Joseph', 'Jordan', 'Ken', 'Kevin', 'Laura', 'Lauren', 'Margaret', 'Michael', 'Nick', 'Nora', 'Olin',
   'Paul', 'Phoebe', 'Rich', 'Ryan', 'Seymore', 'Smitty', 'Stephen', 'Telemachus', 'Tricia', 'Tyler',
   'Vanessa', 'Zach'];
 
-/** "Kevin is bringing the projector", "Stephen will email them" -- a name plus a
- *  verb of commitment. This is the shape a recap uses sparingly and a project
- *  tracker uses in every line. */
+/** "Kevin is bringing the projector" -- a name plus a verb of commitment. */
 export const ownerRe = (names = NAMES) => new RegExp(
   `\\b(?:${names.join('|')})\\b(?:\\s+\\w+){0,3}?\\s+(?:is|are|will|has|can|should|needs? to|volunteered|wants|said)\\b`);
 const nameRe = (names = NAMES) => new RegExp(`\\b(?:${names.join('|')})\\b`);
 
-/** The numbered items of a body, split on the numbering itself. Text before the
- *  first number (greeting, preamble) is not an item and is dropped -- counting it
- *  is what turned 42 words per item into 60 on the first pass. */
+/** The numbered items of a body. Text before the first number (greeting, preamble)
+ *  is not an item and is dropped. */
 const itemsOf = b => b.split(/(?=(?:^|\n)\s*-?\d+[.)]\s)/)
   .filter(s => /^\s*-?\d+[.)]\s/.test(s));
 
@@ -91,9 +58,7 @@ export function form(p = pool()) {
     words: median(p.map(words)),
     items: median(numbered.map(a => a.length)),
     wordsPerItem: median(items.map(words)),
-    // The spread, because the median alone instructs uniformity -- and uniformity
-    // is the tell style.mjs ranks (#29). A real recap mixes a one-line item in
-    // with a fat paragraph.
+    // The spread, because the median alone instructs uniformity.
     p25: at(0.25), p75: at(0.75),
     shortPct: Math.round(100 * items.filter(t => words(t) <= 15).length / items.length),
     longPct: Math.round(100 * items.filter(t => words(t) >= 60).length / items.length),
@@ -103,8 +68,7 @@ export function form(p = pool()) {
   };
 }
 
-/** The form section, computed. Mirrors headsup-form.mjs's formBlock(): a number
- *  here cannot drift from the corpus because it is read from it. */
+/** The form section, computed. Mirrors headsup-form.mjs's formBlock(). */
 export function formBlock() {
   const f = form();
   return [
@@ -134,8 +98,7 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   const all = form();
   console.log(`pool: operator, signed, ${MIN}-${MAX} chars`);
   console.log(`  n=${all.n}  numbered ${all.numberedPct}%  words ${all.words}  items ${all.items}  words/item ${all.wordsPerItem}`);
-  // The era split is the A-vs-B check: if the figure survives it, the rule is
-  // about the genre. If it does not, it is about Abe and must not be a rule.
+  // The era split: a figure that does not survive it is about one author, not the genre.
   for (const [label, sel] of [['<=2024 (Abe)', { until: 2024 }], ['>=2025 (successor)', { since: 2025 }]]) {
     const f = form(pool(sel));
     console.log(`  ${label.padEnd(20)} n=${String(f.n).padStart(3)}  words ${f.words}  items ${f.items}  words/item ${f.wordsPerItem}`);

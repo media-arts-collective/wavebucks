@@ -1,18 +1,6 @@
-/**
- * dates.mjs -- one calendar, shared by the check that catches a wrong weekday and
- * the prompt block that stops the model guessing one.
- *
- * `checks.mjs` grew this resolver first, for `weekday-mismatch`. Then
- * `redige.mjs` needed exactly the same arithmetic to TELL the model each date's
- * real weekday. Two copies of a calendar is how a check and a prompt come to
- * disagree about the same draft -- the bug `no-numbering` had against the dealer
- * all along -- so there is one copy and both import it.
- *
- * The rule this file exists to enforce is `leadTimeBlock`'s, generalised:
- * Node does the date arithmetic and the model is handed the answer. It invented
- * "SATURDAY OCTOBER 11TH" in three separate generations on 2026-09-27, in
- * capitals, as a draft's lead item, from notes that said only "Oct. 11th".
- */
+// dates.mjs -- one calendar, shared by the weekday check and the prompt block,
+// so the two cannot disagree. Node does the date arithmetic; the model is
+// handed the answer.
 
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july',
   'august', 'september', 'october', 'november', 'december'];
@@ -26,20 +14,11 @@ export function monthNum(w) {
   return i < 0 ? null : i;
 }
 
-/** A weekday word bound to an explicit date, tight on purpose: the two must be
- *  adjacent, separated only by whitespace, a comma or "the".
- *
- *  "Wednesday is October 14th" does not match, and neither does "Wednesday movie
- *  nights at Lucky's, so November 25th" -- that second one is the false pair a
- *  looser pattern invents, and failing a correct sentence on it would be worse
- *  than missing the rare phrasing. A bare "Wednesday the 25th" has no month and
- *  is not resolvable, so it is left alone rather than guessed at. */
-/** Month names only. `[A-Za-z]{3,9}` was the first attempt and it is actively
- *  harmful: in "New Marigny Theater 11/25", `Theater 11` matched, resolved to
- *  nothing, and CONSUMED the text, so the scan resumed at "/25" and 11/25 vanished
- *  from the block while 11/29 survived. Reordering the alternation does not fix
- *  that -- order only decides between branches at the same start position, and
- *  `Theater` starts earlier. Only refusing to match a non-month does. */
+// A weekday word bound to an explicit date, tight on purpose: adjacent,
+// separated only by whitespace, a comma or "the". A bare "Wednesday the 25th"
+// has no month and is left alone.
+// Month names only: a generic word pattern matches "Theater 11" in "Theater
+// 11/25" and consumes the date.
 const MON = '(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*';
 
 export const WEEKDAY_DATE_PAIR = new RegExp(
@@ -50,12 +29,8 @@ export const WEEKDAY_DATE_PAIR = new RegExp(
 export const DATE_ANY = new RegExp(
   `\\b(\\d{1,2})\\/(\\d{1,2})\\b|\\b${MON}\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b`, 'gi');
 
-/** Month/day plus a reference point -> a real Date, or null.
- *
- *  The year is whichever candidate lands closest to `asOf`, so a December notice
- *  written in November resolves forward and not back into last year. A 31st of a
- *  30-day month is rejected rather than rolled into the next month, which is what
- *  `new Date` would do silently. */
+// Month/day plus a reference point -> a real Date, or null. The year is the
+// candidate closest to `asOf`. A 31st of a 30-day month is rejected, not rolled over.
 export function resolve(mon, day, asOf) {
   if (mon === null || !(mon >= 0 && mon <= 11) || !(day >= 1 && day <= 31)) return null;
   const ref = new Date(asOf);
@@ -99,14 +74,8 @@ export function datesIn(src, asOf) {
 
 const iso = d => d.toISOString().slice(0, 10);
 
-/** The clock times the source writes, normalised only enough to dedupe, and kept
- *  in the source's own spelling.
- *
- *  This exists because "meeting a 3" in the notes became "3pm" in the draft, and
- *  `invented-figure` blocked it -- correctly, since `3pm` is not in the input. The
- *  fix is to show the model the notes' own spelling, not to loosen the check.
- *  Quieting a grounding check to get unblocked is the move that went wrong earlier
- *  in the same session. */
+// The clock times the source writes, in the source's own spelling, so the
+// model is shown them rather than the grounding check being loosened.
 export function timesIn(src) {
   const out = new Set();
   for (const m of String(src || '').matchAll(/\b\d{1,2}(?::\d{2})?\s?(?:am|pm)\b|\b(?:food|meeting|doors|start|show)\s+a?t?\s+(\d{1,2})\b|\bnoon\b/gi)) {
@@ -115,11 +84,8 @@ export function timesIn(src) {
   return [...out];
 }
 
-/** The prompt block. Every date in the input with its real weekday, and every
- *  time in the input as the input spells it.
- *
- *  Returns '' when the input carries no resolvable date, so a notes file about
- *  nothing dated adds no noise to the prompt. */
+// The prompt block: every date in the input with its real weekday, every time
+// as the input spells it. '' when the input carries nothing dated.
 export function dateBlock(src, asOf = new Date()) {
   const dates = datesIn(src, asOf);
   const times = timesIn(src);
@@ -144,18 +110,10 @@ export function dateBlock(src, asOf = new Date()) {
   return lines.join('\n');
 }
 
-/** The numerals a draft may spell differently from the notes, because they belong
- *  to a date that resolves to a day the notes actually name.
- *
- *  "Oct 14th" in the notes and "10/14" in the draft are one day, but they share no
- *  substring, so `invented-figure` called `14` invented and blocked a correct
- *  subject -- one the dealer had ASKED for, having dealt `calDate` and instructed
- *  "include the calendar date as M/D". Resolving both sides and comparing days is
- *  what makes forgiving it safe: a date the notes do not name is not in this set,
- *  so it still blocks.
- *
- *  Returns the numerals in the same normalised form `figures()` produces, so both
- *  the M/D halves and the bare/ordinal day are covered. */
+// The numerals a draft may spell differently from the notes because they belong
+// to a date that resolves to a day the notes name ("Oct 14th" vs "10/14"). A
+// date the notes do not name is not in this set, so it still blocks.
+// Returned in the normalised form `figures()` produces.
 export function dateNumerals(draft, notes, asOf) {
   const nights = new Set(datesIn(notes, asOf).map(d => d.toISOString().slice(0, 10)));
   const out = new Set();

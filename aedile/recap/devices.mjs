@@ -1,43 +1,10 @@
-/**
- * devices.mjs -- deal this email its stylistic devices, because it cannot
- * deal them to itself.
- *
- * The archive uses a parenthetical aside in 62% of messages, asks the room a
- * question in 46%, and numbers from `0` or `-1` in 14%. Telling a generator
- * those numbers does not work, and the failure is not a wording problem:
- *
- *     device            archive   generated
- *     parenthetical         62%        100%
- *     question mark         46%        100%
- *     ALLCAPS run           62%        100%
- *     numbered list         82%        100%
- *     numbers from 0/-1     14%         70%
- *     semicolon             22%         60%
- *
- * Measured over a full burst. Every optional device pinned at or near 100%.
- * The two that landed were the ones where the archive is already almost-always
- * (exclamations, 92%) or almost-never (em-dash, 7%), which is the tell: a
- * per-message instruction can produce 0% or 100% and nothing in between.
- *
- * It cannot. Each email is one independent call with no memory of the other
- * eleven, so it has no way to ration a device across a set it cannot see. A
- * frequency is a fact about a corpus; an instruction has to be about THIS
- * email. The caller knows the frequency and can roll the dice, so it does, and
- * hands the result over as a fact about this one.
- *
- * Only presentation is dealt. Nothing here decides what the email SAYS.
- */
+// devices.mjs -- deal each email its stylistic devices at the archive's rates.
+// One call cannot ration a device across a set it cannot see, so the caller rolls.
+// Only presentation is dealt; nothing here decides what the email says.
 
-/** Measured over the 164 archived messages of 400-4000 characters that are
- *  MS-authored and signed -- the same pool the duel draws from. Re-derive with
- *  `style.mjs` if the pool changes; these are not guesses. */
+// Rates measured on the digest pool; re-derive with `style.mjs` if the pool changes.
 export const DEVICES = [
   {
-    // 16% of archived messages open straight into the substance with no
-    // greeting at all -- "GMORNING, you wonderful, decent, kind, creative,
-    // perfect people, you" is a greeting; "Some quick art guidelines for
-    // digital throws." is not. A reader named the missing greeting twice in one
-    // sitting while picking the real email out of a pair.
     key: 'greeting', p: 0.84,
     yes: '',
     no: 'Open straight into the substance. No greeting line at all.',
@@ -48,21 +15,14 @@ export const DEVICES = [
     no: 'Do NOT number anything. Write it as prose, with a plain label if it needs one ("Clean-up: we will get as much done as we can on Sunday"). About one archived email in five is written this way, and a short one usually is.',
   },
   {
-    // 0.17 not 0.14: this is gated on there being a list at all, and lists
-    // are 82% of messages. 0.17 x 0.82 lands on the archive's 14% overall.
+    // Gated on there being a list, so p is the overall rate divided by numberedList's.
     key: 'zeroIndex', p: 0.17, requires: 'numberedList',
     yes: 'Open the numbering at `0` or `-1` -- there is a preamble item before the agenda proper.',
     no: 'Start the numbering at `1`.',
   },
   {
     key: 'parenthetical', p: 0.62,
-    // "This is where the archive puts its humour" produced "(The tang is
-    // load-bearing.)" on 2026-09-27, which Zach failed on sight. The archive's
-    // asides were then measured: 59% are 20 characters or less, and the
-    // full-sentence ones carry a name and an exclamation ("Joseph is on it!") or a
-    // concrete consequence ("This is also how we will get everyone to leave.").
-    // None is a verdict on the item it follows. An instruction that says only
-    // "humour" gets the register the model already has, so it says which humour.
+    // Says which humour: a bare "humour" gets the register the model already has.
     yes: 'Include a parenthetical aside, somewhere in the middle rather than at the end. This is where the archive puts its humour -- and its humour is a name with an exclamation mark ("Joseph is on it!", "Koi fish building!"), or a concrete consequence of the plan ("This is also how we will get everyone to leave."), or three words ("tomorrow", "aka we walk"). Never a wry verdict ON an item: not "(the tang is load-bearing)", not "(this is doing a lot of work)". Nobody on this list reviews the agenda, they run it.',
     no: 'No parenthetical asides in this one.',
   },
@@ -77,18 +37,13 @@ export const DEVICES = [
     no: 'No ALL-CAPS emphasis in this one.',
   },
   {
-    // Likewise gated on ALL-CAPS being in play at all (62%), so 0.19 x 0.62
-    // reproduces the archive's 12%.
+    // Likewise gated on allCaps.
     key: 'allCapsLine', p: 0.19, requires: 'allCaps',
     yes: 'Put one WHOLE LINE in capitals.',
     no: '',
   },
   {
-    // 29% of the archive, and 0 of 24 generated emails. The largest single gap
-    // the duel has turned up. Two rounds were decided on it outright -- "AI
-    // censored the bondage word", "vulgarity which AI will not voluntarily do".
-    // This is not coarseness added for its own sake; it is the register the
-    // list has actually read for a decade, from the account that runs it.
+    // The register the list has read from this account, not coarseness for its own sake.
     key: 'crude', p: 0.29,
     yes: 'Be blunt where the archive is blunt. It calls things bullshit, tells people who put a child\'s head in the cabinet that they are a fucking idiot, and writes "Butt juices." as a whole sentence. Do not sand this off, and do not reach for a politer word than the one that fits.',
     no: '',
@@ -100,12 +55,8 @@ export const DEVICES = [
   },
 ];
 
-/** A small string-seeded PRNG, so a burst reproduces exactly from its seed and
- *  a specimen always gets the same hand. Not cryptographic and does not need
- *  to be. */
-/** Exported for schedule.mjs, which deals a second bump beat per event at a measured
- *  rate and needs the SAME seeded generator so a schedule is reproducible and
- *  "why did Wednesday only get one?" is answerable after the fact. */
+// String-seeded PRNG so a burst reproduces from its seed. Exported for
+// schedule.mjs, which needs the same generator.
 export function rng(seed) {
   let h = 2166136261 >>> 0;
   for (const ch of String(seed)) {
@@ -120,41 +71,10 @@ export function rng(seed) {
   };
 }
 
-/** Rates that do not survive a change of genre.
- *
- *  Every `p` above was measured on the 400-4000 char digest pool, and
- *  AEDILE_CONTEXT.headsup.md says so in its own text: those rates "do NOT
- *  transfer to the terse heads-up register." Numbering is the one that bites,
- *  because it is dealt at 0.82 and the same spec says numbering "is NOT a
- *  lock-in trait... a single-venue heads-up should not be numbered" (it scales
- *  with length: 14% / 50% / 93% for short / mid / long). Dealing the digest's
- *  hand to a heads-up produced a numbered three-item notice on the genre's first
- *  real run, which `checks.mjs` then warned at: the dealer and the checker
- *  disagreeing about the same genre.
- *
- *  A forced `false` here, rather than a second probability, because these are
- *  not "rarer in this genre", they are wrong in it. The per-beat rates that ARE
- *  probabilities are still hand-set placeholders and stay open in #49. */
-/** Per-genre probability overrides come from the CALLER, measured, not from a
- *  table here.
- *
- *  This was `GENRE_OFF`, devices forced to false on the authority of
- *  AEDILE_CONTEXT.headsup.md's prose. Measured against the 18 day-before Sunday
- *  messages the operator actually sent, that prose was wrong twice:
- *
- *    numbering   headsup.md: "NOT a lock-in trait"        measured 44%  CI[25,66]
- *    questions   the nudge "drops questions"              measured 33%  CI[16,56]
- *
- *  It then became `GENRE_P`, the same four rates as literals typed in here. Also
- *  wrong in kind: a snapshot of a measurement is a snapshot. So `dealDevices` now
- *  takes the rates, `analysis/headsup-form.mjs` computes them, and this file holds
- *  no genre table at all. devices.mjs keeps no corpus dependency either, which is
- *  why the rates are pushed in rather than imported.
- */
+// Per-genre probability overrides come from the caller (`over`), computed by
+// analysis/headsup-form.mjs; this file keeps no genre table and no corpus dependency.
 
-/** Deal one email its hand. `seed` makes it reproducible; omit for a real
- *  recap, where each one should simply differ from the last. `genre` suppresses
- *  devices that belong to another register. */
+// Deal one email its hand. `seed` makes it reproducible; omit for a real recap.
 export function dealDevices(seed, genre, beat, over = {}) {
   const rand = seed === undefined ? Math.random : rng(seed);
   const hand = {};
@@ -165,10 +85,7 @@ export function dealDevices(seed, genre, beat, over = {}) {
   return hand;
 }
 
-/** The hand, as a block to append to the system prompt. Lines with nothing to
- *  say are dropped: "no whole line in capitals" is noise, and a prompt that
- *  lists every device every time is teaching the model that every device is
- *  always in play, which is the habit being corrected. */
+// The hand, as a block to append to the system prompt. Lines with nothing to say are dropped.
 export function devicesBlock(hand, flourish, typo, gap, subject) {
   const lines = DEVICES
     .map(d => (hand[d.key] ? d.yes : d.no))
@@ -194,21 +111,8 @@ export function devicesBlock(hand, flourish, typo, gap, subject) {
   ].join('\n');
 }
 
-/** A flourish is not a device.
- *
- *  Devices are things the archive does OFTEN, and the fix was to deal each at
- *  its rate. Flourishes are things it does RARELY and never the same way twice:
- *  `juuuuuuust`, `<3 <3 <3`, numbering that goes `-1, 0, 0.5`, a nested
- *  asterisk footnote answering its own joke, `really really very much really`.
- *
- *  Measured, 40% of archived messages carry at least one and the generator
- *  managed 17%. But the rate is not the interesting part: no single flourish is
- *  above 11%, so instructing any one of them would fire every time and become a
- *  tell of its own. The variety IS the trait. So one is drawn from the menu,
- *  in roughly two messages in five, and it is a different one each time.
- *
- *  Nothing here is an error. Every entry is something a person chose to write.
- *  Typos are a separate question and deliberately not in this list. */
+// Flourishes are rare and never the same way twice, so at most one is drawn
+// from the menu. Typos are separate and not in this list.
 export const FLOURISHES = [
   'Stretch a word out for emphasis, the way someone says it aloud ("we juuuuuust found out", "sooooo close").',
   'Repeat a word for stress rather than reaching for a stronger one ("we really really very much really need people").',
@@ -228,30 +132,8 @@ export const FLOURISHES = [
 /** How often the archive carries at least one, measured over the pool. */
 export const FLOURISH_RATE = 0.40;
 
-/** The line above the initials. The archive does not always write `<3`.
- *
- *  Census of every MS-signed message in the 400-4000 character window (n=219),
- *  by what sits directly above the initials:
- *
- *      `<3` alone                                   74.0%
- *      a short valence line ("Okay", "More soon!")  10.5%
- *      nothing -- last content line, then MS         7.3%
- *      xo / xoxo / XOXO                              3.7%
- *      Best                                          2.7%
- *      `<3` with words ("<3 you all,", "<3 all of u")1.8%
- *
- *  These rates are NOT from the duel pool. That pool is filtered to `<3 MS`
- *  (`duel.mjs`), so measured there the lead-in is 100% `<3` by construction and
- *  there is nothing to learn. Re-derive from `messages.jsonl` directly.
- *
- *  ONE roll, not two. The multi-heart used to be dealt by its own function
- *  alongside this, which meant a hand could say `<3 <3 <3` and `Best` at once
- *  and hand the model two sign-offs. These are mutually exclusive shapes of a
- *  single line, so they are one weighted draw.
- *
- *  The 1% ceiling on the multi-heart is kept from that earlier measurement: a
- *  reader clocked it as "faked me out with the special signature", and a
- *  signature variant is the most memorable thing in the email. */
+// The line above the initials: one weighted draw over mutually exclusive shapes.
+// Rates are from messages.jsonl, not the duel pool, which is filtered to `<3 MS`.
 export const SIGNOFF_LEAD_INS = [
   // The base prompt already says `<3 SM`, so the common case says nothing.
   { key: 'heart', p: 0.740, say: null },
@@ -275,47 +157,8 @@ export function dealSignoff(seed) {
   return null;  // float slack at the tail lands on the common case
 }
 
-/** Blank-line gap size, drawn per email.
- *
- *  This was the last measured distribution shipped as a fixed instruction:
- *  AEDILE_CONTEXT.recap.md told the generator "THREE blank lines between items,
- *  most of the time", which is the failure this whole file exists to fix. An
- *  instruction that names a default produces it ~100% of the time; a frequency is
- *  a fact about a corpus, so it has to be drawn. Zach, 2026-09-26, on reading a
- *  draft spaced three throughout: "defaulting to 3 spaces as a rule is wrong, it
- *  should be stochastic."
- *
- *  Weights are the archive's measured gaps: 3 at 54%, 2 at 34%, 1 at 11%.
- *
- *  UNVERIFIED that the distribution is a person. #27 measures a step change in
- *  2020 that then held for six years, 97% of gaps quantized to 2/3/4, and gap-4
- *  correlating with what FOLLOWS it -- all of which a compose client or an export
- *  pipeline does and a typist does not. So this reproduces a measured frequency
- *  and asserts nothing about who or what produced it. If #27 resolves against
- *  Abe, the weights change here and nowhere else, which is the point of putting
- *  them in one draw instead of in prose. */
-/** Gap size scales with LENGTH, so it is per genre. Modal gap by message size,
- *  MS-authored, measured 2026-09-26:
- *
- *    0-250    n=160   gap1 42%  gap0 34%  gap2 17%  gap3  8%
- *    250-400  n= 50   gap1 42%  gap2 40%  gap3 18%
- *    400-1000 n= 85   gap3 49%  gap2 27%  gap1 24%
- *    1000-2000 n= 98  gap3 58%  gap2 34%  gap1  8%
- *    2000-4000 n= 72  gap3 76%  gap2 18%  gap1  6%
- *
- *  Monotonic, no discontinuity: the 54/34/11 that AEDILE_CONTEXT.recap.md used to
- *  state as a house default is the 400-4000 DIGEST rate, and it is simply wrong
- *  for a terse notice. 42% of that length band is single-spaced.
- *
- *  A previous version of this comment cited "the hand-written Half Moon heads-up
- *  (2026-09-14, 230 chars)" as the specimen. It was not hand-written: the Log carries
- *  five recap_draft_posted rows for that pair at 2026-09-14T02:29-02:35Z, and this
- *  session had read them before quoting the message as human. Corroborating a dealt
- *  rate with the generator's own output is the loop these rates exist to avoid, so the
- *  specimen is struck and the band statistic, which is measured over the archive,
- *  stands on its own. Dealing 3 to a
- *  heads-up is the numberedList mistake again: a digest rate applied to a register
- *  that does not share it. */
+// Blank-line gap size, drawn per email: a named default gets produced every
+// time. Gap size scales with length, so the weights are per genre.
 export const GAPS = {
   recap:   [{ p: 0.54, n: 3 }, { p: 0.34, n: 2 }, { p: 0.11, n: 1 }],
   headsup: [{ p: 0.42, n: 1 }, { p: 0.40, n: 2 }, { p: 0.18, n: 3 }],
@@ -332,36 +175,13 @@ export function dealGap(seed, genre) {
   return table[0].n;  // float slack at the tail lands on that register's usual gap
 }
 
-/** The subject, dealt as FEATURES at measured rates.
- *
- *  Three versions of this existed before the right one. First six shape templates
- *  with p values I assigned by hand (0.34/0.20/0.16/0.14/0.10/0.06) off seven
- *  subjects picked out of the mailbox because they looked event-shaped. Then the same
- *  templates with a caveat telling the model not to copy their words, added because
- *  the generator lifted "Rapid Rewards Brunch" onto a laser harp build day. Now:
- *  independent draws at rates measured over 33 real human subjects
- *  (analysis/subject-shapes.mjs), with no example text to lift at all.
- *
- *  What the larger sample changed, all against the hand-picked seven:
- *    only 42% of real subjects carry any day/time/date
- *    among those: day word 79%, calendar date 50%, clock time 43%, venue 29%
- *    median length 26 characters, range 8 to 63
- *    0 of 33 begin "N. "
- *  The full "name. Sun. 1/4 @ 1pm, venue" form I had weighted heaviest is 2 of 14.
- *
- *  ERA AND TYPE, since 2026-10-07. Those 33 were the successor era and one pool for
- *  every kind of mail, which is how a recap came out titled like a calendar entry.
- *  The topic scrape finished, so `subjectWeights(genre, beat)` now measures the Abe-era
- *  subjects of THAT message type, read off the bodies they sat on. Zach, 2026-09-29:
- *  "match the abe figures"; 2026-10-07: "should use RNG to deal a subject and be aware
- *  of message type." Nothing here knows the types: it deals whatever `w` describes.
- */
+// The subject, dealt as features at the rates in `w` (from `subjectWeights(genre, beat)`),
+// with no example text to lift. Nothing here knows the message types.
 export function dealSubject(seed, w) {
   if (!w) return '';   // no measured weights pushed in: say nothing about the subject
   const rand = seed === undefined ? Math.random : rng(String(seed) + ':subject');
   const take = p => rand() < (p || 0);
-  // Length is drawn across the middle half of the pool, not pinned to its median: a
-  // generator told "about 28 characters" every time writes 28 characters every time.
+  // Length is drawn across the middle half of the pool, not pinned to its median.
   const lo = w.q1Chars ?? w.medianChars, hi = w.q3Chars ?? w.medianChars;
   const chars = Math.round(lo + rand() * (hi - lo));
   const parts = [];
@@ -396,19 +216,9 @@ export function dealFlourish(seed) {
   return FLOURISHES[Math.floor(rand() * FLOURISHES.length)] || FLOURISHES[0];
 }
 
-/** An uncorrected slip, at the rate the archive has them.
- *
- *  Ruled in by Zach 2026-09-07, having picked the generated email out of a pair
- *  three times in twelve on literal errors: `GRACIUOS`, `t's beautiful`,
- *  `I'd ilke us`. He types fast, does not reread, and never goes back.
- *
- *  This is the one dealt thing that is not simply a style, so it is fenced. A
- *  slip in a date, a time, an address, a dollar figure, a URL or a person's
- *  name is not a typo, it is a factual error in mail a director forwards to
- *  about forty people -- and getting those exactly right is the whole reason
- *  the recap tier is trusted at all. The fence is in the instruction, and
- *  checks.mjs independently fails any figure or name that is not in the input,
- *  so a slip that lands on one is caught rather than sent. */
+// An uncorrected slip, at the archive's rate. Fenced: a slip in a date, time,
+// address, dollar figure, URL or name is a factual error; the fence is in the
+// instruction, and checks.mjs fails any figure or name not in the input.
 export const TYPO_RATE = 0.10;
 
 export const TYPO_INSTRUCTION = [
@@ -422,9 +232,7 @@ export const TYPO_INSTRUCTION = [
   'whole list.',
 ].join('\n');
 
-/** Deal a typo, or not. Seeded separately so it varies independently of the
- *  flourish -- an email can have both, either, or neither, which is what the
- *  archive looks like. */
+// Seeded separately so it varies independently of the flourish.
 export function dealTypo(seed) {
   const rand = seed === undefined ? Math.random : rng(String(seed) + ':typo');
   return rand() < TYPO_RATE ? TYPO_INSTRUCTION : null;

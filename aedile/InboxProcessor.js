@@ -1,56 +1,30 @@
-/**
- * InboxProcessor.js
- * Inbox scanner for Aedile. Looks at recent unread mail, asks Claude
- * whether each message needs a response, and — for most threads — creates
- * a Gmail draft reply rather than sending. The one narrow exception is
- * auto-send: see AUTOSEND_ENABLED_PROPERTY below and the "Draft-only, with
- * one narrow exception" section of aedile/CLAUDE.md. Never marks a message
- * read.
- *
- * Institutional memory comes from MessageLog (the raw mailing-list
- * archive), not a model-derived summary tier: every reviewed message is
- * appended there regardless of the triage outcome, and every triage call
- * gets a rolling window of that raw history alongside the thread under
- * review. See aedile/CLAUDE.md for why this replaced the earlier
- * Threads/Shards consolidation pipeline.
- */
+// InboxProcessor.js -- inbox scanner. Asks Claude whether each unread message
+// needs a response and creates a Gmail draft reply rather than sending. The one
+// narrow exception is auto-send: see AUTOSEND_ENABLED_PROPERTY below and
+// aedile/CLAUDE.md. Never marks a message read.
 
 const AEDILE_REVIEWED_LABEL = 'aedile-reviewed';
-// Dedup is by message ID (Config.isMessageProcessed), not by this label — the label is thread-level
-// and permanent, so filtering the search on it would hide a thread forever after its first review,
-// even once a brand-new unread reply lands on it later. It's applied to threads purely as a visual
-// marker for human eyes in the inbox.
+// Dedup is by message ID, not this label: the label is thread-level and
+// permanent, so filtering on it would hide later replies. A visual marker only.
 const AEDILE_FLAGGED_LABEL = 'aedile-flagged';
-// Applied when the model's decision is "flag" — a thread that needs a director's judgment call.
-// Without this, "flag" would be indistinguishable from "no_action" except in the Log tab.
 const SCAN_QUERY = `in:inbox is:unread newer_than:14d`;
 const MAX_MESSAGES_PER_RUN = 20;
-// How far back MessageLog.getRecentRaw() reaches for each triage call — see
-// aedile/CLAUDE.md for the reasoning (bounded window instead of the full,
-// ever-growing archive, so per-call cost/context stays flat over time).
+// How far back MessageLog.getRecentRaw() reaches per triage call, so per-call context stays flat.
 const MESSAGE_LOG_WINDOW_DAYS = 365;
 
-// Provisional heuristic for AEDILE_SYSTEM_PROMPT_LIST vs. _DM (see
-// Context.js / classifyAudience below): total distinct To+Cc addresses at
-// or below this reads as a direct ask, above it reads as list-broadcast.
-// Recipient count is a blunt signal (doesn't exclude Aedile's own inbox
-// address, so a 1:1 exchange plus the krewe address lands around 2) —
-// expected to be revisited alongside the DM prompt's real content.
+// Provisional: distinct To+Cc addresses at or below this reads as a direct ask,
+// above it as list-broadcast.
 const DM_RECIPIENT_THRESHOLD = 3;
 
 // --- Auto-send exception (see aedile/CLAUDE.md guardrails section) ---
-// Both script properties default to unset/off, so the exception is opt-in
-// and fails closed to draft-only if either is missing.
+// Both script properties default to off, so the exception is opt-in and fails
+// closed to draft-only.
 const AUTOSEND_ENABLED_PROPERTY = 'AUTOSEND_ENABLED';
-// Comma-separated list, set in Project Settings > Script Properties. Each
-// entry is either a full address ("zach@nomac.org") or a "@domain" suffix
-// ("@nomac.org") matching any address on that domain. Must include every
-// address that's expected to appear on an auto-sendable thread, including
-// Aedile's own inbox address — there's no separate self-detection.
+// Comma-separated full addresses or "@domain" suffixes. Must include every
+// address expected on an auto-sendable thread, including Aedile's own inbox
+// address: there is no self-detection.
 const AUTOSEND_ALLOWLIST_PROPERTY = 'AUTOSEND_ALLOWLIST';
-// A second, independent cap on top of MAX_MESSAGES_PER_RUN — auto-send is
-// strictly riskier than drafting (nothing left for a human to catch before
-// it goes out), so it gets its own tighter per-run ceiling.
+// A second, tighter cap: auto-send leaves nothing for a human to catch.
 const MAX_AUTOSEND_PER_RUN = 5;
 
 const InboxProcessor = (function () {
@@ -79,16 +53,9 @@ const InboxProcessor = (function () {
     return allowlist.some(entry => entry.startsWith('@') ? addr.endsWith(entry) : addr === entry);
   }
 
-  /**
-   * Every address (From/To/Cc) across every message in the thread, lowercased
-   * and deduped. This is the FULL historical participant set — deliberately
-   * broader than whatever Gmail's own replyAll()/createDraftReply() would
-   * address a reply to, which only looks at the LAST message. Shared by
-   * isAllowlistEligible (eligibility check) and by reviewMessage/
-   * reviewForBump's send/draft calls (actual recipient completion) so the
-   * two can never silently disagree — see getRecipientCompletion below for
-   * why they used to.
-   */
+  // Every From/To/Cc address across every message, lowercased and deduped: the
+  // full participant set, broader than what replyAll() addresses. Shared by the
+  // eligibility check and recipient completion so the two cannot disagree.
   function getThreadParticipants(thread) {
     const participants = new Set();
     thread.getMessages().forEach(m => {
@@ -99,17 +66,9 @@ const InboxProcessor = (function () {
     return Array.from(participants);
   }
 
-  /**
-   * True only when every participant on the thread (every From/To/Cc
-   * address, across every message) matches AUTOSEND_ALLOWLIST — one
-   * participant outside the allowlist (a third party CC'd in, say)
-   * disables auto-send for the whole thread, falling back to a draft. Also
-   * requires AUTOSEND_ENABLED. Deliberately has NO per-run cap check here —
-   * this is the shared safety boundary (the allowlist itself contains the
-   * blast radius), reused by BumpChecker.js too, which tracks its own
-   * separate per-run cap since it runs on a completely different trigger
-   * schedule than scanInbox.
-   */
+  // True only when every participant on the thread matches AUTOSEND_ALLOWLIST and
+  // AUTOSEND_ENABLED is on; one participant outside it disables auto-send for
+  // the thread. No per-run cap here: BumpChecker.js reuses this and tracks its own.
   function isAllowlistEligible(thread) {
     if (!isAutosendEnabled()) return false;
 
@@ -119,22 +78,9 @@ const InboxProcessor = (function () {
     return getThreadParticipants(thread).every(addr => matchesAllowlist(addr, allowlist));
   }
 
-  /**
-   * CONFIRMED BUG (found 2026-07-22 via a real auto-sent bump that reached
-   * Tyler but never reached Zach): thread.replyAll()/createDraftReply() only
-   * address a reply to the LAST message's From/To/Cc, not the full thread
-   * history — but isAllowlistEligible() evaluates eligibility against every
-   * message in the thread. A thread can pass eligibility on someone who
-   * participated earlier but isn't on the specific last message, and the
-   * actual send/draft then silently excludes them. Fix: always pass the
-   * full aggregated participant set (minus this account's own address, and
-   * minus whatever Gmail will already address it to/cc it to natively) as
-   * an explicit `cc` on every replyAll()/createDraftReply() call, so nobody
-   * who was part of the eligibility check can be silently dropped from the
-   * actual message. Returns a comma-joined string ready for the `cc` option
-   * (Apps Script tolerates duplicate/self addresses in cc, so this doesn't
-   * bother deduping against the native recipients precisely).
-   */
+  // replyAll()/createDraftReply() address only the last message's recipients,
+  // but eligibility covers the whole thread. Pass the full participant set
+  // (minus this account) as an explicit `cc` so nobody is silently dropped.
   function getRecipientCompletion(thread) {
     const self = Session.getEffectiveUser().getEmail().toLowerCase();
     return getThreadParticipants(thread).filter(addr => addr !== self).join(',');
@@ -155,21 +101,9 @@ const InboxProcessor = (function () {
       || _GmailApp.createLabel(AEDILE_FLAGGED_LABEL);
   }
 
-  /**
-   * The LAST bracketed group, not the first (#61). RFC 5322 puts the real
-   * address after the display name, so a display name that itself contains
-   * `<someone@allowlisted>` decided what this returned — and therefore what
-   * getThreadParticipants recorded and isAllowlistEligible compared. Any
-   * sender who can set a display name could present as Zach and make a thread
-   * look fully allowlisted.
-   *
-   * No spam vector: an auto-reply goes back to whoever wrote in. The reason it
-   * matters is coupling. buildUserContent prepends a rolling 365 days of the
-   * private archive to every triage call, classifyAudience sends a
-   * single-recipient thread down the DM prompt (the one told to answer rather
-   * than hedge), and #37's uncapped sendReplyAll is safe only because the
-   * allowlist holds. One parse decided all three.
-   */
+  // The LAST bracketed group, not the first: the real address follows the
+  // display name, so a display name containing `<someone@allowlisted>` must not
+  // decide the allowlist check.
   function extractEmail(header) {
     const matches = String(header).match(/<([^<>]+)>/g);
     const last = matches && matches[matches.length - 1];
@@ -180,12 +114,8 @@ const InboxProcessor = (function () {
     return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
   }
 
-  /**
-   * "dm" (narrow, direct) vs "list" (broadcast) — see DM_RECIPIENT_THRESHOLD
-   * above. Picks which system prompt reviewMessage() uses. Classifies the
-   * message actually under review, not the whole thread, since a thread's
-   * audience can shift message to message.
-   */
+  // "dm" vs "list" (see DM_RECIPIENT_THRESHOLD). Classifies the message under
+  // review, not the whole thread.
   function classifyAudience(msg) {
     const recipients = new Set();
     (msg.getTo() || '').split(',').forEach(a => a.trim() && recipients.add(extractEmail(a)));
@@ -193,13 +123,6 @@ const InboxProcessor = (function () {
     return recipients.size <= DM_RECIPIENT_THRESHOLD ? 'dm' : 'list';
   }
 
-  /**
-   * Renders every message in the thread (oldest first, Gmail's default order)
-   * as a single delimited string, so the model can track an ongoing
-   * back-and-forth instead of judging one message in isolation. The message
-   * actually being reviewed — currentMessageId — is called out explicitly so
-   * the model knows what's new versus historical context.
-   */
   function buildThreadContent(thread, currentMessageId) {
     return thread.getMessages().map((m, i) => {
       const isCurrent = m.getId() === currentMessageId;
@@ -211,22 +134,12 @@ const InboxProcessor = (function () {
     }).join('\n\n');
   }
 
-  /**
-   * Combines the rolling raw mailing-list history with the thread actually
-   * under review into one user-content block. History is oldest-first and
-   * clearly separated from the live thread so the model doesn't confuse
-   * "background" with "the thing to decide on."
-   */
   function buildUserContent(threadContent) {
     const historyBlock = MessageLog.buildHistoryBlock(MESSAGE_LOG_WINDOW_DAYS);
     return `${historyBlock}\n\n${'='.repeat(20)}\n\nTHREAD UNDER REVIEW:\n\n${threadContent}`;
   }
 
-  /**
-   * Config.logEvent wrapped in its own try/catch — one bad write to the
-   * Log tab shouldn't take down the rest of reviewMessage(), and a failure
-   * here is worth seeing in the execution log even though success isn't.
-   */
+  // Config.logEvent in its own try/catch: one bad Log write must not take down reviewMessage().
   function logResult(threadId, messageId, from, subject, action, notes, dryRun) {
     if (dryRun) {
       Logger.log(`[reviewMessage] DRY RUN — would Config.logEvent(${action}): ${notes}`);
@@ -239,11 +152,8 @@ const InboxProcessor = (function () {
     }
   }
 
-  /**
-   * OpenLoops.upsert wrapped the same way as logResult. Fully suppressed in
-   * dry-run — writing a real row here would contaminate OpenLoops.getDue()
-   * on a subsequent real checkBumps() run.
-   */
+  // OpenLoops.upsert wrapped the same way. Suppressed in dry-run: a real row
+  // would contaminate a later real checkBumps().
   function recordOpenLoop(threadId, decision, lastMessageDate, dryRun) {
     if (dryRun) {
       Logger.log(`[reviewMessage] DRY RUN — would OpenLoops.upsert(open=${!!decision.open_loop}, recheckAfterDays=${decision.recheck_after_days})`);
@@ -260,11 +170,6 @@ const InboxProcessor = (function () {
     }
   }
 
-  /**
-   * Requests.append wrapped the same way as logResult/recordOpenLoop — only
-   * called when the triage decision set is_request: true (see Context.js's
-   * "Reporting bugs and features" section).
-   */
   function recordRequest(threadId, messageId, from, decision, dryRun) {
     if (dryRun) {
       Logger.log(`[reviewMessage] DRY RUN — would Requests.append(${decision.request_type}): ${decision.request_summary}`);
@@ -277,17 +182,9 @@ const InboxProcessor = (function () {
     }
   }
 
-  /**
-   * Asks Claude whether this message needs a response and, if so, drafts
-   * one. Draft-only for everyone except threads that pass
-   * isAutosendEligible() — see the constants above and aedile/CLAUDE.md.
-   * Every review is logged regardless of outcome (no_action, draft_reply,
-   * auto_reply, flag, or error), and no single message's failure is
-   * allowed to propagate up and kill the rest of the batch. The message is
-   * appended to MessageLog regardless of the triage outcome — the raw log
-   * is ground truth about what arrived, independent of whether the model
-   * call itself succeeded.
-   */
+  // Reviews one message. Draft-only except threads that pass isAutosendEligible().
+  // Every review is logged, one message's failure never kills the batch, and the
+  // message is appended to MessageLog regardless of the triage outcome.
   function reviewMessage(msg, dryRun) {
     let threadId, messageId, from, subject;
 
@@ -355,26 +252,18 @@ const InboxProcessor = (function () {
     }
   }
 
-  /**
-   * Entry point for the time-driven trigger. Scans up to
-   * MAX_MESSAGES_PER_RUN unread, not-yet-logged messages and logs each one
-   * via reviewMessage(). Labels a thread "aedile-reviewed" only once every
-   * unread message in it has been logged this run or a previous one — a
-   * thread cut off mid-way by the cap is left unlabeled so it's picked up
-   * again next run instead of silently dropped.
-   */
+  // Entry point for the time-driven trigger. A thread is labeled
+  // "aedile-reviewed" only once every unread message in it has been logged; one
+  // cut off by the cap is left unlabeled for the next run.
   function scanUnread(dryRun) {
     if (!isEnabled()) {
       Logger.log('⏸️ Aedile is disabled (Script Property AEDILE_ENABLED is not "true"). Skipping run.');
       return { skipped: 'disabled' };
     }
 
-    // Without this, two overlapping runs — a slow one still in flight when
-    // the next trigger fires, or WriteApi's doPost firing mid-trigger —
-    // would each start from a fresh _autosendCountThisRun of 0, silently
-    // exceeding MAX_AUTOSEND_PER_RUN. The lock is script-wide, so scanInbox
-    // and checkBumps also can't overlap each other; that's deliberate,
-    // since both append to the same Log/OpenLoops/Messages tabs.
+    // Without the lock, overlapping runs would each start _autosendCountThisRun
+    // at 0 and exceed MAX_AUTOSEND_PER_RUN. Script-wide on purpose: scanInbox and
+    // checkBumps append to the same tabs.
     const lock = LockService.getScriptLock();
     if (!lock.tryLock(10000)) {
       Logger.log('⏸️ scanUnread skipped — could not acquire the script lock (another run is still in progress).');
@@ -428,9 +317,6 @@ const InboxProcessor = (function () {
     scanUnread,
     reviewMessage,
     setGmailApp,
-    // Shared with BumpChecker.js so it doesn't duplicate thread-rendering /
-    // labeling logic, the auto-send allowlist check, or DM/list audience
-    // classification, for its own, differently-scheduled Claude calls.
     extractEmail,
     buildThreadContent,
     getFlaggedLabel,
@@ -444,11 +330,7 @@ function scanInbox(dryRun) {
   return InboxProcessor.scanUnread(!!dryRun);
 }
 
-/**
- * One-time setup: installs an hourly time-driven trigger for scanInbox().
- * Safe to re-run — clears any existing scanInbox trigger first so this
- * never creates duplicates.
- */
+// One-time setup: installs an hourly trigger for scanInbox(). Safe to re-run.
 function installTrigger() {
   ScriptApp.getProjectTriggers()
     .filter(t => t.getHandlerFunction() === 'scanInbox')
@@ -462,13 +344,7 @@ function installTrigger() {
   Logger.log('✅ Installed hourly trigger for scanInbox().');
 }
 
-/**
- * Read-only guardrail check — select this in the editor's function
- * dropdown, run it, and read the execution log. Doesn't mutate anything;
- * surfaces exactly what the auto-send exception would see on its next
- * run, so a typo'd domain or an accidentally-empty allowlist shows up
- * before it matters rather than during a live test.
- */
+// Read-only guardrail check: run it from the editor and read the execution log.
 function checkGuardrails() {
   const props = PropertiesService.getScriptProperties();
   const aedileEnabled = props.getProperty('AEDILE_ENABLED') === 'true';
@@ -513,12 +389,8 @@ function disableAedile() {
   Logger.log('⏸️ Aedile disabled.');
 }
 
-/**
- * TEMPORARY testing toggle — turns on the AEDILE_CONTEXT_TESTING override
- * (SystemPrompt._testingOverride), which suspends dead-season silence for the
- * whitelisted director loop so the draft/auto-send path can be tested live.
- * Off by default; ALWAYS run disableTestingMode() when the test is done.
- */
+// Temporary testing toggle: suspends dead-season silence for the whitelisted
+// director loop. Always run disableTestingMode() when the test is done.
 function enableTestingMode() {
   PropertiesService.getScriptProperties().setProperty('TESTING_MODE', 'true');
   Logger.log('🧪 TESTING_MODE on — dead-season restraint suspended for the whitelisted loop. Remember to disable when done.');

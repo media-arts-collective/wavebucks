@@ -1,16 +1,7 @@
-/**
- * MessageLog.js
- * Sheet helper for the "Messages" tab — the append-only raw mailing-list
- * log Aedile draws on for institutional memory. Replaces the retired
- * Threads/Shards/ConsolidationLog tiers: instead of a model-derived summary
- * pipeline, each Claude call gets the actual raw messages from a rolling
- * window directly, plus the hand-curated context in Context.js for anything
- * older than the window.
- *
- * Columns: MessageId | ThreadId | From | Date | Subject | Body | TopicUrl
- * TopicUrl is only populated for historical Google Groups imports
- * (migrateMessagesFromDriveId) — Gmail-sourced rows have no equivalent.
- */
+// MessageLog.js -- sheet helper for the "Messages" tab: the append-only raw
+// mailing-list log each Claude call draws a rolling window from.
+// Columns: MessageId | ThreadId | From | Date | Subject | Body | TopicUrl
+// TopicUrl is only populated for historical Google Groups imports.
 
 const MessageLog = (() => {
 
@@ -41,12 +32,8 @@ const MessageLog = (() => {
     _sheet().appendRow([messageId, threadId, from, date, subject, body, topicUrl]);
   }
 
-  /**
-   * All messages with Date >= sinceDate, oldest first, rendered as a single
-   * delimited text block — same per-message shape as
-   * InboxProcessor.buildThreadContent, so the model sees mailing-list
-   * history and the thread under review in a consistent format.
-   */
+  // Messages with Date >= sinceDate, oldest first, in the same per-message
+  // shape as InboxProcessor.buildThreadContent.
   function getRecentRaw(sinceDate) {
     const rows = _sheet().getDataRange().getValues().slice(1);
     return rows
@@ -56,12 +43,8 @@ const MessageLog = (() => {
       .join('\n\n');
   }
 
-  /**
-   * The "MAILING LIST HISTORY" block both InboxProcessor and BumpChecker
-   * prepend to their user content — pulled here since MessageLog already
-   * owns the rolling-window concept, so there's one place that decides how
-   * the window is worded, not two copies drifting apart.
-   */
+  // The "MAILING LIST HISTORY" block InboxProcessor and BumpChecker prepend; one
+  // place decides its wording.
   function buildHistoryBlock(windowDays) {
     const since = new Date();
     since.setDate(since.getDate() - windowDays);
@@ -71,13 +54,8 @@ const MessageLog = (() => {
       : `MAILING LIST HISTORY (last ~${windowDays} days): none recorded yet.`;
   }
 
-  /**
-   * One-time bulk import of the historical mailing-list archive from a
-   * Drive-hosted copy of aedile/messages.jsonl (Apps Script has no
-   * filesystem access — the export has to be reachable via DriveApp, so
-   * upload it to Drive under the krewe account first and pass its file ID).
-   * Not idempotent — it only appends, so run it once per export.
-   */
+  // One-time bulk import from a Drive-hosted copy of messages.jsonl. Not
+  // idempotent: it only appends.
   function migrateMessagesFromDriveId(driveFileId) {
     const text = DriveApp.getFileById(driveFileId).getBlob().getDataAsString();
     const rows = text.split('\n')
@@ -107,14 +85,8 @@ const MessageLog = (() => {
   return { append, getRecentRaw, buildHistoryBlock, migrateMessagesFromDriveId };
 })();
 
-/**
- * One-time historical import — select this in the Apps Script editor's
- * function dropdown and click Run. Takes no argument because the editor's
- * Run button can't pass one; instead it reads the Drive file ID from the
- * MIGRATION_DRIVE_FILE_ID script property (Project Settings > Script
- * Properties, same place AEDILE_ENABLED and ANTHROPIC_API_KEY live) —
- * set that once before running.
- */
+// One-time historical import, run from the editor. Reads the Drive file ID from
+// the MIGRATION_DRIVE_FILE_ID script property.
 function migrateMessages() {
   const fileId = PropertiesService.getScriptProperties().getProperty('MIGRATION_DRIVE_FILE_ID');
   if (!fileId) throw new Error('Set the MIGRATION_DRIVE_FILE_ID script property first (Project Settings > Script Properties).');

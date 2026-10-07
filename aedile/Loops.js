@@ -1,29 +1,17 @@
-/**
- * Loops.js
- * Sheet helpers for the "Loops" and "Record" tabs (#84): what the krewe owes
- * and is owed, and what was ruled, found or settled. One row per ask.
- *
- * These live in the private config spreadsheet on purpose. The repo and its
- * issues are public; a contact, a counterpart's name or a candid reason goes
- * here and nowhere in git. `Sensitive` marks a row to redact if the sheet is
- * ever shared wider.
- *
- * Loops columns:  Id | Opened | Owner | Counterpart | Ask | Channel | Contact |
- *                 Due | Status | Closed | Tag | Source | Sensitive | Audience
- * Record columns: Id | Date | Kind | Who | Words | Source | Supersedes | Tag |
- *                 Sensitive | Audience
- *
- * Loops are krewe work only. Work on this machinery is a GitHub issue.
- *
- * Audience is `list` or `private` and is required at intake: only a `list`
- * row may be rendered into mail to the list. Rows older than the column were
- * backfilled `private`, the value that cannot leak.
- *
- * Nothing is edited in place. Record is append-only: a reversal is a new row
- * whose Supersedes names the old Id. A loop is corrected by `amend`, which
- * writes the corrected row under a new Id and marks the old one superseded.
- * An Id is never reused, so rows may be closed but not deleted.
- */
+// Loops.js -- sheet helpers for the "Loops" and "Record" tabs: what the krewe
+// owes and is owed, and what was ruled, found or settled. One row per ask.
+// Private config spreadsheet on purpose: the repo is public, so a contact, a
+// counterpart's name or a candid reason goes here and nowhere in git.
+//
+// Loops columns:  Id | Opened | Owner | Counterpart | Ask | Channel | Contact |
+//                 Due | Status | Closed | Tag | Source | Sensitive | Audience
+// Record columns: Id | Date | Kind | Who | Words | Source | Supersedes | Tag |
+//                 Sensitive | Audience
+//
+// Audience is `list` or `private`, required at intake: only a `list` row may be
+// rendered into mail to the list.
+// Nothing is edited in place and an Id is never reused: Record reversals and
+// loop amendments are new rows naming the old Id.
 
 const AUDIENCES = ['list', 'private'];
 
@@ -108,11 +96,8 @@ const Loops = (() => {
     }
   }
 
-  /**
-   * Correct an open loop without editing it: the corrected row is appended
-   * under a new Id and the old row is marked superseded. `f` holds only the
-   * fields that change. Returns null when the Id is absent or not open.
-   */
+  // Correct an open loop without editing it: append the corrected row under a
+  // new Id, mark the old one superseded. Null when the Id is absent or not open.
   function amend(id, f) {
     const lock = LockService.getScriptLock();
     lock.waitLock(20000);

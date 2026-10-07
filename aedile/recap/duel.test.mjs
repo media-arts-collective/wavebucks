@@ -1,21 +1,8 @@
-/**
- * duel.test.mjs -- the duel's harness, checked before anyone plays a round.
- *
- *   node aedile/recap/duel.test.mjs
- *
- * The game is only worth playing if the two sides differ ONLY in who wrote
- * them. Every case here is a way that could quietly stop being true:
- *
- *   - the normalizer treating the two sides differently, so the tell is the
- *     harness and every win rate after it is noise;
- *   - the de-voicing step leaking Abe's phrasing into the notes, which hands
- *     it straight back to the generator;
- *   - the two copies of the recap prompt drifting apart, which has already
- *     happened once -- Context.js went on asking for `body_html` after
- *     MeetingRecap stopped reading it, and nothing failed until a draft did.
- *
- * No network, no model, no vault reads beyond the two prompt files.
- */
+// duel.test.mjs -- the duel's harness: the two sides may differ only in who wrote them.
+//
+//   node aedile/recap/duel.test.mjs
+//
+// No network, no model, no vault reads beyond the two prompt files.
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -47,8 +34,7 @@ const ok = (label, cond) => check(label, !!cond, true);
 // above the initials.
 const REAL = 'Hi friends!\n\n\n1. Tickets. Extend the promo codes.\n\n\n\n'
   + '2. Storage tonight, 7pm. Mail me at kreweofvaporwave@gmail.com.\n\n\n<3\nMS';
-// The generated shape: `<3 SM` inline, and (before the prompt change) uniform
-// single blank lines.
+// The generated shape: `<3 SM` inline, uniform single blank lines.
 const AI = 'Krewe,\n\n1. Tickets. Extend the promo codes.\n\n'
   + '2. Storage tonight, 7pm.\n\n<3 SM';
 
@@ -83,8 +69,7 @@ ok('the Groups footer is cut', !normalize(FOOTED).includes('You received this me
 ok('the message above the footer survives', normalize(FOOTED).includes('2. Storage tonight'));
 
 console.log('\nthe mail client\'s hand is flattened, not the author\'s');
-// Curly quotes are Gmail's doing, not Abe's: 0.36 per 1k chars of archive
-// against 0.00 generated, which is a per-round giveaway about nothing.
+// Curly quotes are Gmail's doing, not the author's.
 check('curly apostrophes are straightened',
   normalize('We\u2019re on. Don\u2019t be late.'), "We're on. Don't be late.");
 check('curly double quotes are straightened',
@@ -98,9 +83,7 @@ check('bare MS with no <3', /\bMS\b/.test(normalize('Some body text.\n\nMS')), f
 check('bare SM with no <3', /\bSM\b/.test(normalize('Some body text.\n\nSM')), false);
 
 console.log('\nthe de-voicing step must not hand back Abe\'s phrasing');
-// Ten words, not six: a content-matched pair guarantees short overlaps because
-// both sides state the same facts in ordinary English. Measured across the
-// first burst, the longest shared run was nine words and all were fact-carrying.
+// Ten words: a content-matched pair guarantees shorter overlaps.
 const SOURCE = 'Please extend the promo codes to your cynical, joyless, spendthrift friends before Wednesday, and bring a pushbroom.';
 ok('a lifted sentence is caught',
   leaks(SOURCE, 'Please extend the promo codes to your cynical, joyless, spendthrift friends before Wednesday.').length > 0);
@@ -110,10 +93,8 @@ check('an incidental short overlap is not flagged',
   leaks(SOURCE, 'Bring a pushbroom on Wednesday.'), []);
 
 console.log('\na preserved fact is not a lifted sentence');
-// The generator only ever sees the notes, so it cannot take anything from the
-// real email except through them. Restoring the articles the de-voicing dropped
-// lands on the original wording because there is no other way to write it --
-// every one of the sixteen runs flagged in the first full burst was this.
+// The generator only sees the notes; restoring the articles the de-voicing
+// dropped lands on the original wording.
 const NOTES_LINE = '- hang clip lights in rafters of Brake Tag Station, set up DMX over stage';
 ok('articles restored around a preserved fact is not a leak',
   carriedByNotes('clip lights in the rafters of the brake tag station', NOTES_LINE));
@@ -121,10 +102,8 @@ check('phrasing the notes never carried is not excused',
   carriedByNotes('i thought we would never in our lives top that', NOTES_LINE), false);
 
 console.log('\nthe device deal reproduces the archive, which no single email can');
-// Measured over a full burst, every optional device the prompt named came back
-// at or near 100% -- 62% and 46% are not instructions a single independent
-// generation can follow. The caller rolls instead. These assert the roll lands
-// on the archive's real rates, INCLUDING the two that are gated on a parent.
+// The caller rolls the devices. These assert the roll lands on the table's
+// rates, including the two gated on a parent.
 {
   const N = 6000, tally = {};
   for (let i = 0; i < N; i++) {
@@ -173,11 +152,8 @@ ok('the typo instruction fences off facts',
 }
 
 console.log('\nthe sign-off is dealt, not fixed');
-// The generator signed `<3 SM` at ~99% against an archive that writes `<3`
-// above the initials in 74% of MS-signed messages and something else -- or
-// nothing -- in the other 26%. Rates are measured over messages.jsonl direct,
-// NOT the duel pool: that pool is filtered to `<3 MS`, so it reads 100% `<3`
-// by construction and can teach nothing about this line.
+// The line above the initials is dealt, at rates measured over messages.jsonl,
+// not the duel pool.
 check('the lead-in rates are a distribution',
   SIGNOFF_LEAD_INS.reduce((a, x) => a + x.p, 0).toFixed(6), '1.000000');
 {
@@ -194,17 +170,14 @@ check('the lead-in rates are a distribution',
   }
 }
 check('the same seed deals the same sign-off', dealSignoff('abc'), dealSignoff('abc'));
-// ONE roll. The multi-heart used to be its own function rolled alongside this
-// one, so a hand could carry `<3 <3 <3` and `Best` at once and hand the model
-// two sign-offs for one email.
+// One roll: a hand must not carry two sign-offs.
 ok('a hand never carries two closing lines', Array.from({ length: 2000 }, (_, i) =>
   dealSignoff('x' + i)).every(v => v === null || SIGNOFF_LEAD_INS.some(x => x.say === v)));
 ok('the common case says nothing, leaving the prompt\'s own `<3 SM`',
   SIGNOFF_LEAD_INS.find(x => x.key === 'heart').say === null);
 
 console.log('\nan unparseable answer costs one specimen, not the burst');
-// parseDecision used to call die(), which is process.exit(), which no pool can
-// catch: one bad response killed a burst and every pair built before it.
+// parseDecision throws rather than exiting, so one bad response cannot kill a burst.
 check('JSON behind a prose preamble is recovered',
   parseDecision('3366 chars, no semicolons.\n\n```json\n{"subject":"s","body":"b"}\n```'),
   { subject: 's', body: 'b' });
@@ -217,8 +190,6 @@ check('JSON behind a prose preamble is recovered',
 console.log('\nthe two copies of each prompt agree');
 // redige.mjs reads the .md files; Apps Script reads the constants in
 // Context.js. They are maintained by hand and nothing else enforces this.
-// Context.js once went on asking for `body_html` after MeetingRecap stopped
-// reading it, and nothing failed until a draft did.
 function constantOf(name) {
   const s = readFileSync(join(AEDILE, 'Context.js'), 'utf8');
   const m = s.match(new RegExp('const ' + name + ' = `([\\s\\S]*?)`;\\s*$', 'm'));
@@ -245,13 +216,8 @@ for (const [name, file] of [['AEDILE_CONTEXT_CORE', 'AEDILE_CONTEXT.core.md'],
   check(`${file} and ${name} are byte-identical`, js === md, true);
 }
 
-// The prompt may not itself do the thing it forbids. It carried 24 em-dashes
-// while telling the generator never to write one, and the examples it holds up
-// as exemplary contain none at all.
-// headsup.md joins this list but NOT the byte-identical list above: it has no
-// Context.js mirror by design, since that genre is Node-only and never ran in
-// Apps Script. It went on the read path on 2026-09-26 carrying eleven em-dashes
-// while instructing the generator that the corpus never writes one.
+// The prompt may not itself do the thing it forbids. headsup.md joins this list
+// but not the byte-identical list above: it has no Context.js mirror by design.
 for (const file of ['AEDILE_CONTEXT.core.md', 'AEDILE_CONTEXT.recap.md',
                     'AEDILE_CONTEXT.headsup.md']) {
   const t = bodyOf(file);
@@ -259,10 +225,7 @@ for (const file of ['AEDILE_CONTEXT.core.md', 'AEDILE_CONTEXT.recap.md',
   check(`${file} contains no spaced --`, /(?:^|\s)--(?:\s|$)/.test(t), false);
 }
 
-// Step A has to preserve the source's lumping. It used to sort facts into a
-// taxonomy -- "what is happening, when, where, who" -- which handed the
-// generator a tidy plan, and no device dealt afterwards can un-tidy a plan.
-// The blind judge named exactly this: "reconstructed from facts".
+// Step A has to preserve the source's lumping, not sort facts into a taxonomy.
 check('units counts a lumpy paragraph as one unit',
   units('a b c, and also d, and e tonight'), 1);
 check('units counts each list item',
@@ -284,11 +247,8 @@ check('DEVOICE_PROMPT no longer dictates a fact taxonomy',
 check('DEVOICE_PROMPT still forbids reusing distinctive phrasing',
   /NEVER reuse a distinctive phrase/.test(DEVOICE_PROMPT), true);
 
-// The NBSP flattening was creating the tell it existed to remove. Gmail leaves
-// a non-breaking space at end of line; turning it into a plain space leaves
-// trailing whitespace the generated side can never have. It ran at 42% on the
-// real side and 0% on the generated one for eleven bursts, and the blind judge
-// named "stray double spaces" as its reason more than once.
+// Gmail leaves an NBSP at end of line; flattening it to a space leaves trailing
+// whitespace the generated side never has.
 check('an NBSP at end of line does not become trailing whitespace',
   /[ \t]+$/m.test(normalize('one\u00a0\ntwo')), false);
 check('trailing spaces are stripped on the generated side too',
@@ -298,7 +258,7 @@ check('a three-newline paragraph gap survives normalize',
   isRagged(normalize('one   \n\n\ntwo')), true);
 check('stripping does not change the gap count',
   (normalize('one\n\n\n\ntwo').match(/\n/g) || []).length, 4);
-// A blank line holding a space used to hide the gap from modalGap entirely.
+// A blank line holding a space must not hide the gap from modalGap.
 check('modalGap sees a gap whose blank line held a space',
   modalGap(normalize('one\n \ntwo\n \nthree')), 1);
 check('normalize is idempotent',

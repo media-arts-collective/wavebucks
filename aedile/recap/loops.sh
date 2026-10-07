@@ -1,8 +1,7 @@
 #!/bin/bash
 # loops.sh -- open loops, one per line: Id, owner, due, counterpart, ask.
-# The SessionStart hook in .claude/settings.json runs this (#85), so a session
-# starts knowing what the krewe owes. Reads the private sheet; prints nothing
-# that is in git.
+# Run by the SessionStart hook in .claude/settings.json. Reads the private
+# sheet; prints nothing that is in git.
 set -euo pipefail
 "$(dirname "$0")/call.sh" get loops open=true | python3 -c "
 import json, sys

@@ -1,23 +1,10 @@
-/**
- * recap-assembly.test.mjs -- the DELIVERED recap still ends with the sign-off.
- *
- *   node --test aedile/recap/recap-assembly.test.mjs     (also runs under `npm test`)
- *
- * WHY THIS TEST AND NOT A CHECK. `checks.mjs` grades what `redige.mjs` produced, and it
- * is positional about the sign-off -- the LAST LINE must be `<3`, `SM` or both. It still
- * could not catch #23, because `MeetingRecap.appendOpenQuestions` runs afterwards, in
- * Apps Script, on the far side of the wire: every recap with open questions shipped with
- * seven bullets after `<3 SM` and `runChecks` returned `[]` on it. A witness looking at
- * the wrong object reports healthy, which is #22's shape as well.
- *
- * So this grades the assembled string, which is the only artifact nobody was grading.
- *
- * It reads the function out of `MeetingRecap.js` and evaluates just that function. That
- * file is Apps Script and cannot be imported -- but `appendOpenQuestions` touches no
- * Google service, so extracting it is honest rather than a re-implementation. The repo's
- * standing trap is a local copy of logic drifting from the real module (see
- * scribaSenatus/TestsLocal.js's warning); taking the source text means there is no copy.
- */
+// recap-assembly.test.mjs -- the delivered recap still ends with the sign-off.
+//
+//   node --test aedile/recap/recap-assembly.test.mjs
+//
+// checks.mjs grades what redige.mjs produced; MeetingRecap.appendOpenQuestions
+// runs afterwards, so this grades the assembled string. The function is read out
+// of MeetingRecap.js and evaluated, so there is no local copy to drift.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

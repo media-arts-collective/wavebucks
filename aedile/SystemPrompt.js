@@ -1,21 +1,9 @@
-/**
- * SystemPrompt.js
- * Assembles Aedile's system prompts by concatenating the shared core
- * context (Context.js) with each tier's task-specific context. Triage
- * splits into two variants — AEDILE_SYSTEM_PROMPT_LIST for broadcast list
- * traffic, AEDILE_SYSTEM_PROMPT_DM for narrowly-addressed messages — see
- * InboxProcessor.classifyAudience for how a message picks one. As of
- * 2026-07-21, the bump tier (BumpChecker's checkBumps) splits the same way
- * — AEDILE_BUMP_PROMPT_LIST/_DM — via BumpChecker.reviewForBump classifying
- * the thread's last message the same way InboxProcessor does. A prior
- * consolidation tier (a third prompt judging cross-thread Shard
- * membership) was retired in favor of injecting the raw message log
- * directly — see MessageLog.js and aedile/CLAUDE.md.
- */
+// SystemPrompt.js -- assembles the system prompts: the shared core context
+// (Context.js) plus each tier's task context. Triage and bump each split into
+// _LIST and _DM variants; see InboxProcessor.classifyAudience.
 
-// Apps Script re-evaluates globals on every execution, so this reads the
-// current TESTING_MODE property at prompt-assembly time each run — flipping
-// the property takes effect on the next trigger/scan with no redeploy.
+// Globals are re-evaluated on every execution, so flipping TESTING_MODE takes
+// effect on the next run with no redeploy.
 function _testingOverride() {
   try {
     return PropertiesService.getScriptProperties().getProperty('TESTING_MODE') === 'true'
@@ -31,9 +19,6 @@ const AEDILE_SYSTEM_PROMPT_DM = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_TRIA
 const AEDILE_BUMP_PROMPT_LIST = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_BUMP_LIST}${_testingOverride()}`;
 const AEDILE_BUMP_PROMPT_DM = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_BUMP_DM}${_testingOverride()}`;
 
-// The meeting-recap tier (MeetingRecap.js). Deliberately does NOT take
-// _testingOverride(): that override suspends dead-season restraint so the
-// director loop can be exercised out of season, and this tier has no seasonal
-// behaviour to suspend — it runs when a meeting happened. Adding it here would
-// widen a testing switch's reach for no purpose.
+// The meeting-recap tier. Deliberately does not take _testingOverride(): it
+// has no seasonal behaviour to suspend.
 const AEDILE_RECAP_PROMPT = `${AEDILE_CONTEXT_CORE}\n\n${AEDILE_CONTEXT_RECAP}`;

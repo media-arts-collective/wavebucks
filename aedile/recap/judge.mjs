@@ -1,29 +1,11 @@
 #!/usr/bin/env node
-/**
- * judge.mjs -- run the duel against a blind model instead of a person.
- *
- *   ./judge.mjs pairs.json [--votes 3] [--jobs 4] [--out judged.json]
- *   ./judge.mjs pairs.json --trend other.json more.json    (compare bursts)
- *
- * The human scores stopped being comparable to each other. Zach went 33%, 17%,
- * 25%, 25%, 8% while his median decision time halved -- he was learning faster
- * than the generator was improving, so a falling number could mean either
- * thing and there was no way to tell which.
- *
- * A blind judge cannot learn. Every pair is a fresh process with no memory of
- * any other pair, no knowledge of this project, and no idea which system wrote
- * which side. Run the same judge over burst 4 and burst 9 and the difference
- * is the generator, because nothing else changed.
- *
- * It is a WEAKER detector than a human who knows the author -- it has never
- * read the archive and cannot know that Abe says "yay". So read it as a floor,
- * not a ceiling: a burst it cannot crack may still be obvious to Zach, but a
- * burst it cracks easily is not close.
- *
- * The reasons it gives are the point as much as the score. They are the
- * automated version of the notes, and they arrive without anyone having to sit
- * there and play twelve rounds.
- */
+// judge.mjs -- run the duel against a blind model instead of a person.
+//
+//   ./judge.mjs pairs.json [--votes 3] [--jobs 4] [--out judged.json]
+//   ./judge.mjs pairs.json --trend other.json more.json    (compare bursts)
+//
+// A blind judge cannot learn between bursts, so a difference is the generator.
+// It is a weaker detector than a human who knows the author: read it as a floor.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -67,15 +49,13 @@ async function judgeOne(pair, vote) {
   const body = `--- EMAIL A ---\n${onA ? pair.real : pair.ai}\n\n--- EMAIL B ---\n${onA ? pair.ai : pair.real}`;
   const d = parse(await callModelAsync(JUDGE_PROMPT, body));
   const pickedReal = (d.pick === 'A') === onA;
-  // `onA` is kept so the run can score what a CONSTANT responder would have got on this
-  // exact layout (#22). Without it, position bias is invisible and a judge that always
-  // says A reports a fooled-rate that reads like discrimination.
+  // `onA` is kept so the run can score what a constant responder would have got
+  // on this layout.
   return { pick: d.pick, pickedReal, onA, confidence: d.confidence, why: String(d.why || '').trim() };
 }
 
-/** Two-sided exact binomial p for `k` of `n` at p=0.5, by summing the tail. No
- *  dependency and no approximation: n here is dozens, so exact is cheap and a normal
- *  approximation would be wrong in exactly the small-n case that matters. */
+// Two-sided exact binomial p for `k` of `n` at p=0.5. Exact: a normal
+// approximation is wrong at small n.
 export function twoSidedBinomialP(k, n) {
   if (!n) return 1;
   const hi = Math.max(k, n - k);
@@ -89,18 +69,8 @@ export function twoSidedBinomialP(k, n) {
   return Math.min(1, 2 * tail);
 }
 
-/** A run that did not DISCRIMINATE returns output shaped like one that did (#22).
- *
- *  Burst 11, batched: the judge answered A in ten of twelve rounds and the harness
- *  reported 67% fooled -- 67 points above the same specimens scored per-pair, against an
- *  arc that eleven bursts of real tuning had moved by 8. The twelve rationales were
- *  fluent, specific and drawn from the correct vocabulary, so nothing in the output
- *  distinguished it from a breakthrough. Position bias at 10/12 is p=0.039; the 67% is
- *  p=0.194 against chance. The bias was the only significant effect in the run.
- *
- *  So the split is ALWAYS reported, and past the binomial threshold no rate is emitted at
- *  all -- a number withheld cannot be pasted into an arc table. A figure that is always
- *  printed is a guard; a threshold someone might trip is a rule they edit later. */
+// A run that did not discriminate returns output shaped like one that did. So
+// the split is always reported, and past the binomial threshold no rate is emitted.
 export function positionAudit(results) {
   const n = results.length;
   const saidA = results.filter(r => r.pick === 'A').length;
@@ -153,25 +123,21 @@ async function run(path, votes, jobs) {
     if (rs.filter(r => r.pickedReal).length * 2 > rs.length) caught++;
   }
   const fooled = byPair.size - caught;
-  // A pair whose every vote errored leaves the rate quietly measured on a
-  // smaller denominator. Burst 11 reported 0/10 from a 12-pair file and
-  // nothing in the output said which two were missing.
+  // A pair whose every vote errored leaves the rate measured on a smaller
+  // denominator; say so.
   if (byPair.size < pairs.length) {
     console.error(`   ${pairs.length - byPair.size} of ${pairs.length} pair(s) got no verdict; rate below is on the rest`);
   }
   const audit = positionAudit(ok);
   return { path, pairs: byPair.size, votes: ok.length, caught, fooled, audit,
-           // No rate at all when the run did not discriminate (#22). null, not 0 -- a 0
-           // would read as "never fooled", which is a finding, and this is the absence of
-           // one.
+           // No rate when the run did not discriminate. null, not 0: a 0 would
+           // read as "never fooled".
            rate: audit.degenerate || !byPair.size
              ? null : Math.round(100 * fooled / byPair.size),
            results: ok };
 }
 
-// CLI only when INVOKED, not when imported. Without this guard a test that imports
-// `twoSidedBinomialP` runs the whole command line and exits 2 on the usage check --
-// which is how the guard in #22 nearly shipped untested.
+// CLI only when invoked, not when imported by a test.
 if (process.argv[1] && process.argv[1].endsWith('judge.mjs')) {
   const args = process.argv.slice(2);
   if (!args.length || args.includes('--help')) {
@@ -205,9 +171,7 @@ if (process.argv[1] && process.argv[1].endsWith('judge.mjs')) {
   if (all.length > 1) {
     console.log('\ntrend, blind judge, 50% is indistinguishable:');
     for (const r of all) {
-      // A degenerate run is not plotted. Giving it a bar would put it on the arc, which is
-      // the exact mistake #22 records -- 67% read as the breakthrough eleven bursts had been
-      // waiting for.
+      // A degenerate run is not plotted: a bar would put it on the arc.
       if (r.rate === null) {
         console.log(`  ${r.path.split('/').pop().padEnd(16)}    - |${'DEGENERATE, not plotted'.padEnd(50, ' ')}|`);
         continue;
@@ -217,8 +181,7 @@ if (process.argv[1] && process.argv[1].endsWith('judge.mjs')) {
     }
   }
 
-  // The reasons are the automated version of a human's notes, and the whole
-  // point of running this unattended.
+  // The reasons are the automated version of a human's notes.
   const last = all[all.length - 1];
   const caughtWhy = last.results.filter(r => r.pickedReal).map(r => r.why).filter(Boolean);
   if (caughtWhy.length) {

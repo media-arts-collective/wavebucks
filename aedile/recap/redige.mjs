@@ -1,29 +1,11 @@
 #!/usr/bin/env node
-/**
- * redige -- meeting notes in, krewe-voice draft out.
- *
- * Runs on mandark under node, NOT in Apps Script. It needs a filesystem: the
- * Obsidian voice corpus, the context files next door, and whisper. Apps Script
- * has none of those, which is why the generator lives here and aedile stays an
- * inbox watcher.
- *
- *   ./redige.mjs <notes.md|meeting.m4a> [--out FILE] [--post [--dry-run]] [--json]
- *
- * Intake is agnostic on purpose. Given text it uses it; given audio it sends it
- * to whisper first. Nothing in this file knows or cares which happened.
- *
- * It writes a draft to a file. With --post it also hands that draft to aedile's
- * createDraft sink, which is the only step that needs Google at all -- aedile
- * runs AS the krewe account, so no Google credential ever has to exist here.
- * --post --dry-run makes the round trip and files nothing.
- *
- * WRITE_API_TOKEN gates the sink and is read from the environment. It is NOT
- * read from /srv/vaporwave-reports: that tree is being retired, and a path in
- * source is how a retired location outlives the decision to retire it.
- *
- * Excluded from `clasp push` by aedile/.claspignore. Pushing this would break
- * the live project: Apps Script has no `import`, no `fs`, no `process`.
- */
+// redige -- meeting notes in, krewe-voice draft out. Runs under node, not Apps Script.
+//
+//   ./redige.mjs <notes.md|meeting.m4a> [--out FILE] [--post [--dry-run]] [--json]
+//
+// --post hands the draft to aedile's createDraft sink; --post --dry-run files nothing.
+// WRITE_API_TOKEN gates the sink and is read from the environment.
+// Excluded from `clasp push` by aedile/.claspignore: Apps Script has no `import`.
 
 import { existsSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -43,12 +25,7 @@ const VAULT = process.env.KREWE_VAULT
   || '/srv/vaporwave-reports/obsidian-vault/mailing-list-archive';
 const WHISPER = process.env.WHISPER_URL || 'http://100.107.253.56:8090/inference';
 
-// aedile's Web App, the deployment the anonymous URL serves. A version cut
-// updates THIS deployment rather than making a new one, so the URL is stable
-// and belongs in the source. The version it points at is NOT stable and does
-// not belong here: this comment said `@10` while the deployment had moved to
-// @16, then @18 (2026-09-26, readThread/readInbox). `clasp deployments` is the
-// answer to which version is live; a number in a comment is a claim that rots.
+// Stable across version cuts; `clasp deployments` says which version is live.
 const EXEC = process.env.AEDILE_EXEC_URL
   || 'https://script.google.com/macros/s/AKfycbyyx1N_0hMP2-GG3z1gM_EgNL0RXFB83yvrY57JOKPQ026a2y2hOARKjGc-lKF-qj7s5w/exec';
 
@@ -58,10 +35,6 @@ const die = (msg, code = 1) => { console.error(`redige: ${msg}`); process.exit(c
 
 // --- intake ------------------------------------------------------------------
 
-/** Audio -> text, via the same two steps /opt/zaxon-relay/bin/whisper_stt.sh uses.
- *  Deliberately not via Zaxon: its transcript is written to a TemporaryDirectory
- *  and deleted, and its own watcher records that the success path has never once
- *  run. This talks to the same healthy whisper container directly. */
 function transcribe(audioPath) {
   const health = WHISPER.replace(/\/inference$/, '/health');
   try {
@@ -89,23 +62,11 @@ function intake(path) {
   return text;
 }
 
-/** Bullets mean outline. Detected, not declared: a heading or marker the writer
- *  has to remember is a contract that gets forgotten, and the notes are written
- *  during a meeting. Whisper output is unbulleted prose, so it falls through
- *  unchanged and the transcript path is untouched. */
+// Bullets mean outline. Detected, not declared; whisper output is unbulleted and falls through.
 const looksLikeOutline = raw => (raw.match(/(?:^|\n)\s*[*\-\u2022]\s+\S/g) || []).length >= 3;
 
-/** One model call, turning bullets into the meeting as it was spoken, so the
- *  outline rides the pipeline the transcript already rides -- same prompt, same
- *  devices, same checks, nothing downstream aware of which path it came from.
- *
- *  THE CHECKS STILL GRADE THE RAW FILE, not this. #68's warning is that a
- *  fabricated transcript makes invented-name/invented-figure circular, because
- *  they prove a fact appears in the input and the agent wrote the input. That
- *  applies to this output too: it is model-authored. So main() keeps the writer's
- *  bytes as the grounding text and hands only the model the spoken version, which
- *  means anything this pass adds is caught against the original rather than
- *  laundered by it. */
+// One model call turning bullets into spoken prose, so the outline rides the transcript path.
+// The checks still grade the raw file, not this: this output is model-authored.
 async function outlineToTranscript(raw) {
   const sys = [
     'You are given one person\'s bullet notes from a meeting that already happened.',
@@ -127,10 +88,6 @@ async function outlineToTranscript(raw) {
 
 // --- the vault ---------------------------------------------------------------
 
-/** The .md files carry the voice as prose a human reads; this pulls out the two
- *  things a machine can use. The motif counts become the check's expectations,
- *  and real archived recaps become few-shot examples -- far stronger grounding
- *  than describing the form in prose and hoping. */
 export function readVault() {
   const motifs = {};
   for (const line of readFileSync(join(VAULT, 'voice/Index.md'), 'utf8').split('\n')) {
@@ -138,21 +95,13 @@ export function readVault() {
     if (m) motifs[m[1]] = Number(m[2]);
   }
 
-  // Two genuine post-meeting recaps by the krewe's own voice. Chosen because
-  // they are the exact genre being generated, not merely the same author.
   const examples = [
     'thank-you-for-a-productive-sunday-meeting-i-had-a-big-email-PpYQ3C6toiQ.md',
     'thank-you-to-everyone-for-a-good-meeting-i-think-that-our-c-IO3RQJWWafk.md',
   ].map(f => {
     const raw = readFileSync(join(VAULT, 'threads', f), 'utf8');
     // A thread file is frontmatter, a link header, then one section per message
-    // headed `## <date> -- [[people/...]]`. Take the FIRST message only.
-    //
-    // This used to be `split(/^---$/m).slice(2).join('---')`, which kept every
-    // LATER message too -- so REAL RECAP 1 was being shown to the model with a
-    // reply pasted onto the end of it reading `Brandon Bales / WBBALES.COM`,
-    // plus the horizontal rules between messages. An exemplary recap that ends
-    // in someone else's signature block teaches exactly that.
+    // headed `## <date> -- [[people/...]]`. Take the first message only.
     const first = (raw.split(/^## /m)[1] || '').split('\n').slice(1).join('\n');
     return first
       .replace(/^\s*-\s+\*\*.*$/gm, '')  // `- **Thread URL:** ...` bullets
@@ -166,15 +115,8 @@ export function readVault() {
 
 // --- the model ---------------------------------------------------------------
 
-// One model client for the whole project: brain/model.mjs (#40), driven by the
-// subscription-authenticated `claude` CLI through the Agent SDK -- no
-// ANTHROPIC_API_KEY (dead, #48). #41 collapsed this file's former duplicate
-// callModel/callModelAsync/callApi/callCli/parseDecision onto it, so there is
-// one implementation to keep correct rather than a copy that drifts. main()
-// below awaits the (async) client; the old sync callModel (execFileSync) is
-// gone. duel.mjs and judge.mjs import callModelAsync/parseDecision from here, so
-// those names are re-exported unchanged -- callModelAsync IS brain's callModel,
-// which already carries the retry/backoff the old duplicate had.
+// One model client: brain/model.mjs, via the subscription `claude` CLI, no
+// ANTHROPIC_API_KEY. Re-exported under the names duel.mjs and judge.mjs import.
 export { parseDecision };
 export const callModelAsync = callModel;
 
@@ -186,24 +128,10 @@ function contextBody(name) {
   return s.slice(s.indexOf('\n## ')).trim();
 }
 
-/** The genres this generator can write. A genre is a speech act, orthogonal to
- *  topic (#49): the recap reports what a meeting settled, the heads-up summons
- *  people to a gathering. Each is one prompt file appended after the core.
- *
- *  `headsup` was specified in full on 2026-09-13 and then sat unwired for two
- *  weeks, during which two sessions produced heads-up mail by hand-writing prose
- *  straight into `call.sh createDraft` -- which is how a numbered, digest-length
- *  notice went out under a spec whose own text says "a single-venue heads-up
- *  should not be numbered". Zach, 2026-09-26: "is this being generated by a
- *  script? don't we have a script that makes drafts? feels like you're
- *  handrolling." A spec no code reads is a document, not a rule. */
 export const GENRES = {
   recap: { context: 'AEDILE_CONTEXT.recap.md', label: 'recap_draft_posted' },
   headsup: { context: 'AEDILE_CONTEXT.headsup.md', label: 'headsup_draft_posted' },
-  // One person, their own commitments, ahead of a gathering. The ONLY genre whose
-  // form is asserted rather than measured -- there is no DM corpus, and its context
-  // file says so in its own text rather than implying a rate it does not have.
-  // Requires --to: a reminder sent to the list is a category error, not a typo.
+  // One person, their own commitments. Requires --to: a reminder must not go to the list.
   reminder: { context: 'AEDILE_CONTEXT.reminder.md', label: 'reminder_draft_posted', needsTo: true, needsFor: true },
 };
 
@@ -213,32 +141,15 @@ export function buildSystemPrompt(vault, genre = 'recap') {
     .map((e, i) => `--- REAL RECAP ${i + 1}, written by the krewe's own voice ---\n${e}`)
     .join('\n\n');
 
-  // The transport advertises the CLI's tools even though `allowedTools: []`
-  // refuses them, so the model can still EMIT a tool_use block. `maxTurns: 1`
-  // then spends the only turn on the rejected call and the run ends
-  // `error_max_turns` with no text: six consecutive failures on 2026-09-26,
-  // diagnosed as `Grep`/`Glob` against a path that never existed. The prompt says
-  // so plainly rather than the transport being loosened, because a second turn
-  // would buy a retry for a call that should not happen at all.
+  // The model can still emit a tool_use block, which spends the only turn and
+  // returns no text; so the prompt says there are no tools.
   const closed = ['## You have no tools here', '',
     'Everything you need is in this prompt and the notes that follow it. There is no',
     'archive to search and no file to read: any tool call is refused and costs you',
     'the whole answer. Write the email from what you have been given.'].join('\n');
 
-  // The genre file ENDS with its output contract, so it goes last: the two blocks
-  // that are not the contract sit above it. A prompt whose final words are
-  // anything other than "respond with only JSON" gets prose some of the time.
-  // BOTH genres' form is COMPUTED, not quoted: the context file carries the
-  // genre's purpose and the beats' functions, and analysis/headsup-form.mjs or
-  // analysis/recap-form.mjs measures the shape from the corpus every run. A figure
-  // in a prompt file is a snapshot, and both snapshots this file used to carry were
-  // falsified the first time anyone measured them.
-  //
-  // The recap went two weeks longer than the heads-up with no measured block at
-  // all, which is how a draft carrying 7 items of 28 words each reached a human
-  // against a corpus median of 5 items of 43 (#49). Quoting two example recaps is
-  // not the same as stating their shape: the model had the examples in front of it
-  // both times.
+  // The genre file ends with its output contract, so the examples and `closed`
+  // sit above it. Form is computed from the corpus each run, not quoted.
   return [
     contextBody('AEDILE_CONTEXT.core.md'),
     `## Two real recaps from the archive\n\nMatch this register. Do not copy their content.\n\n${examples}`,
@@ -248,28 +159,14 @@ export function buildSystemPrompt(vault, genre = 'recap') {
   ].filter(Boolean).join('\n\n');
 }
 
-/** Lead time, computed HERE and never by the model.
- *
- *  A heads-up's whole content is a date, and `AEDILE_CONTEXT.recap.md` forbids
- *  inventing one ("A recap that invents a date is worse than no recap"), so
- *  nothing in the generation path has ever called `new Date()`. But "build day is
- *  TOMORROW" is the single most important word in a day-before notice and the
- *  model cannot derive it without knowing today. So the operator passes
- *  --event-date, Node does the arithmetic, and the model is handed the answer as
- *  a fact alongside the beat. It still invents no date; it is told one.
- *
- *  Beat comes from the corpus, not from taste: lead time is bimodal with a mode
- *  at 0-1 days, and a same-day nudge goes out in the morning. */
+// Lead time, computed here and never by the model: the operator passes
+// --event-date, Node does the arithmetic, and the model is told the answer.
 export function leadTimeBlock(eventDate, beat, asOf) {
   if (!eventDate) return '';
   for (const [flag, v] of [['--event-date', eventDate], ['--as-of', asOf]]) {
     if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) die(`${flag} must be YYYY-MM-DD, got "${v}"`, 2);
   }
-  // `--as-of` is the day the mail will be READ, which is not always the day it is
-  // generated. A nudge goes out in the morning (corpus median 10am) and gets
-  // written the night before, so computing lead time against the clock makes it
-  // say "tomorrow" to someone reading it on the day. The operator states the send
-  // date; nothing here guesses it.
+  // `--as-of` is the day the mail will be read, not the day it is generated.
   const day = s => Math.floor(new Date(s + 'T12:00:00').getTime() / 86400000);
   const days = day(eventDate) - day(asOf || new Date().toISOString().slice(0, 10));
   leadTimeBlock.days = days;  // the one derivation, reused by the checks below
@@ -285,49 +182,25 @@ export function leadTimeBlock(eventDate, beat, asOf) {
 
 // --- the sink ----------------------------------------------------------------
 
-/** The DEFAULT recipient: the Google Group, not the Workspace account aedile runs as
- *  (those are different addresses, and confusing them drafts krewe mail to aedile's
- *  own inbox). Kept in step with MeetingRecap.js's RECAP_RECIPIENT by hand: this end
- *  and the Apps Script end must agree.
- *
- *  `post()` takes a `to` defaulting to this, and `--to` overrides it, so the
- *  `reminder` genre can address one person. That needed no Apps Script change:
- *  createDraft's originate form already passes `params.to` through unchecked
- *  (WriteApi.js:317-324) because a draft cannot leave without a human opening it --
- *  Zach, 2026-09-25: "drafts are safe by construction." A MEMBER ADDRESS MUST NEVER
- *  BE COMMITTED: this repo is public, so recipients come from argv. */
+// The default recipient: the Google Group, not the account aedile runs as. Keep
+// in step with MeetingRecap.js's RECAP_RECIPIENT. `--to` overrides it for a
+// reminder. A member address must never be committed: recipients come from argv.
 const LIST_RECIPIENT = 'kreweofvaporwave@googlegroups.com';
 
-/** Same default call.sh uses, and the same caveat: that tree is being retired, so the
- *  environment wins. Only read by --if-new, which needs the READ token. */
 const SECRETS = process.env.AEDILE_SECRETS
   || [join(process.env.HOME || '', '.config/aedile/api-secrets'), '/srv/vaporwave-reports/aedile/.aedile-api-secrets']
     .find(f => existsSync(f)) || '';
 
-/** Render open_questions into the body the same way MeetingRecap.js does --
- *  plain text, "Still open:" then a dash list. #41 moved assembly here so the
- *  POST carries a FINISHED body: the createDraft primitive is a dumb sink that
- *  assembles nothing. The two copies (this and MeetingRecap.appendOpenQuestions,
- *  which the in-Apps-Script draftRecap path still uses) sit on opposite sides of
- *  the clasp boundary and cannot share a function; keep them identical. */
+// Render open_questions the same way MeetingRecap.appendOpenQuestions does; the
+// two copies cannot share a function, keep them identical.
 function appendOpenQuestions(body, openQuestions) {
   if (!openQuestions || !openQuestions.length) return body;
   const items = openQuestions.map(q => `  - ${q}`).join('\n');
   return `${body}\n\nStill open:\n${items}`;
 }
 
-/** Has this label already been drafted to this addressee recently?
- *
- *  There is no outbound dedup anywhere in the system: logDraft only ever writes, so
- *  running the same batch twice makes two drafts and two Log rows, and a director
- *  finds duplicates in the mailbox with no way to tell which is which. The Log is
- *  enough to answer it -- on an originate, logDraft puts the ADDRESSEE in the `From`
- *  column (WriteApi.js:323) -- so `--if-new` reads it back before posting.
- *
- *  KNOWN LIMIT, and it is not fixable from this side: once a human converts a draft
- *  to a scheduled message, the Log still says `*_draft_posted` and nothing here can
- *  tell that it was armed or sent. So this prevents a double DRAFT, not a double send.
- */
+// Reads the Log, where an originate's addressee is in the `From` column.
+// Prevents a double draft, not a double send.
 function alreadyDrafted(label, to, days = 14) {
   const token = process.env.READ_API_TOKEN
     || (() => { try { return (readFileSync(SECRETS, 'utf8').match(/^AEDILE_READ_API_TOKEN=(.*)$/m) || [])[1]?.replace(/["'\r]/g, ''); } catch { return undefined; } })();
@@ -346,32 +219,18 @@ function alreadyDrafted(label, to, days = 14) {
   return rows.some(r => r.Action === label && String(r.From) === to && new Date(r.Timestamp).getTime() >= cutoff);
 }
 
-/** Hand the finished draft to aedile's createDraft primitive (originate form).
- *
- *  This is the only step that touches Google, and it is deliberately the only
- *  one: aedile already runs AS the krewe account, so the capability lives where
- *  the credential already is and no Google credential has to exist on mandark at
- *  all. #41: a FINISHED plain-text body crosses the wire (to + subject + body),
- *  not the decision's raw fields for the far end to assemble -- the primitive is
- *  the single dumb draft sink and judges nothing.
- */
+// The only step that touches Google; no Google credential exists on this side.
 function post(decision, dryRun, genre = 'recap', to = LIST_RECIPIENT) {
   const token = process.env.WRITE_API_TOKEN;
   if (!token) {
     die('WRITE_API_TOKEN is not set -- it gates the sink, and this end has no other way in', 5);
   }
 
-  // Plain text, no HTML: the archive is plain text and HTML would force escaping
-  // things like `<3` -- the same reason MeetingRecap.js drafts plain.
+  // Plain text, no HTML: HTML would force escaping `<3`.
   const body = appendOpenQuestions(decision.body, decision.open_questions);
 
-  // The whole form body goes through a 0600 file rather than argv: a token on
-  // a command line is readable out of /proc by any local account for as long
-  // as curl runs.
-  // logLabel/logNote name the genre + provenance for the Log tab (#53). The
-  // primitive is genre-blind; the caller supplies these, so a recap reads as a
-  // recap in the audit trail (restoring what the removed MeetingRecap.createDraft
-  // sink used to write) rather than every draft being hardcoded as one.
+  // The form body goes through a 0600 file, not argv: a token on a command line
+  // is readable out of /proc.
   const form = [
     `token=${encodeURIComponent(token)}`,
     'action=createDraft',
@@ -388,11 +247,9 @@ function post(decision, dryRun, genre = 'recap', to = LIST_RECIPIENT) {
 
   let raw;
   try {
-    // -L because /exec answers a POST with a 302 to googleusercontent.com and
-    // the result is served from there. NO -X POST: it pins the method across
-    // that redirect, so curl re-POSTs with no body and Google answers with a
-    // sign-in page instead of JSON -- which reads exactly like a missing
-    // version cut and is not one. --data-binary alone already means POST.
+    // -L because /exec answers a POST with a 302. No -X POST: it pins the method
+    // across the redirect, curl re-POSTs with no body, and Google answers with a
+    // sign-in page.
     raw = execFileSync('curl', ['-sfL', '--max-time', '120', EXEC,
       '-H', 'Content-Type: application/x-www-form-urlencoded',
       '--data-binary', `@${bodyFile}`],
@@ -407,15 +264,13 @@ function post(decision, dryRun, genre = 'recap', to = LIST_RECIPIENT) {
   try {
     res = JSON.parse(raw);
   } catch {
-    // An HTML page here is the endpoint 404ing or asking for a login, which is
-    // what a missing version cut looks like from this side.
+    // An HTML page here is the endpoint 404ing or asking for a login.
     die(`the sink answered with something that is not JSON:\n${raw.slice(0, 300)}`, 7);
   }
   if (!res.ok) die(`the sink refused: ${res.error || raw}`, 7);
 
-  // ok:true only means the endpoint ran the action. The action reports its own
-  // refusals in the result, and a refusal that reads as success is the failure
-  // this whole pipeline is built to avoid.
+  // ok:true only means the endpoint ran the action; the action reports its own
+  // refusals in the result.
   const r = res.result || {};
   if (r.error || r.skipped) die(`the sink did nothing: ${r.error || r.skipped}`, 7);
   return r;
@@ -447,8 +302,7 @@ async function main(argv) {
   const asOf = flag('--as-of');
   const to = flag('--to') || LIST_RECIPIENT;
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) die(`--to must be one email address, got "${to}"`, 2);
-  // Fail loud both ways. A reminder is one person's own items; sending it to ~40
-  // people leaks the whole action-item list and reads as a public dressing-down.
+  // Fail loud both ways: a reminder sent to the list leaks one person's action items.
   if (GENRES[genre].needsTo && to === LIST_RECIPIENT) {
     die(`--genre ${genre} requires --to ADDRESS: it is one person's items, and the list is not a person`, 2);
   }
@@ -456,11 +310,7 @@ async function main(argv) {
     die(`--genre ${genre} goes to the list; --to is only for a reminder`, 2);
   }
 
-  // WHOSE items. `--to` is an address and says nothing about which of four owners the
-  // notes' action-item list belongs to; without this the model has to guess, and the
-  // failure mode is telling one person about another person's commitments. The name is
-  // a fact about the input, so it is passed in rather than inferred, the same reasoning
-  // as --event-date.
+  // `--to` is an address and does not say whose items; the name is passed in, never guessed.
   const forWhom = flag('--for');
   if (GENRES[genre].needsFor && !forWhom) {
     die(`--genre ${genre} requires --for NAME: it carries one person's items and cannot guess whose`, 2);
@@ -470,8 +320,6 @@ async function main(argv) {
     die(`--for must be one capitalised first name as the notes write it, got "${forWhom}"`, 2);
   }
 
-  /** The addressee block. Deliberately spare: the notes already carry the items, so
-   *  this says which owner to read and, twice, that the others are off limits. */
   const forBlock = forWhom ? [
     `## This message is for ${forWhom}, and only ${forWhom}`,
     '',
@@ -482,18 +330,12 @@ async function main(argv) {
     'an obligation for them.',
   ].join('\n') : '';
   if (genre === 'headsup' && !eventDate) {
-    // Fail loud. A heads-up whose lead time nobody computed is the exact draft
-    // that goes out saying "Sunday the 27th" to people reading it on the 27th.
     die('--genre headsup requires --event-date YYYY-MM-DD: the beat and the word "tomorrow" are derived from it', 2);
   }
   const out = flag('--out') || input.replace(/\.[^.]+$/, '') + `.${genre}.json`;
 
-  // A saved decision can be re-posted without regenerating. Without this, the
-  // only way to post was to generate again, so the operator reviewed one draft
-  // and shipped its sibling: `--post --dry-run` and `--post` are two runs and the
-  // model does not repeat itself. Reviewing text that is not the text that goes
-  // out is worse than not reviewing. The notes come back too, so the checks still
-  // grade against the input they were written from rather than against nothing.
+  // A saved decision is re-posted without regenerating, so the text reviewed is
+  // the text posted. The notes are saved with it so the checks still grade against the input.
   if (input.endsWith('.json')) {
     const saved = JSON.parse(readFileSync(input, 'utf8'));
     if (!saved.body || !saved.subject) die(`${input} has no subject/body -- not a saved decision`, 3);
@@ -523,9 +365,7 @@ async function main(argv) {
     die(`input is ${raw.trim().length} chars, under the 500-char floor -- refusing rather than recapping nothing`, 3);
   }
 
-  // `spoken` is what the model drafts from; `raw` stays the grounding text for the
-  // checks. An outline gets converted to speech first so it rides the transcript
-  // path; a transcript is already speech and is passed through untouched.
+  // `spoken` is what the model drafts from; `raw` stays the grounding text for the checks.
   const outline = looksLikeOutline(raw);
   const spoken = outline ? await outlineToTranscript(raw) : raw;
   if (outline) console.error(`-- outline detected: ${raw.trim().length} chars of notes -> ${spoken.length} chars of speech`);
@@ -533,15 +373,8 @@ async function main(argv) {
   const vault = readVault();
   console.error(`-- vault: ${Object.keys(vault.motifs).length} motifs, ${vault.examples.length} example recaps`);
 
-  // Which optional devices this recap gets. Presentation only -- it never
-  // touches what the recap SAYS. A single generation cannot reproduce a
-  // corpus frequency on its own, so the caller rolls and tells it.
-  // The dealt rates for a heads-up are measured, not tabulated: see
-  // analysis/headsup-form.mjs. A recap keeps devices.mjs's own pool rates.
-  // The dealt devices are list-voice traits measured on the 400-4000 char digest pool
-  // -- a greeting ritual, an ALL-CAPS payload marker, a parenthetical joke. None of
-  // them belongs in a two-line DM about someone's own tasks, so a reminder is dealt
-  // no hand at all and devicesBlock is left out of its prompt.
+  // Presentation only: the caller rolls the devices and tells the model. A
+  // heads-up uses measured rates (analysis/headsup-form.mjs); a reminder is dealt no hand.
   const hand = genre === 'reminder' ? {} : dealDevices(undefined, genre, beat, genre === 'headsup' ? measuredRates() : {});
   const flourish = dealFlourish();
   const typo = dealTypo();
@@ -554,10 +387,8 @@ async function main(argv) {
   console.error(`-- subject: ${subjectShape.slice(9, 96)}`);
 
   const lead = leadTimeBlock(eventDate, beat, asOf);
-  // Same principle as leadTimeBlock, applied to every date in the notes rather
-  // than just the event's: Node resolves the weekday, the model is told. Built
-  // from `raw` -- the writer's own bytes -- not from the model's rendering of
-  // them, so the spelling it is shown is the spelling the checks grade against.
+  // Node resolves each date's weekday and the model is told. Built from `raw`,
+  // so the spelling shown is the spelling the checks grade against.
   const dates = dateBlock(raw, asOf ? new Date(asOf) : new Date());
   const leadDays = eventDate ? leadTimeBlock.days : undefined;
   const prompt = [
@@ -578,19 +409,8 @@ async function main(argv) {
   const grade = d => runChecks(d, raw + '\n' + (eventDate || ''), vault, checkOpts);
   let findings = grade(decision);
 
-  // ONE repair pass, and only over blocking findings.
-  //
-  // Every check message already says what is wrong and why, in the words a human
-  // reads. Handing those same words back to the model is strictly cheaper than a
-  // human re-rolling: on 2026-09-27 three consecutive generations were blocked by
-  // three mechanical violations each ("a member's handle: misterdee27", "a person
-  // attached to an opinion: Zach has doubts", "1pm not present in the input"), all
-  // of them fixable without any new fact.
-  //
-  // Bounded at one, and it keeps whichever draft grades better, so a repair that
-  // makes things worse is discarded rather than shipped. It changes nothing about
-  // grounding: the notes the checks grade against are untouched, so a repair cannot
-  // launder an invented fact -- it can only remove one.
+  // One repair pass, over blocking findings only; keeps whichever draft grades
+  // better. The notes the checks grade against are untouched, so a repair cannot add a fact.
   const blockers = f => f.filter(x => x.level === 'fail');
   if (blockers(findings).length) {
     const fix = ['## Your draft was rejected. Fix exactly these and change nothing else.', ''];
@@ -614,11 +434,8 @@ async function main(argv) {
     }
   }
 
-  // _hand/_gap are saved because the re-post path re-grades the SAVED decision, and
-  // without them `hand-ignored` -- the one check that verifies the draft followed the
-  // draw -- silently did not run on the bytes that actually ship. It also made the
-  // question "was it following the deal?" unanswerable from the artifact: the draw is
-  // unseeded, printed to stderr once, and then gone.
+  // _hand/_gap are saved because the re-post path re-grades the saved decision,
+  // and `hand-ignored` needs the draw.
   writeFileSync(out, JSON.stringify({ ...decision, _checks: findings, _notes: raw, _spoken: outline ? spoken : undefined, _hand: hand, _gap: gap }, null, 2));
   console.error(`-- wrote ${out}`);
   report(findings);
@@ -638,18 +455,8 @@ async function main(argv) {
   process.exit(blocking.length ? 6 : 0);
 }
 
-/** What you read here is what the krewe receives, character for character.
- *
- *  It did not used to be. The body was HTML and this function un-marked-up a
- *  rough approximation of it for the terminal, so reviewing a draft meant
- *  reading one thing and sending another -- and the two differed in exactly the
- *  place a reviewer would not look, the open-questions section, which the sink
- *  assembles rather than the model. Plain text ended that, and the only reason
- *  it can now be promised is that `body` needs no rendering at all.
- *
- *  So this is a copy of MeetingRecap.js's appendOpenQuestions -- change one,
- *  change both -- plus a subject line and the confidence, neither of which is
- *  part of the body. */
+// What prints here is what the krewe receives. The open-questions rendering is
+// a copy of MeetingRecap.js's appendOpenQuestions: change one, change both.
 function render(d) {
   const open = d.open_questions?.length
     ? `\n\nStill open:\n${d.open_questions.map(q => `  - ${q}`).join('\n')}`
@@ -663,12 +470,8 @@ function render(d) {
   ].join('\n');
 }
 
-// Only when run directly. duel.mjs imports readVault/buildSystemPrompt/
-// callModelAsync/parseDecision from here so the game exercises the SAME prompt
-// the product uses -- a second copy would drift, which is precisely how
-// Context.js came to request a field MeetingRecap had stopped reading.
+// Only when run directly: duel.mjs imports from here so it exercises the same prompt.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  // main() is async now (the model client is): a throw before its own exit(0/6)
-  // must still leave non-zero, not an unhandled rejection warning.
+  // A throw before main()'s own exit must still leave non-zero.
   main(process.argv).catch(err => die(String(err?.message || err), 1));
 }

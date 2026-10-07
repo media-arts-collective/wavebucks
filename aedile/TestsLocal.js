@@ -1,24 +1,10 @@
-/**
- * TestsLocal.js
- * Fast local regression suite for Aedile's pure-logic pieces, run with
- * plain `node TestsLocal.js` — no Google Apps Script dependencies, no
- * live ReadApi/WriteApi calls, no secrets. Mirrors the pattern already
- * established in scribaSenatus/TestsLocal.js: self-contained, re-declares
- * the functions under test inline (plain node cannot load Apps Script
- * globals from the real .js files), with mocked GmailApp/PropertiesService/
- * Session objects standing in for the real services.
- *
- * When you change the real logic in InboxProcessor.js (getThreadParticipants,
- * getRecipientCompletion, isAllowlistEligible, classifyAudience), mirror the
- * change here or this suite will silently test stale logic.
- *
- * This is the first piece of the scenario library discussed in
- * .scheduler/FOCUS.md's backlog item 2 — the part that needs no live data
- * or secrets, so it should run on every cycle regardless of network/API
- * availability. Live-data dry-run scenarios (against real OpenLoops/
- * Messages via ReadApi/WriteApi) are a separate, second piece, not yet
- * built — see FOCUS.md.
- */
+// TestsLocal.js -- local regression suite for Aedile's pure-logic pieces.
+//
+//   node TestsLocal.js
+//
+// Re-declares the functions under test inline (plain node cannot load Apps
+// Script globals). When you change the real logic, mirror the change here or
+// this suite will silently test stale logic.
 
 // --- Inline copies of the functions under test (see InboxProcessor.js) ---
 
@@ -105,11 +91,8 @@ console.log('InboxProcessor pure-logic regression suite\n');
 
 console.log('extractEmail — display-name spoofing of the allowlist (#61, 2026-09-25)');
 {
-  // Regression case for the audit finding of 2026-09-25. extractEmail took the
-  // FIRST bracketed group, so a display name containing <zach@nomac.org> made
-  // getThreadParticipants record Zach for a stranger, and isAllowlistEligible
-  // then saw a fully allowlisted thread. The fix is to take the LAST group:
-  // RFC 5322 puts the real address after the display name.
+  // extractEmail takes the LAST bracketed group: a display name containing
+  // <zach@nomac.org> must not make a stranger read as allowlisted.
   const allowlist = ['zach@nomac.org', 'tyler@nomac.org', 'kreweofvaporwave@kreweofvaporwave.com'];
 
   assertEqual(extractEmail('Zachary Pine <zach@nomac.org>'), 'zach@nomac.org',
@@ -140,13 +123,8 @@ console.log('extractEmail — display-name spoofing of the allowlist (#61, 2026-
 
 console.log('getRecipientCompletion — recipient-completion bug (2026-07-22)');
 {
-  // Regression case for the real bug found 2026-07-22: a real bump email
-  // reached Tyler but never reached Zach. Root cause: the LAST message in
-  // the thread only carried tyler@nomac.org and the krewe address — Zach
-  // only appeared on an EARLIER message. thread.replyAll()/createDraftReply()
-  // only address the last message's participants natively, so the fix is
-  // that getRecipientCompletion must return the FULL historical set,
-  // including Zach, regardless of which message is last.
+  // getRecipientCompletion returns the full historical participant set,
+  // regardless of which message is last.
   const thread = mockThread([
     mockMessage({ from: 'zach@nomac.org', to: 'tyler@nomac.org, kreweofvaporwave@kreweofvaporwave.com' }),
     mockMessage({ from: 'kreweofvaporwave@kreweofvaporwave.com', to: 'zach@nomac.org, tyler@nomac.org' }),
@@ -191,18 +169,8 @@ console.log('\nclassifyAudience');
 
 console.log('\nOpenLoops._sanitizeRecheckDays — clamping guard');
 {
-  // Inline copy of OpenLoops.js's private _sanitizeRecheckDays (see
-  // OpenLoops.js's MIN/MAX/DEFAULT_RECHECK_DAYS constants). Not a
-  // regression case for the actual stale-recheck-window bug found
-  // 2026-07-22 (both director-loop threads stuck at recheck_after_days=10)
-  // — that was a model-judgment bug (seasonal restraint overriding an
-  // explicit blocker), reproducible only against the real API with live
-  // OpenLoops/Messages data, which this local suite deliberately can't
-  // reach (no secrets/network). This instead covers the one piece of that
-  // failure mode that IS pure logic: the clamp that keeps a bad/missing
-  // recheck_after_days from parking a loop absurdly far out. The live-data
-  // dry-run scenario for the actual bug is still open — see
-  // .scheduler/FOCUS.md's Stability milestone checklist.
+  // Inline copy of OpenLoops.js's private _sanitizeRecheckDays: the clamp that
+  // keeps a bad or missing recheck_after_days from parking a loop absurdly far out.
   const MIN_RECHECK_DAYS = 1;
   const MAX_RECHECK_DAYS = 60;
   const DEFAULT_RECHECK_DAYS = 3;
@@ -222,13 +190,8 @@ console.log('\nOpenLoops._sanitizeRecheckDays — clamping guard');
 
 console.log('\nWriteApi.strictBool — a misread safety flag must not mean "no safety"');
 {
-  // Inline copy of WriteApi.js's strictBool (see WriteApi.js).
-  //
-  // Regression case for the fail-open dryRun parse. The old form was
-  // `String(params.dryRun) === 'true'`, so every value it did not recognise
-  // read as false and ran FOR REAL — on an endpoint that can auto-send mail
-  // via replyAll() with no human between the decision and delivery.
-  // `dryRun=1` and `dryRun=ture` are the realistic ways to hit it.
+  // Inline copy of WriteApi.js's strictBool. An unrecognised dryRun value must
+  // not run for real on an endpoint that can auto-send mail.
   function strictBool(value, name) {
     if (value === undefined || value === null || value === '') return false;
     const s = String(value);
@@ -267,9 +230,7 @@ console.log('\nMeetingRecap — the two guards that keep a draft from becoming a
     return String(transcript || '').trim().length < MIN_TRANSCRIPT_CHARS;
   }
 
-  // The recipient is the LIST, not the Workspace account Aedile runs as.
-  // Confusing the two sends krewe mail to Aedile's own inbox, where nobody
-  // reads it — and it is one character of difference in a plausible typo.
+  // The recipient is the list, not the Workspace account Aedile runs as.
   assertEqual(RECAP_RECIPIENT, 'kreweofvaporwave@googlegroups.com', 'recap is addressed to the Google Group');
   assertEqual(RECAP_RECIPIENT === 'kreweofvaporwave@kreweofvaporwave.com', false, 'recap is NOT addressed to Aedile\'s own Workspace inbox');
 
@@ -280,9 +241,7 @@ console.log('\nMeetingRecap — the two guards that keep a draft from becoming a
   assertTrue(tooShort('we met and talked about the parade'), 'a one-line transcript is refused');
   assertEqual(tooShort('x'.repeat(MIN_TRANSCRIPT_CHARS)), false, 'a transcript at the floor is accepted');
 
-  // Open questions must survive into the draft. The recap context tells the
-  // model to report what the meeting did NOT settle rather than resolve it;
-  // dropping them here would quietly undo that instruction.
+  // Open questions must survive into the draft.
   const body = appendOpenQuestions('1. THE LIVESTREAM. Building Sunday at 1.', ['Who is getting the tires?']);
   assertTrue(body.includes('Who is getting the tires?'), 'an open question reaches the draft body');
   assertTrue(body.includes('Still open:'), 'open questions are labelled, not silently appended');
@@ -331,8 +290,7 @@ console.log('\nsetRecapEnabled — a kill switch that can be flipped from outsid
   assertEqual(setRecapEnabled('true', false), { was: false, now: true }, 'unset -> true, and it reports both ends');
   assertEqual(setRecapEnabled('false', false), { was: true, now: false }, 'and back off again — both directions');
 
-  // A misread value must not silently mean "off". Same failure direction the
-  // strictBool guard was added for on dryRun.
+  // A misread value must not silently mean "off".
   prop = 'true';
   for (const bad of ['1', 'yes', 'ture', 'TRUE', 'on']) {
     assertTrue(setRecapEnabled(bad, false).error, `enabled=${bad} is refused, not guessed at`);
@@ -351,10 +309,8 @@ console.log('\nsetRecapEnabled — a kill switch that can be flipped from outsid
 
 console.log('\nWriteApi.chooseDraftForm — the createDraft sink picks exactly one shape');
 {
-  // Inline copy of WriteApi.js's chooseDraftForm (see that file). Reply
-  // (threadId) and originate (to+subject) are mutually exclusive; anything
-  // ambiguous or half-specified returns an { error } rather than guessing at
-  // an intent — a dumb sink shouldn't invent which kind of draft to make.
+  // Inline copy of WriteApi.js's chooseDraftForm. Reply and originate are
+  // mutually exclusive; anything ambiguous returns { error }.
   function chooseDraftForm(params) {
     const hasThread = !!params.threadId;
     const hasOriginate = !!params.to || !!params.subject;
@@ -379,12 +335,7 @@ console.log('\nWriteApi.chooseDraftForm — the createDraft sink picks exactly o
 
 console.log('\nWriteApi.chooseBody — one body, plain XOR html; recap goes plain so `<3` survives');
 {
-  // Inline copy of WriteApi.js's chooseBody (see that file). The createDraft
-  // primitive became the single draft sink in #41; a recap (plain text) and a
-  // triage/bump reply (HTML) both flow through it, so it takes exactly one of
-  // `body` (plain) or `htmlBody`. Plain matters: the recap sign-off `<3 SM` is
-  // swallowed by an HTML tag-stripper unless it is drafted as plain text — the
-  // reason MeetingRecap.js drafts plain and redige.mjs posts a plain body.
+  // Inline copy of WriteApi.js's chooseBody: exactly one of `body` (plain) or `htmlBody`.
   function chooseBody(params) {
     const hasHtml = params.htmlBody !== undefined && params.htmlBody !== '';
     const hasPlain = params.body !== undefined && params.body !== '';
@@ -403,10 +354,8 @@ console.log('\nWriteApi.chooseBody — one body, plain XOR html; recap goes plai
 
 console.log('\nWriteApi.sendGate — the send primitive fails closed, master kill first');
 {
-  // Inline copy of WriteApi.js's sendGate (see that file). Returns a refusal
-  // REASON string, or null when a send may proceed. This is the guardrail
-  // last line for sendReplyAll now that judgment no longer runs the guardrails
-  // in-process — the brain deciding to send does not bypass it.
+  // Inline copy of WriteApi.js's sendGate: a refusal reason, or null when a
+  // send may proceed. The guardrail last line for sendReplyAll.
   function sendGate(aedileEnabled, allowlistEligible) {
     if (!aedileEnabled) return 'AEDILE_ENABLED is not "true" — master kill switch is off.';
     if (!allowlistEligible) {

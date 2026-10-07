@@ -1,12 +1,8 @@
-/**
- * schedule.test.mjs -- which beats an event gets, and which events get none.
- *
- *   node --test aedile/recap/schedule.test.mjs
- *
- * No corpus, no network. The cases are the real 2026-09-27 notes, because the bug
- * worth pinning here was found by running it against them: the first version
- * scheduled a nudge for BOTH candidate Evangelion dates.
- */
+// schedule.test.mjs -- which beats an event gets, and which events get none.
+//
+//   node --test aedile/recap/schedule.test.mjs
+//
+// No corpus, no network.
 
 import test from 'node:test';
 import assert from 'node:assert';
@@ -32,8 +28,7 @@ test('the odds come from the event weekday, measured', () => {
   assert.ok(SECOND_BEAT_ODDS.sunday > SECOND_BEAT_ODDS.midweek);
 });
 
-// THE BUG. Both candidate dates got a nudge, which would have announced two
-// screenings for one double feature nobody has booked.
+// Two candidate dates for one unbooked event must not both get a nudge.
 test('an either/or date pair gets no beats at all', () => {
   assert.ok(unsettled(NOTES, new Date(2026, 10, 25)));
   assert.ok(unsettled(NOTES, new Date(2026, 10, 29)));
@@ -81,7 +76,7 @@ test('an event too close to nudge is dropped rather than nudged late', () => {
 
 test('a past date in the notes is never scheduled', () => {
   const rows = schedule('* Wings were Sep 2nd\n* Brunch Oct 18th', { today: TODAY });
-  // Distinct EVENTS, not rows: one event legitimately yields two rows when the deal
-  // gives it a lock-in as well as a nudge, which is what this assertion first caught.
+  // Distinct events, not rows: one event yields two rows when dealt a lock-in
+  // as well as a nudge.
   assert.deepEqual([...new Set(beats(rows).map(r => r.event))], ['2026-10-18']);
 });

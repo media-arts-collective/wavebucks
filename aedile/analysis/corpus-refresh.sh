@@ -4,27 +4,8 @@
 #   aedile/analysis/corpus-refresh.sh              # scrape what is left, merge, gate, install
 #   aedile/analysis/corpus-refresh.sh --no-scrape  # merge, gate and install what is banked
 #
-# WHY THIS EXISTS. Every step below already worked by hand on 2026-09-27, and the work
-# then sat for ten days: the scrape stopped at 364 of 628 topics on a revoked session, the
-# way to resume it was a paragraph in an issue comment, and nothing ever wrote the vault.
-# Zach, 2026-10-07: "mechanize all this ... the old work blocked and rotted until I
-# reraised it."
-#
-# Steps, each of which stops the run loudly rather than continuing on a bad input:
-#   1. session   one request. Dead -> re-export the Firefox container. Still dead -> exit 3;
-#                a human signs the `kreweofvaporwave` container back in. Nothing else can.
-#   2. scrape    chunks of $CHUNK topics with $GAP seconds between, not one long run: Google
-#                revoked the session twice after ~250 continuous page loads. The ledger makes
-#                a chunk free to repeat. Stops when the ledger is full or two chunks in a row
-#                bank nothing.
-#   3. merge     scrape + the legacy archive + live Gmail (mail since the 2026-07-29 snapshot).
-#   4. gate      the merged file must not lose rows, topics or subjects, must not fuse
-#                distinct messages, and must not have MORE preview snippets than the legacy.
-#   5. install   legacy kept once as messages.legacy.jsonl; the merged file becomes
-#                messages.jsonl, which every rate in analysis/ and recap/ reads.
-#
-# Status lands in $STATE/status as one line (OK / BLOCKED / FAILED, date, reason) so a
-# blocked run is a file something can read, not a comment someone has to remember.
+# Scrapes in chunks of $CHUNK topics, $GAP seconds apart: Google revokes a long continuous run.
+# Status lands in $STATE/status as one line (OK / BLOCKED / FAILED, date, reason).
 #
 # Exit: 0 installed, 3 needs a human sign-in, 4 gate refused, 1 anything else.
 
@@ -94,11 +75,7 @@ if [ "${1:-}" != --no-scrape ]; then
   done
 fi
 
-# Eight goes, a minute apart, each resuming where the last died. The Gmail half reads
-# through /exec, which on 2026-10-07 failed about three calls in four (#54): the first
-# full run died here with all 628 topics banked, and three restarts from zero died too.
-# So ingest.py keeps each thread it has read under $CACHE/gmail-threads, and a retry
-# only reads what is missing. A read is safe to repeat.
+# /exec is flaky, so ingest.py caches each thread read and a retry reads only what is missing.
 export INGEST_GMAIL_CACHE=$CACHE/gmail-threads
 merged=no
 for try in 1 2 3 4 5 6 7 8; do

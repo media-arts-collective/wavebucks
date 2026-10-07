@@ -634,6 +634,10 @@ def read_thread(t):
     path = os.path.join(cache, f"{t['threadId']}-{stamp}.json")
     if os.path.exists(path):
         return json.load(open(path))
+    # PACED. Back to back, these reads failed almost every time on 2026-10-07 (1 thread
+    # banked across three attempts); the same thread read by hand a minute later answered
+    # three times out of three. Three seconds is a guess that worked, not a measured floor.
+    time.sleep(3)
     body = call('readThread', threadId=t['threadId'])
     os.makedirs(cache, exist_ok=True)
     with open(path + '.part', 'w') as fh:

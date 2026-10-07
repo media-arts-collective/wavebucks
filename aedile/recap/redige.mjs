@@ -25,7 +25,7 @@
  * the live project: Apps Script has no `import`, no `fs`, no `process`.
  */
 
-import { readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -300,7 +300,9 @@ const LIST_RECIPIENT = 'kreweofvaporwave@googlegroups.com';
 
 /** Same default call.sh uses, and the same caveat: that tree is being retired, so the
  *  environment wins. Only read by --if-new, which needs the READ token. */
-const SECRETS = process.env.AEDILE_SECRETS || '/srv/vaporwave-reports/aedile/.aedile-api-secrets';
+const SECRETS = process.env.AEDILE_SECRETS
+  || [join(process.env.HOME || '', '.config/aedile/api-secrets'), '/srv/vaporwave-reports/aedile/.aedile-api-secrets']
+    .find(f => existsSync(f)) || '';
 
 /** Render open_questions into the body the same way MeetingRecap.js does --
  *  plain text, "Still open:" then a dash list. #41 moved assembly here so the

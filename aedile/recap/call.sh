@@ -29,7 +29,10 @@ URL="${AEDILE_EXEC_URL:-https://script.google.com/macros/s/AKfycbyyx1N_0hMP2-GG3
 
 # Environment first, like redige.mjs, because the file below lives under
 # /srv/vaporwave-reports and that tree is being retired.
-SECRETS="${AEDILE_SECRETS:-/srv/vaporwave-reports/aedile/.aedile-api-secrets}"
+SECRETS="${AEDILE_SECRETS:-}"
+for f in "$HOME/.config/aedile/api-secrets" /srv/vaporwave-reports/aedile/.aedile-api-secrets; do
+  [ -z "$SECRETS" ] && [ -r "$f" ] && SECRETS=$f
+done
 
 [ $# -ge 1 ] || { echo "usage: call.sh <action|get <scope>> [field=value ...]" >&2; exit 2; }
 

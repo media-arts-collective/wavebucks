@@ -11,5 +11,5 @@ desc=${1:?usage: deploy.sh "<description>"}
 id=$(grep -o 'AKfycb[A-Za-z0-9_-]*' recap/call.sh | sort -u)
 [ "$(wc -l <<<"$id")" = 1 ] || { echo "deploy: expected one deployment id in recap/call.sh" >&2; exit 1; }
 clasp -u aedile push
-clasp -u aedile deploy -i "$id" -d "$desc"
+clasp -u aedile deploy -i "$id" -d "$desc ($(git rev-parse --short HEAD))"
 clasp -u aedile deployments

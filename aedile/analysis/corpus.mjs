@@ -272,6 +272,11 @@ export function load({ since = null, until = null } = {}) {
   return readFileSync(join(VAULT, 'messages.jsonl'), 'utf8').trim().split('\n')
     .map(l => JSON.parse(l))
     .filter(m => isOperator(m) && typeof m.body === 'string')
+    // July rows the 2026-10 scrape did not replace: 126 duplicate a scraped row and 28
+    // are masked previews of messages the scrape lacks (#99). Zach, 2026-10-07: "can we
+    // deactivate those from the vault or something, not train on them?" They stay in the
+    // file because the scraper reads its topic list from it.
+    .filter(m => m.source !== 'legacy-scrape')
     .map(m => ({ ...m, _d: parseDate(m.date) }))
     .filter(m => m._d)
     .filter(m => (!since || m._d.getUTCFullYear() >= since)

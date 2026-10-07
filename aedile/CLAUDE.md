@@ -186,9 +186,7 @@ instruction-following rather than a rate.
 **The heads-up form is computed, not written.** `analysis/headsup-form.mjs` measures it
 from the corpus every run and `redige.mjs` splices the result; `AEDILE_CONTEXT.headsup.md`
 keeps only the genre's purpose and the beats' functions. Its Form section was deleted
-because it was wrong twice in one session in the same direction (it called both beats
-"terse" against a 173-word median, and said numbering "is NOT a lock-in trait" against
-50%). Every rate is checked three ways before it may become an instruction -- target
+because it was wrong twice in one session in the same direction. Every rate is checked three ways before it may become an instruction -- target
 pool, a differently-drawn neighbour pool, and a Wilson interval -- and an interval
 spanning 50% is reported as undecidable rather than rounded into a rule.
 
@@ -197,85 +195,15 @@ That table has been wrong three ways: first `GENRE_OFF`, devices forced to false
 strength of prose; then `GENRE_P`, the same rates as literals I typed after reading the
 report; now the measurement itself. Only the third survives a corpus change.
 
-**EVERY RATE IN THIS SECTION AND IN `devices.mjs` IS A LOWER BOUND.** 28% of
-`messages.jsonl` is a ~101-character Google Groups preview rather than a body (31% if
-the band is drawn at 80-101 characters, as `ingest.py --audit` draws it -- same pool,
-different edge, and the conclusion holds either way), and the
-truncation is strongly length-biased: 62% of messages 111-1000 characters long were
-truncated, 75% at 1001-3000, 94% above 3001. A snippet is cut before the sign-off, the
-closing exclamation and the later numbered items, so it votes "trait absent" for every
-trait that lives late in a message. `isFullBody` in `analysis/corpus.mjs` excludes them
-now, which raised the length target from 134 words to 173 and the exclamation rate from
-94% to 100%.
-
-**Re-deriving these rates from the OLD `messages.jsonl` will NOT correct them** -- the
-same pool reproduces the same bias. The fix was never a second mailbox: it is reading the
-group's own topic pages, which `aedile/analysis/scrape-topics.py` now does
-(2026-09-27). A collapsed message on a topic page renders masked and truncated exactly
-like a list preview, so the scrape clicks `Expand all` first; see that file's header.
-
-**Partially corrected, and the direction was a surprise.** At 239 of 628 topics (38%
-coverage) the snippet band falls 343 -> 288 of 1171 rows, subjects go 0 -> 368, null
-addresses 325 -> 262 and ellipsized authors 802 -> 558. But the length target moved
-**DOWN**, 173 -> 164 words, with the lower quartile falling 96 -> 64. The prediction here
-was that 173 was a floor and the true figure was above it, on the argument that truncation
-is length-biased and the survivors are the short ones. That argument is sound and still
-produced the wrong direction, because replacing a snippet with its real body also admits
-genuinely SHORT announcements that `isFullBody` had been dropping. So 173 was not a floor.
-No property verdict changed, which is the reassuring half: the form conclusions survived a
-38% corpus change intact. **Nothing has been adopted from the new corpus** -- the rates in
-`devices.mjs` and `formBlock()` still read the vault copy, and moving them is a decision.
-
-Finishing the scrape is blocked on a live session, not on code: Google invalidated the
-exported container credential mid-run (every Google property bounced to the account
-chooser with all five auth cookies present and freshly re-exported), which on ~250
-headless page loads in 90 minutes reads as an anti-automation revocation. Re-signing the
-`kreweofvaporwave` Firefox container in restores it and the ledger resumes.
-
-Two rules the corpus turned out not to support, both deleted:
-
-- The subject doctrine (#30). `messages.jsonl` has **no subject field**; the scraper
-  built thread titles from body first lines, and 448 of 542 comparable titles are the
-  body opening verbatim with nearly all the rest differing only in apostrophes. They are
-  truncated at slug length too ("Bring bri" for "Bring brilliant, unwieldy ideas"). Of 31
-  real subjects recovered from live Gmail, **0** begin `N. ` and 0 restate the body
-  opening. The prompt rule and the `subject-body-mismatch` check are both gone, and
-  `dealSubject` deals subject FEATURES at rates measured over those 31 -- successor-era
-  only, which was forced when Abe-era subjects existed in no store. **They exist now**:
-  the topic scrape put 186 Abe-era operator subjects in the corpus at 38% coverage, and
-  `subject-shapes.mjs` reads them (`corpusSubjects({ until: 2024 })`). `N. ` is 0 of 186,
-  so #30's deletion holds on a six-times-larger denominator spanning the era it was
-  missing.
-
-  **The weights `dealSubject` uses are drawn from the wrong era, and one is badly wrong.**
-  Same detectors, the 12 logistics-carrying subjects the weights come from against 112
-  Abe-era ones: `calDate` 58% -> **2%**, `bang` 8% -> 44%, `lowerOpen` 8% -> 29%,
-  `clockTime` 50% -> 26%, `dayWord` 75% -> 94%, carries-logistics 39% -> 60%. The
-  generator is taught to put an `M/D` in a subject at 58%, off roughly seven specimens,
-  against 2% of 112. Not yet changed -- re-weighting is Zach's call, and only the `<=2024`
-  slice is clean anyway (`isOperator` matches aedile's own sends and no `--mark-aedile`
-  pass runs behind that loader; aedile did not exist before 2026, so the Abe slice needs
-  no filter).
-
-  **Do not build a generator on those 31.** They refute a rule; they are far too thin
-  and too skewed to source one. Only 10 of 31 carry a day, time or date at all (32%,
-  counting a day word, a clock time, `tonight`/`today`, or `M/D`/`Nth`; a looser regex
-  scores 12 of 31, and both definitions are in the code beside their numbers). Median
-  length 28 characters, range 8-63. Reading event-shaped specimens out of a mailbox by
-  eye overstated exactly this, twice, in one session. If a rate off this set travels,
-  the denominator and the definition travel with it.
-
-  Two of the 35 raw thread-starters were unsent DRAFTS, not list mail -- Gmail's
-  `list:` operator matches drafts addressed to the group, so `--gmail` ingested text
-  nobody had read. `ingest.py` excludes them at the source now. It is the same error as
-  counting aedile's own sent mail, one step earlier and worse in kind, because a draft
-  may never go out at all.
-- The three-blank-line default (#27). Now a per-email draw (`dealGap`) at the measured
-  54/34/11 for a recap and 42/40/18 for a heads-up, not an instruction. Zach:
-  *"defaulting to 3 spaces as a rule is wrong, it should be stochastic."* The
-  distribution itself stays UNVERIFIED as a human habit; #27 has the 2020 regime change,
-  and a cross-source body comparison shows the two renderings diverge past 60 characters,
-  which is consistent with re-flow and does not establish it.
+**Archive figures are not quoted in this file.** `python3 aedile/analysis/ingest.py
+--audit <file>` and `node aedile/analysis/subject-shapes.mjs` print them from the
+installed archive. Zach, 2026-10-07, on figures here that still described an archive
+that had been replaced: *"This is in fact a failure: using prose with numbers."* The
+paragraphs that held them are deleted. What they concluded, and what still holds: a
+subject is never numbered and never restates the body's opening (#30); the blank-line
+gap is a per-email draw, not a rule (#27); the scrape stalled on an `unread,` line,
+not on a revoked session (#71); the July rows the scrape did not replace are held out
+of `load()` (#99).
 
 **Before teaching the generator any new trait, check its provenance against a
 source outside the scrape.** Non-breaking spaces, gap sizes and subjects all read
@@ -299,9 +227,7 @@ cyborg-narrator lore) already makes this on-brand.
 
 Two behavioral rules tied to voice:
 - Aedile may **originate** krewe-wide announcements (e.g. gathering
-  heads-ups) — which is what the operator historically always did (97% of
-  past announcements were new-subject thread-starters, per the mailing-list
-  archive). The safety boundary is **not** a ban on originating; it is
+  heads-ups) — which is what the operator historically always did. The safety boundary is **not** a ban on originating; it is
   **draft-only: aedile drafts, a human sends, and it stays that way until a
   flag explicitly changes it** (same posture as `AUTOSEND_ENABLED`). The
   earlier "never start threads" rule was scoped to internal working-group

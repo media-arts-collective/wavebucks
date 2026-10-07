@@ -288,6 +288,9 @@ def calendar_day(date):
     return f'{m.group(3)}-{m.group(1)}-{int(m.group(2)):02d}' if m else '?'
 
 
+QUOTES = str.maketrans({'\u2018': "'", '\u2019': "'", '\u201c': '"', '\u201d': '"'})
+
+
 def merge_key(date, body, seq):
     """Identity of a message ACROSS sources. Every part of this is measured;
     `keytune` in the commit message has the table.
@@ -328,7 +331,12 @@ def merge_key(date, body, seq):
     chosen from the decay curve; it holds for two reasons and only one of
     them was reasoned about.
     """
-    text = re.sub(r'\s+', ' ', body or '').strip()[:PREFIX].lower()
+    # Quotes are folded before the cut. The legacy scrape wrote straight apostrophes and
+    # a topic page renders curly ones, so "I'm" and "I\u2019m" keyed apart: at full scrape
+    # coverage on 2026-10-07, 72 legacy rows sat beside their own scraped twins, same day,
+    # same words, as two messages.
+    text = (body or '').translate(QUOTES)
+    text = re.sub(r'\s+', ' ', text).strip()[:PREFIX].lower()
     if not text:
         return f'empty-body-{seq}'
     return hashlib.sha1(f'{calendar_day(date)}|{text}'.encode()).hexdigest()
@@ -412,7 +420,11 @@ def from_mbox(path, group=GROUP):
             'to': str(msg['To']) if msg['To'] else None,
             'cc': str(msg['Cc']) if msg['Cc'] else None,
             'body': body,
-            'topic_url': None,
+            # scrape-topics.py stamps each message with its topic. Dropping it here left
+            # the merged corpus unable to say which topics exist, and the scraper
+            # enumerates from exactly that.
+            'topic_url': (f"https://groups.google.com/g/{GROUP}/c/{msg['X-Topic-Id']}"
+                          if msg['X-Topic-Id'] else None),
             'source': 'mbox',
         }
     print(f'ingest: mbox {path}: kept {kept} list messages, '

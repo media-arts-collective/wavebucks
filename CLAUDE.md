@@ -23,6 +23,8 @@ Treat any diff to that file as a privilege change.
 - An agent never widens its own permissions. Moving a row out of `ask`, or adding one to
   `allow`, needs Zach's explicit sentence, and that sentence goes in the commit message of
   the `settings.json` change. Nowhere else.
+- Spell a `call.sh` verb as `aedile/recap/call.sh <verb>` or `./call.sh <verb>` only. A
+  wrapped or env-prefixed spelling matches no row.
 - Flag every push in the next report: what, why, and `git revert <sha>`.
 - Fail loud. No defensive try/catch or silent fallback that would quiet an error.
 - Loops rows are krewe work. Issues are for maintaining this machinery.

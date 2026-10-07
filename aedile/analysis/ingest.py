@@ -335,7 +335,10 @@ def merge_key(date, body, seq):
     # a topic page renders curly ones, so "I'm" and "I\u2019m" keyed apart: at full scrape
     # coverage on 2026-10-07, 72 legacy rows sat beside their own scraped twins, same day,
     # same words, as two messages.
-    text = (body or '').translate(QUOTES)
+    # And two things only one side carries: the legacy scrape kept Google's icon glyphs
+    # (private-use codepoints, the same ones scrape-topics.py strips) and a topic page
+    # sometimes leads with a byte-order mark. 20 more pairs keyed apart on those.
+    text = re.sub(r'[\ue000-\uf8ff\ufeff]', '', (body or '').translate(QUOTES))
     text = re.sub(r'\s+', ' ', text).strip()[:PREFIX].lower()
     if not text:
         return f'empty-body-{seq}'
@@ -687,6 +690,15 @@ def from_gmail(query, year_from, year_to):
             for m in read_thread(t)['messages']:
                 dt = datetime.fromisoformat(
                     m['date'].replace('Z', '+00:00')).astimezone(LOCAL)
+                # A SCHEDULED send is dated when it will go, and `-in:drafts` does not
+                # exclude it: the first full merge on 2026-10-07 carried three mails the
+                # list had not received yet, the latest dated ten days out. Same error as
+                # the draft leak above. The query now says -in:scheduled; this is the
+                # backstop that does not depend on Gmail's operator.
+                if dt > datetime.now(LOCAL):
+                    print(f"ingest: skipped a message dated {dt.date()}, in the future "
+                          f'(a scheduled send)', file=sys.stderr)
+                    continue
                 name, addr = email.utils.parseaddr(m['from'])
                 yield {
                     'author': name or addr,
@@ -794,7 +806,7 @@ def main():
                    help="set aedile_authored by cross-referencing aedile's Log; "
                         'costs one read call. See aedile_marker().')
     p.add_argument('--query',
-                   default='list:kreweofvaporwave.googlegroups.com -in:drafts',
+                   default='list:kreweofvaporwave.googlegroups.com -in:drafts -in:scheduled',
                    help='Gmail search. Keep -in:drafts unless you mean to '
                         'ingest unsent text; see from_gmail().')
     p.add_argument('--years', default='2019:2026', metavar='FROM:TO')

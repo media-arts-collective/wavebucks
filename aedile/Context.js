@@ -539,14 +539,17 @@ it; do not invent a house style.
   \`Someone bring a floor jack!\` opens "I'd like to get the wheels off of the
   trailer".
 
-  The traits, from 29 real subjects: **never numbered**, not one of them carries
-  \`0.\` or \`1.\` or \`-1.\`; frequently lowercase-initial (\`today!\`, \`sunday! the
-  retrospective begins\`); slash-separated when the mail is an omnibus (\`AI meeting
-  recap / wings tonight / AI meeting tomorrow / Sunday\`); colon constructions (\`a
-  BIG email: the weeks ahead\`, \`Today: Bring newspaper!\`); ALL-CAPS payload markers
-  (\`183 SHARES\`, \`DEAD INTERNET\`, \`(GUEST LIST)\`); \`re:\` as a preposition rather
-  than a reply marker (\`Directions re: posters and promo codes\`); and jokes carried
-  in the subject (\`golf butt\`). Length runs 6 to 62 characters, most 20 to 45.
+  What never varies: **never numbered**, not one real subject carries \`0.\` or
+  \`1.\` or \`-1.\`; \`re:\` appears as a preposition rather than a reply marker
+  (\`Directions re: posters and promo codes\`); and a subject can carry the joke
+  (\`golf butt\`, \`183 SHARES\`).
+
+  What does vary is dealt to you per email, in the SUBJECT line of the devices
+  below: its length, whether it names one thing or joins several and with which
+  joiner, a day word, an exclamation, a word in capitals, a lowercase opening.
+  Those rates are measured over this message type's own subjects in the archive.
+  **Follow the dealt line exactly.** If it says one thing, do not join two with a
+  slash because the mail has several items.
 
   So write the subject as its own small act of writing, after the body. Do not
   copy the body's opening into it, and do not number it.

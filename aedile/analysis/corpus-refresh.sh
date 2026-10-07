@@ -120,5 +120,5 @@ refuse() { status FAILED "gate refused: $1; vault untouched, merged file at $MER
 [ "$(topics "$MERGED")" -ge "$TOTAL" ] || refuse "merged lost topic URLs, so the next scrape could not enumerate"
 
 [ -f "$LEGACY" ] || cp -p "$LIVE" "$LEGACY"
-cp "$MERGED" "$LIVE.new" && mv "$LIVE.new" "$LIVE"
+cp "$MERGED" "$LIVE.new" && chmod 660 "$LIVE.new" && mv "$LIVE.new" "$LIVE"
 status OK "installed $(audit "$LIVE" 'rows') rows, $(banked)/$TOTAL topics scraped, $(audit "$LIVE" 'bodies 80-101 chars') preview snippets left"

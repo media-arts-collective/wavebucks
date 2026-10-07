@@ -209,9 +209,9 @@ and *"b. yes"*. None of the three touches Gmail; they write rows to the
 private sheet. The hook runs `aedile/recap/loops.sh`, a read. On a check
 that would hold bot PRs touching this file, Zach: *"c. do nothing"*.
 
-**`amendLoop` added to `ask` (2026-10-06).** Not ruled by Zach; placed
-beside `closeLoop` because it retires a row the same way. Moving it to
-`allow` needs his sentence.
+**`amendLoop` added to `ask` (2026-10-06).** Placed beside
+`closeLoop` because it retires a row the same way. Zach, asked the same
+day whether it stays in `ask` or moves to `allow`: *"ask"*.
 
 **Loops are krewe work; issues are this machinery (2026-10-06,
 human-directed).** Zach: *"Can we separate Loop items from repo/self-dev

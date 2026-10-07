@@ -686,7 +686,11 @@ def from_gmail(query, year_from, year_to):
     seen = 0
     for year in range(year_from, year_to + 1):
         q = f'{query} after:{year}/01/01 before:{year + 1}/01/01'
-        for t in call('readInbox', q=q, limit=100)['threads']:
+        threads = call('readInbox', q=q, limit=100)['threads']
+        if len(threads) >= 100:
+            raise SystemExit(f'ingest: {year} returned {len(threads)} threads, the '
+                             f'readInbox cap; the year is truncated. Split it by month.')
+        for t in threads:
             for m in read_thread(t)['messages']:
                 dt = datetime.fromisoformat(
                     m['date'].replace('Z', '+00:00')).astimezone(LOCAL)

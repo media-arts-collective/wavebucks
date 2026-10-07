@@ -1,0 +1,13 @@
+# Install, from the repo root (links, so the unit that runs is this file):
+#   systemctl --user link "$PWD/aedile/analysis/systemd/krewe-corpus-refresh.service"
+#   systemctl --user enable --now "$PWD/aedile/analysis/systemd/krewe-corpus-refresh.timer"
+[Unit]
+Description=krewe: refresh the mailing-list corpus nightly
+Documentation=https://github.com/media-arts-collective/wavebucks/issues/93
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

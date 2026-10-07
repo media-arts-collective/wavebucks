@@ -497,7 +497,7 @@ async function main(argv) {
     if (!saved.body || !saved.subject) die(`${input} has no subject/body -- not a saved decision`, 3);
     if (!saved._notes) die(`${input} has no _notes -- regenerate it with this version, which saves them`, 3);
     leadTimeBlock(eventDate, beat, asOf);  // recompute leadTimeBlock.days for the check
-    const findings = runChecks(saved, saved._notes + '\n' + (eventDate || ''), readVault(), { genre, beat, leadDays: eventDate ? leadTimeBlock.days : undefined, shape: genre === 'recap' ? recapForm() : undefined, asOf: asOf || new Date(), hand: saved._hand });
+    const findings = runChecks(saved, saved._notes + '\n' + (eventDate || ''), readVault(), { genre, beat, leadDays: eventDate ? leadTimeBlock.days : undefined, shape: genre === 'recap' ? recapForm() : undefined, asOf: asOf || new Date(), hand: saved._hand, subjectShape: saved._subjectShape });
     report(findings);
     console.log(render(saved));
     const blocked = findings.filter(f => f.level === 'fail');
@@ -572,7 +572,7 @@ async function main(argv) {
     die(String(err.message || err), 5);
   }
 
-  const checkOpts = { genre, beat, leadDays, hand, shape: genre === 'recap' ? recapForm() : undefined, asOf: asOf || new Date() };
+  const checkOpts = { genre, beat, leadDays, hand, subjectShape, shape: genre === 'recap' ? recapForm() : undefined, asOf: asOf || new Date() };
   const grade = d => runChecks(d, raw + '\n' + (eventDate || ''), vault, checkOpts);
   let findings = grade(decision);
 
@@ -617,7 +617,7 @@ async function main(argv) {
   // draw -- silently did not run on the bytes that actually ship. It also made the
   // question "was it following the deal?" unanswerable from the artifact: the draw is
   // unseeded, printed to stderr once, and then gone.
-  writeFileSync(out, JSON.stringify({ ...decision, _checks: findings, _notes: raw, _spoken: outline ? spoken : undefined, _hand: hand, _gap: gap }, null, 2));
+  writeFileSync(out, JSON.stringify({ ...decision, _checks: findings, _notes: raw, _spoken: outline ? spoken : undefined, _hand: hand, _gap: gap, _subjectShape: subjectShape }, null, 2));
   console.error(`-- wrote ${out}`);
   report(findings);
 

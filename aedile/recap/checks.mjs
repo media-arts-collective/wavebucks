@@ -18,6 +18,7 @@
 import { isRagged, modalGap } from './normalize.mjs';
 import { weekdayPairs, dateNumerals } from './dates.mjs';
 import { NAMES } from '../analysis/recap-form.mjs';
+import { isMulti } from '../analysis/subject-shapes.mjs';
 
 // Capitalised words that are not people. Sentence-initial words mostly appear
 // in both texts and cancel out; these are the ones that would not.
@@ -702,6 +703,12 @@ export function runChecks(d, notes, vault, opts = {}) {
       add('warn', 'hand-ignored',
         `dealt but absent: ${ignored.join(', ')}. The draw is how a corpus frequency gets reproduced across emails; ignoring it pins the rate at zero`);
     }
+  }
+  // The subject is dealt a shape too. Six recaps on 2026-10-07 were dealt "Name one
+  // thing" and all six came back joined (#93 item 7). `isMulti` is the dealer's own
+  // definition of joined, so "Sunday, 2pm" counts: a comma is a joiner there too.
+  if (/Name one thing/.test(opts.subjectShape || '') && isMulti(d.subject || '')) {
+    add('warn', 'hand-ignored', `dealt a one-thing subject, got a joined one: "${d.subject}"`);
   }
 
   // 5. Motifs the corpus says are near-universal. Warn only: a short recap

@@ -116,7 +116,7 @@ export const SEPARATORS = {
   ' + ':  s => /\s\+\s/.test(s),
   ' & ':  s => /\s&\s/.test(s),
 };
-const isMulti = s => Object.values(SEPARATORS).some(fn => fn(s));
+export const isMulti = s => Object.values(SEPARATORS).some(fn => fn(s));
 
 const numberedItems = b => (b.match(/(?:^|\n)\s*-?\d+[.)]\s/g) || []).length;
 

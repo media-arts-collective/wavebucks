@@ -694,5 +694,17 @@ console.log('\nthe reminder genre relaxes list form and nothing else');
   else { failed++; console.log(`  FAIL borrowing MS still blocks in a DM; got [${mids.join(', ')}]`); }
 }
 
+// #93 item 7: the subject is dealt a shape, and a joined subject under a one-thing
+// deal is the draw ignored. Silent when nothing was dealt or a join was dealt.
+{
+  const one = { subjectShape: 'SUBJECT: about 31 characters. Name one thing, and include no date, time or venue at all: just the thing.' };
+  const joined = { ...CLEAN, subject: 'Supernova call + laser harp Sunday' };
+  expectWarn('one thing dealt, joined subject back', joined, 'hand-ignored', true, one);
+  expectWarn('one thing dealt, one thing back', { ...CLEAN, subject: 'More Wangs' }, 'hand-ignored', false, one);
+  expectWarn('a join dealt, joined subject back', joined, 'hand-ignored', false,
+    { subjectShape: 'SUBJECT: about 41 characters. Name two or three of the things this mail carries, a few words each, joined by " + ".' });
+  expectWarn('no subject shape supplied', joined, 'hand-ignored', false);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

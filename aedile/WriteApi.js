@@ -12,8 +12,8 @@
 // Primitives (all honor dryRun):
 //   createDraft  body=|htmlBody= (exactly one), with threadId=<id> (reply) or
 //                to=<addr> subject=<subj> (originate); optional logLabel, logNote.
-//                Never sends. htmlBody exists for a review redline's marks;
-//                mail meant to be sent as it is goes plain, like the archive.
+//                Never sends. Mail goes plain, like the archive; htmlBody is
+//                for re-posting a draft read back with html=true (#78).
 //   sendReplyAll threadId=<id> body=   sends plain text; refused unless AEDILE_ENABLED and
 //                every participant is in AUTOSEND_ALLOWLIST with AUTOSEND_ENABLED on
 //   sendDraft    messageId=<id> sha256=<of its html>   sends one armed draft; same gate

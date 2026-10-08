@@ -300,23 +300,12 @@ const WRITE_API = (() => {
     return respondOk('appendRecord', dryRun, { id, appended: true });
   }
 
-  // One use: the properties the retired tiers read. Removed after it runs.
-  function primDeleteDeadProperties(params, dryRun) {
-    const dead = ['ANTHROPIC_API_KEY', 'BUMP_ENABLED', 'RECAP_ENABLED', 'TESTING_MODE', 'MIGRATION_DRIVE_FILE_ID'];
-    const props = PropertiesService.getScriptProperties();
-    const present = dead.filter(k => props.getProperty(k) !== null);
-    if (dryRun) return respondOk('deleteDeadProperties', dryRun, { wouldDelete: present, note: 'DRY RUN — nothing changed.' });
-    present.forEach(k => props.deleteProperty(k));
-    return respondOk('deleteDeadProperties', dryRun, { deleted: present, remaining: props.getKeys().sort() });
-  }
-
   const PRIMITIVES = {
     createDraft: primCreateDraft,
     sendReplyAll: primSendReplyAll,
     sendDraft: primSendDraft,
     addLabel: primAddLabel,
     logEvent: primLogEvent,
-    deleteDeadProperties: primDeleteDeadProperties,
     trashMessage: primTrashMessage,
     openLoop: primOpenLoop,
     closeLoop: primCloseLoop,

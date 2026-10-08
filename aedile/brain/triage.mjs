@@ -99,6 +99,10 @@ async function main(argv) {
   const system = [contextBody('AEDILE_CONTEXT.core.md'), contextBody('AEDILE_CONTEXT.triage.md')].join('\n\n');
   const history = historyBlock(readFileSync(join(VAULT, 'messages.jsonl'), 'utf8').trim().split('\n').map(l => JSON.parse(l)));
 
+  // So the model neither reopens a tracked ask nor dates one in the past.
+  const tracked = call('get', 'loops', 'open=true').rows.map(r => `${r.Id} ${r.Owner}: ${r.Ask}`).join('\n') || 'none';
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
+
   let reviewed = 0;
   for (const t of call('readInbox', `q=${SCAN_QUERY}`, 'limit=50').threads) {
     const { messages } = call('readThread', `threadId=${t.threadId}`);
@@ -112,7 +116,7 @@ async function main(argv) {
       const from = extractEmail(msg.from);
       const audience = audienceOf(msg);
       const d = await getJsonDecision(system,
-        `${history}\n\n${'='.repeat(20)}\n\nTHREAD UNDER REVIEW:\n\n${threadBlock(messages, msg)}\n\nAUDIENCE: ${audience}`);
+        `${history}\n\n${'='.repeat(20)}\n\nTHREAD UNDER REVIEW:\n\n${threadBlock(messages, msg)}\n\nAUDIENCE: ${audience}\nTODAY: ${today}\n\nOPEN LOOPS:\n${tracked}`);
       if (!ACTIONS.includes(d.action)) throw new Error(`unknown action ${JSON.stringify(d.action)} for ${msg.messageId}`);
       if (d.action === 'draft_reply' && !d.draft_body) throw new Error(`draft_reply with no draft_body for ${msg.messageId}`);
       reviewed++;

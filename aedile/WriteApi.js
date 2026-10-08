@@ -335,6 +335,7 @@ const WRITE_API = (() => {
       cc: m.getCc(),
       subject: m.getSubject(),
       body: m.getPlainBody(),
+      unread: m.isUnread(),
     }, withHtml ? { html: m.getBody() } : {}));
     return { status: 200, body: { ok: true, action: 'readThread', threadId: params.threadId, count: messages.length, messages } };
   }

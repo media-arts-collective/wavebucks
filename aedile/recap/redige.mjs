@@ -122,7 +122,7 @@ export const callModelAsync = callModel;
 
 // --- prompt ------------------------------------------------------------------
 
-/** Same rule Context.js's constants follow: each .md from its first "## " on. */
+/** Each .md from its first "## " on. */
 export function contextBody(name) {
   const s = readFileSync(join(AEDILE, name), 'utf8');
   return s.slice(s.indexOf('\n## ')).trim();

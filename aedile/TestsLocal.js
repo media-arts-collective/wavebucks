@@ -39,15 +39,6 @@ function isAllowlistEligible(thread, allowlist) {
   return getThreadParticipants(thread).every(addr => matchesAllowlist(addr, allowlist));
 }
 
-const DM_RECIPIENT_THRESHOLD = 3;
-
-function classifyAudience(msg) {
-  const recipients = new Set();
-  (msg.getTo() || '').split(',').forEach(a => a.trim() && recipients.add(extractEmail(a)));
-  (msg.getCc() || '').split(',').forEach(a => a.trim() && recipients.add(extractEmail(a)));
-  return recipients.size <= DM_RECIPIENT_THRESHOLD ? 'dm' : 'list';
-}
-
 // --- Minimal mock helpers ---
 
 function mockMessage({ from, to = '', cc = '' }) {
@@ -154,40 +145,6 @@ console.log('\nisAllowlistEligible');
   assertEqual(isAllowlistEligible(eligibleThread, []), false, 'empty allowlist never qualifies');
 }
 
-console.log('\nclassifyAudience');
-{
-  const dmMsg = mockMessage({ from: 'zach@nomac.org', to: 'tyler@nomac.org', cc: 'kreweofvaporwave@kreweofvaporwave.com' });
-  assertEqual(classifyAudience(dmMsg), 'dm', 'a 2-recipient message classifies as dm');
-
-  const listMsg = mockMessage({
-    from: 'zach@nomac.org',
-    to: 'kreweofvaporwave@kreweofvaporwave.com',
-    cc: 'a@example.com, b@example.com, c@example.com, d@example.com',
-  });
-  assertEqual(classifyAudience(listMsg), 'list', 'a 5-recipient message classifies as list');
-}
-
-console.log('\nOpenLoops._sanitizeRecheckDays — clamping guard');
-{
-  // Inline copy of OpenLoops.js's private _sanitizeRecheckDays: the clamp that
-  // keeps a bad or missing recheck_after_days from parking a loop absurdly far out.
-  const MIN_RECHECK_DAYS = 1;
-  const MAX_RECHECK_DAYS = 60;
-  const DEFAULT_RECHECK_DAYS = 3;
-  function sanitizeRecheckDays(days) {
-    const n = Number(days);
-    if (!Number.isFinite(n) || n < MIN_RECHECK_DAYS) return DEFAULT_RECHECK_DAYS;
-    return Math.min(n, MAX_RECHECK_DAYS);
-  }
-
-  assertEqual(sanitizeRecheckDays(10), 10, 'an in-range value passes through unchanged');
-  assertEqual(sanitizeRecheckDays(500), MAX_RECHECK_DAYS, 'an absurdly large value clamps to the 60-day max');
-  assertEqual(sanitizeRecheckDays(0), DEFAULT_RECHECK_DAYS, 'a zero/sub-minimum value falls back to the 3-day default');
-  assertEqual(sanitizeRecheckDays(-5), DEFAULT_RECHECK_DAYS, 'a negative value falls back to the default');
-  assertEqual(sanitizeRecheckDays('not a number'), DEFAULT_RECHECK_DAYS, 'a non-numeric value falls back to the default');
-  assertEqual(sanitizeRecheckDays(undefined), DEFAULT_RECHECK_DAYS, 'a missing value falls back to the default');
-}
-
 console.log('\nWriteApi.strictBool — a misread safety flag must not mean "no safety"');
 {
   // Inline copy of WriteApi.js's strictBool. An unrecognised dryRun value must
@@ -282,9 +239,9 @@ console.log('\nWriteApi.sendGate — the send primitive fails closed, master kil
 
 console.log('\nWriteApi.capRefusal — sends stop at the daily cap');
 {
-  // The real function: WriteApi.js evaluated with its two trigger globals stubbed.
+  // The real function, out of WriteApi.js.
   const src = (await import('node:fs')).readFileSync(new URL('./WriteApi.js', import.meta.url), 'utf8');
-  const { capRefusal } = new Function('scanInbox', 'checkBumps', src + '\nreturn WRITE_API;')();
+  const { capRefusal } = new Function(src + '\nreturn WRITE_API;')();
 
   const four = ['armed_draft_sent', 'reply_sent', 'bump_auto_reply', 'auto_reply'];
   assertEqual(capRefusal([]), null, 'no sends → may send');

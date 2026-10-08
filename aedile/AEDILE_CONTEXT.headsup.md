@@ -4,9 +4,7 @@
 > `AEDILE_CONTEXT.core.md`, the same way `AEDILE_CONTEXT.recap.md` is used, and
 > `checks.mjs` grades against it under `{ genre: 'headsup' }`. The split between
 > corpus-wide *style* and genre-specific *form* is still not finalized here; that
-> research stays tracked in wavebucks#49. There is no `Context.js` mirror of this
-> file and there should not be: this genre is Node-only and never ran in Apps
-> Script.
+> research stays tracked in wavebucks#49.
 >
 > The cadence and form rates below are re-derivable by a HUMAN with `node
 > aedile/analysis/cadence.mjs`, and the device rates live in `recap/devices.mjs`.

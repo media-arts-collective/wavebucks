@@ -1,8 +1,8 @@
 // WriteApi.js -- token-gated Web App endpoint (POST only) driving Aedile's Gmail side.
 // Unlike ReadApi.js this causes real side effects. WRITE_API_TOKEN is its own
 // Script Property, separate from READ_API_TOKEN; fails closed if unset. Kill
-// switches (AEDILE_ENABLED, AUTOSEND_ENABLED, BUMP_ENABLED) and the autosend
-// allowlist still apply.
+// switches (AEDILE_ENABLED, AUTOSEND_ENABLED) and the autosend allowlist gate
+// the two sends.
 //
 // Call: POST <exec-url> -d token=<WRITE_API_TOKEN> -d action=<action>
 //
@@ -17,25 +17,15 @@
 //                every participant is in AUTOSEND_ALLOWLIST with AUTOSEND_ENABLED on
 //   sendDraft    messageId=<id> sha256=<of its html>   sends one armed draft; same gate
 //                Both sends share MAX_SENDS_PER_DAY, counted from the Log.
-//   removeTriggers  deletes the scanInbox and checkBumps time triggers
 //   logEvent     messageId=<id> logLabel=<action> [threadId, from, subject, logNote]
 //                one Log row; refuses a send label
 //   addLabel     threadId=<id> label=<name>
 //   trashMessage messageId=<id>
 //   openLoop, closeLoop, amendLoop, appendRecord
-// Legacy trigger-actions (judgment runs in Apps Script):
-//   scanInbox    [dryRun=true]
-//   checkBumps   [dryRun=true] [ignoreDue=true]  ignoreDue evaluates every open loop
 //
-// dryRun and ignoreDue accept only the exact strings "true" and "false"; absent
-// means false, anything else is a 400. A misspelled safety flag must not mean "no safety".
+// dryRun accepts only the exact strings "true" and "false"; absent means false, anything else is a 400. A misspelled safety flag must not mean "no safety".
 
 const WRITE_API = (() => {
-
-  const ACTIONS = {
-    scanInbox: scanInbox,
-    checkBumps: checkBumps,
-  };
 
   // Absent is false; anything but "true"/"false" throws, so a misspelled dryRun
   // cannot run a real send.
@@ -309,24 +299,12 @@ const WRITE_API = (() => {
     return respondOk('appendRecord', dryRun, { id, appended: true });
   }
 
-  // The triggers that run in-Apps-Script judgment. installTrigger() and
-  // installBumpTrigger() put them back.
-  function primRemoveTriggers(params, dryRun) {
-    const doomed = ScriptApp.getProjectTriggers()
-      .filter(t => ['scanInbox', 'checkBumps'].indexOf(t.getHandlerFunction()) !== -1);
-    const handlers = doomed.map(t => t.getHandlerFunction());
-    if (dryRun) return respondOk('removeTriggers', dryRun, { wouldRemove: handlers, note: 'DRY RUN — nothing changed.' });
-    doomed.forEach(t => ScriptApp.deleteTrigger(t));
-    return respondOk('removeTriggers', dryRun, { removed: handlers, remaining: ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction()) });
-  }
-
   const PRIMITIVES = {
     createDraft: primCreateDraft,
     sendReplyAll: primSendReplyAll,
     sendDraft: primSendDraft,
     addLabel: primAddLabel,
     logEvent: primLogEvent,
-    removeTriggers: primRemoveTriggers,
     trashMessage: primTrashMessage,
     openLoop: primOpenLoop,
     closeLoop: primCloseLoop,
@@ -382,10 +360,9 @@ const WRITE_API = (() => {
 
     const action = params.action;
 
-    let dryRun, ignoreDue;
+    let dryRun;
     try {
       dryRun = strictBool(params.dryRun, 'dryRun');
-      ignoreDue = strictBool(params.ignoreDue, 'ignoreDue');
     } catch (err) {
       return { status: 400, body: { ok: false, error: String(err.message) } };
     }
@@ -399,19 +376,8 @@ const WRITE_API = (() => {
       return PRIMITIVES[action](params, dryRun);
     }
 
-    const fn = ACTIONS[action];
-    if (!fn) {
-      const known = Object.keys(READS).concat(Object.keys(PRIMITIVES), Object.keys(ACTIONS)).join(', ');
-      return { status: 400, body: { ok: false, error: 'Unknown action. Use one of: ' + known } };
-    }
-
-    let result;
-    if (action === 'checkBumps') {
-      result = fn(dryRun, ignoreDue);
-    } else {
-      result = fn(dryRun);
-    }
-    return { status: 200, body: { ok: true, action, dryRun, ignoreDue, result } };
+    const known = Object.keys(READS).concat(Object.keys(PRIMITIVES)).join(', ');
+    return { status: 400, body: { ok: false, error: 'Unknown action. Use one of: ' + known } };
   }
 
   // Everything but handle is exposed for TestsLocal.js.

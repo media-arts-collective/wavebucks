@@ -1,10 +1,9 @@
 # AEDILE_CONTEXT.core.md
 
 Shared institutional context: identity, the Engine/Ritual split, voice,
-lore, standing check. Injected into every tier's system prompt (triage and
-consolidation alike) via Context.js's `AEDILE_CONTEXT_CORE`. Nothing
-specific to a particular decision task belongs here. That lives in the
-tier's own file (AEDILE_CONTEXT.triage.md, AEDILE_CONTEXT.consolidation.md).
+lore, standing check. `recap/redige.mjs` and `brain/triage.mjs` put it first
+in every system prompt. Nothing specific to one decision task belongs here;
+that lives in the tier's own file.
 
 ## Identity
 

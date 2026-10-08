@@ -3,8 +3,8 @@
 ## What this is
 Aedile is an AI operations role for the Virtual Krewe of Vaporwave, an
 eleven-year-old Mardi Gras krewe run by the nonprofit Media Arts Collective
-(co-directors: Zach and Tyler). This project is an Apps Script implementation
-of that role, forked from an earlier system called **Scriba Senatus**
+(co-directors: Zach and Tyler). Judgment runs in Node (`brain/`, `recap/`);
+the Apps Script project is its interface to Gmail and the sheet. It was forked from an earlier system called **Scriba Senatus**
 (see `../scribaSenatus` in the `wavebucks` repo), which handled email-driven
 commands for the krewe's old spendable-Wavebucks economy.
 
@@ -33,62 +33,32 @@ This distinction governs every decision in this codebase.
 When in doubt about whether a feature belongs in this codebase: if it
 requires taste or would take a side in a human disagreement, it doesn't.
 
-## Non-negotiable guardrails (v0 and for the foreseeable future)
-- **Draft only, with one narrow, explicit exception: the director
-  allowlist.** By default every code path that produces outbound text ends
-  in `msg.createDraftReply()`, never `.reply()`/`.replyAll()`/`.sendEmail()`.
-  This remains the primary safety margin during the trust-building period —
-  don't weaken it for convenience, and don't add an ad hoc "just this once,
-  auto-send" branch outside the mechanism below.
-
-  The one sanctioned exception (`InboxProcessor.isAutosendEligible`) lets a
-  `draft_reply` decision auto-send via `thread.replyAll()` instead, but only
-  when **all** of the following hold:
-  - `AUTOSEND_ENABLED` script property is `'true'` (separate from
-    `AEDILE_ENABLED` — a director can kill just this capability without
-    disabling scanning/drafting entirely).
+## Non-negotiable guardrails
+- **Draft only.** What aedile writes lands as a Gmail draft a human sends.
+  `brain/triage.mjs` and `recap/redige.mjs` call `createDraft` and nothing
+  else that mails. Don't add a "just this once" send beside the two below.
+- **Two actions can send: `sendReplyAll` and `sendDraft`** (`WriteApi.js`).
+  Each refuses unless all of these hold:
+  - `AEDILE_ENABLED` and `AUTOSEND_ENABLED` are both `'true'`.
   - Every participant (From/To/Cc, every message in the thread) matches
-    `AUTOSEND_ALLOWLIST`, a comma-separated script property of exact
-    addresses and/or `@domain` suffixes (e.g. `zach@nomac.org,@nomac.org`).
-    A single participant outside the allowlist — any third party CC'd in —
-    disables auto-send for that whole thread; it falls back to a draft.
-    The allowlist must include Aedile's own inbox address explicitly (no
-    self-detection) and is managed entirely via Project Settings > Script
-    Properties, not in code.
-  - `MAX_AUTOSEND_PER_RUN` (5) hasn't been hit yet this run — a tighter,
-    separate cap than `MAX_MESSAGES_PER_RUN`, since auto-send has no human
-    review step between decision and delivery.
+    `AUTOSEND_ALLOWLIST`: exact addresses and/or `@domain` suffixes, managed
+    in Script Properties, and it must include Aedile's own inbox address. One
+    participant outside it refuses the whole thread.
+  - Fewer than `MAX_SENDS_PER_DAY` sends are in the Log for the last 24 hours.
 
-  This exists to test live with the directors themselves in a fully
-  closed loop (only Zach/Tyler/the krewe address on the thread) before
-  ever considering it for the general mailing list. Don't broaden the
-  allowlist's reach (e.g. matching on thread content instead of exact
-  participants, or applying it to `flag`) without treating that as the
-  same category of decision this was — flagged and reasoned through
-  explicitly, not defaulted into.
-- **Label, don't mark as read.** Processed threads get a tracking label;
-  the unread flag stays untouched. Directors rely on unread-as-signal.
-- **Recipient allowlist, on the paths that send.** Never let generated
-  content introduce a new recipient to a *reply*. To/Cc stays limited to
-  existing thread participants or a small hardcoded set (currently: Zach,
-  Tyler). **`WriteApi`'s `createDraft` originate form is deliberately
-  outside this** — it passes `params.to` through unchecked, because a draft
-  cannot leave without a human opening and sending it, and the caller that
-  uses it (`redige.mjs`) hardcodes the list address. Zach,
-  2026-09-25: *"drafts are safe by construction."* This paragraph used to
-  state the rule unconditionally, which read as though the code enforced it
-  everywhere; it does not, and the gap was the sentence rather than the
-  code (#61). Distinct from `AUTOSEND_ALLOWLIST`
-  above — this rule is about never *adding* an unexpected recipient to a
-  reply; that one is about whether the *existing* participants are safe
-  enough to skip human review entirely.
-- **Per-run and per-day caps**, enforced in code, not just by good intentions.
-- **Kill switch** via Script Properties (`AEDILE_ENABLED`), checked first in
-  every trigger-invoked function, so either director can pause everything
-  without touching code.
-- **Log everything** — thread ID, timestamp, action, one-line reasoning — to
-  the Log tab. This is the primary tool for evaluating whether Aedile's
-  judgment is any good, so undecorated logging matters more than clever code.
+  Don't broaden what the allowlist matches, and don't add the list address to
+  it, without treating that as its own decision, reasoned through explicitly.
+- **Label, don't mark as read.** Reviewed threads get a tracking label; the
+  unread flag stays untouched. Directors rely on unread-as-signal.
+- **Never add a recipient to a reply.** To/Cc stays the thread's existing
+  participants. `createDraft`'s originate form is deliberately outside this:
+  it passes `to` through unchecked, because a draft cannot leave without a
+  human sending it. Zach, 2026-09-25: *"drafts are safe by construction."*
+- **Caps**, enforced in code, not just by good intentions.
+- **Kill switch**: `AEDILE_ENABLED` in Script Properties stops both sends;
+  either director can flip it without touching code.
+- **Log everything**: message, action, one-line reasoning, to the Log tab. It
+  is how anyone judges whether aedile's judgment is any good.
 
 ## Ownership model
 Aedile runs under the krewe's own Google Workspace seat
@@ -119,10 +89,7 @@ outside the scrape.
 ## Voice
 The voice carries over close to verbatim from Scriba Senatus — dry,
 deadpan, memory-invoking, in the tradition of Abraham's own register —
-codified in `AEDILE_CONTEXT_CORE` (`Context.js`), not a separate templates
-file. (An earlier `Personality.js`, reading HTML templates from a
-`Personality` tab, was deleted as dead code — it had zero call sites and
-was never wired into draft generation.) Same entity in a different
+codified in `AEDILE_CONTEXT.core.md`. Same entity in a different
 register, not a performed character. AI involvement doesn't need explicit
 disclosure; the krewe's existing aesthetic (Scriba Senatus's own
 cyborg-narrator lore) already makes this on-brand.
@@ -131,9 +98,7 @@ Two behavioral rules tied to voice:
 - Aedile may **originate** krewe-wide announcements (e.g. gathering
   heads-ups) — which is what the operator historically always did. The safety boundary is **not** a ban on originating; it is
   **draft-only: aedile drafts, a human sends, and it stays that way until a
-  flag explicitly changes it** (same posture as `AUTOSEND_ENABLED`). The
-  earlier "never start threads" rule was scoped to internal working-group
-  ops flow, not list-wide announcements, and was removed 2026-09-13. See #49.
+  flag explicitly changes it** (same posture as `AUTOSEND_ENABLED`).
 - Observe seasonal rhythm: July is historically silent (low activity
   expected/correct); October–February is live season.
 

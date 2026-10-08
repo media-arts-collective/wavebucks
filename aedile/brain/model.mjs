@@ -1,7 +1,6 @@
 // aedile/brain/model.mjs -- Node model client: drives Claude through the Agent
 // SDK on the krewe's own subscription token and returns a parsed JSON decision.
 // No ANTHROPIC_API_KEY, and never the CLI login of whoever runs it.
-// Mirrors AnthropicClient.getJsonDecision's name and arg order.
 // Node-only: excluded from Apps Script by aedile/.claspignore (`brain/**`).
 // Smoke: node brain/model.mjs --smoke
 
@@ -69,8 +68,8 @@ function escapeControlsInStrings(src) {
   return out;
 }
 
-// AnthropicClient.getJsonDecision's third arg is a numeric maxTokens; this
-// transport has no such knob, so a number is tolerated and ignored.
+// Callers once passed a numeric maxTokens third; this transport has no such
+// knob, so a number is tolerated and ignored.
 function normalizeOpts(opts) {
   if (opts == null) return {};
   if (typeof opts === 'number') return {}; // legacy positional maxTokens: no transport equivalent
@@ -152,7 +151,6 @@ export async function callModel(systemPrompt, userContent, opts) {
 }
 
 // getJsonDecision(systemPrompt, userContent, opts?) -> Promise<object>
-// Same name + arg order as AnthropicClient.getJsonDecision.
 export async function getJsonDecision(systemPrompt, userContent, opts) {
   return parseDecision(await callModel(systemPrompt, userContent, opts));
 }

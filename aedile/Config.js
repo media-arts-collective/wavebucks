@@ -5,7 +5,6 @@
  * Tabs expected:
  *   Config       - key/value settings (A: key, B: value)
  *   Log          - append-only record of every message Aedile has looked at
- *   Messages     - raw mailing-list archive (read/written by MessageLog.js, not through this module)
  */
 
 const CONFIG_SHEET_ID = '1bBLfPpw618EtkZBpLylBa-Hg-J8cd62nCxHkqbET6BM'; // Aedile Config spreadsheet owned by kreweofvaporwave@kreweofvaporwave.com
@@ -33,21 +32,12 @@ const Config = (() => {
     return getAll()[key];
   }
 
-  const LOG_MESSAGE_ID_COL = 2; // Column C — must match the column order in logEvent() below
-
   /**
    * Append one row to the Log tab.
    * Columns: Timestamp | ThreadID | MessageID | From | Subject | Action | Notes
    */
   function logEvent(threadId, messageId, from, subject, action, notes = '') {
     _sheet('Log').appendRow([new Date(), threadId, messageId, from, subject, action, notes]);
-  }
-
-  /** Check whether a message ID has already been logged, for dedup */
-  function isMessageProcessed(messageId) {
-    if (!messageId) return false;
-    const rows = _sheet('Log').getDataRange().getValues();
-    return rows.some(row => row[LOG_MESSAGE_ID_COL] === messageId);
   }
 
   /** Actions logged at or after `since`; WriteApi's send cap counts from these. */
@@ -57,5 +47,5 @@ const Config = (() => {
       .map(row => String(row[5]));
   }
 
-  return { get, getAll, logEvent, isMessageProcessed, actionsSince };
+  return { get, getAll, logEvent, actionsSince };
 })();

@@ -1,4 +1,4 @@
-// triage.test.mjs -- the rules triage.mjs carries over from InboxProcessor.js.
+// triage.test.mjs -- triage.mjs's pure rules: audience, dedup, history, the Log window.
 //
 //   node --test aedile/brain/triage.test.mjs
 

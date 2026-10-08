@@ -187,38 +187,13 @@ check('JSON behind a prose preamble is recovered',
   ok('garbage throws rather than exiting the process', threw);
 }
 
-console.log('\nthe two copies of each prompt agree');
-// redige.mjs reads the .md files; Apps Script reads the constants in
-// Context.js. They are maintained by hand and nothing else enforces this.
-function constantOf(name) {
-  const s = readFileSync(join(AEDILE, 'Context.js'), 'utf8');
-  const m = s.match(new RegExp('const ' + name + ' = `([\\s\\S]*?)`;\\s*$', 'm'));
-  return m ? m[1].replace(/\\`/g, '`').replace(/\\\$/g, '$').trim() : null;
-}
 function bodyOf(file) {
   const s = readFileSync(join(AEDILE, file), 'utf8');
   return s.slice(s.indexOf('\n## ')).trim();
 }
-for (const [name, file] of [['AEDILE_CONTEXT_CORE', 'AEDILE_CONTEXT.core.md'],
-                            ['AEDILE_CONTEXT_TRIAGE_LIST', 'AEDILE_CONTEXT.triage-list.md'],
-                            ['AEDILE_CONTEXT_BUMP_LIST', 'AEDILE_CONTEXT.bump.md']]) {
-  const js = constantOf(name), md = bodyOf(file);
-  ok(`${name} was found in Context.js`, js !== null);
-  if (js !== null && js !== md) {
-    // Name the first differing line, or the diff is a staring contest.
-    const a = md.split('\n'), b = js.split('\n');
-    const at = a.findIndex((l, k) => l !== b[k]);
-    console.log(`       first difference at line ${at + 1}:`);
-    console.log(`       ${file}: ${JSON.stringify(a[at])}`);
-    console.log(`       Context.js: ${JSON.stringify(b[at])}`);
-  }
-  check(`${file} and ${name} are byte-identical`, js === md, true);
-}
-
-// The prompt may not itself do the thing it forbids. headsup.md joins this list
-// but not the byte-identical list above: it has no Context.js mirror by design.
+// The prompt may not itself do the thing it forbids.
 for (const file of ['AEDILE_CONTEXT.core.md', 'AEDILE_CONTEXT.recap.md',
-                    'AEDILE_CONTEXT.headsup.md']) {
+                    'AEDILE_CONTEXT.headsup.md', 'AEDILE_CONTEXT.triage.md']) {
   const t = bodyOf(file);
   check(`${file} contains no em-dash`, /[\u2014\u2013]/.test(t), false);
   check(`${file} contains no spaced --`, /(?:^|\s)--(?:\s|$)/.test(t), false);

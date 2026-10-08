@@ -1,11 +1,9 @@
 # Local test files - not for Apps Script deployment.
 #
 # TestsLocal.js is not merely unwanted up there, it is BREAKING: Apps Script
-# runs every file in one shared global scope, and TestsLocal.js declares
-# `const DM_RECIPIENT_THRESHOLD` at top level, which InboxProcessor.js already
-# declares. Two top-level `const`s of one name in one scope is a SyntaxError at
-# load, so a push carrying both stops the whole project -- triage, bumps and
-# both Web App endpoints -- not just the tests.
+# runs every file in one shared global scope, and it re-declares functions the
+# project defines and uses `import`. A push carrying it stops the whole
+# project, both Web App endpoints included.
 TestsLocal.js
 
 # Git files

@@ -7,13 +7,12 @@
 //   scope=openloops [open=true]
 //   scope=messages  [q=<kw>] [threadId=<id>] [limit=<n>]   newest first
 //   scope=log       [limit=<n>]                            newest first
-//   scope=requests  [status=open]
 //   scope=guardrails                                       switches and installed triggers
 //
 // Every scope reads a sheet. Live Gmail reads are on WriteApi's doPost instead:
 // this endpoint's token rides in a query string.
 
-// Column layouts mirror the writers: MessageLog.js, OpenLoops.js, Config.js (Log), Requests.js.
+// Messages and OpenLoops are tabs nothing writes any more; they stay readable.
 const READ_API = (() => {
 
   const MAX_LIMIT = 500;
@@ -69,12 +68,6 @@ const READ_API = (() => {
     return rows.slice(0, _clampLimit(p.limit));
   }
 
-  function requests(p) {
-    let rows = _rows('Requests');
-    if (p.status) rows = rows.filter(r => String(r.Status) === String(p.status));
-    return rows;
-  }
-
   // `open=true` keeps only rows still open.
   function loops(p) {
     let rows = _rows('Loops');
@@ -88,12 +81,12 @@ const READ_API = (() => {
     return rows.slice(0, _clampLimit(p.limit));
   }
 
-  // What checkGuardrails() prints in the editor, as one row. Counts the
-  // allowlist, never lists it.
+  // The switches and installed triggers, as one row. Counts the allowlist,
+  // never lists it.
   function guardrails() {
     const props = PropertiesService.getScriptProperties();
     const row = {};
-    ['AEDILE_ENABLED', 'AUTOSEND_ENABLED', 'BUMP_ENABLED', 'TESTING_MODE'].forEach(k => {
+    ['AEDILE_ENABLED', 'AUTOSEND_ENABLED'].forEach(k => {
       row[k] = props.getProperty(k) === 'true';
     });
     row.allowlistEntries = (props.getProperty('AUTOSEND_ALLOWLIST') || '').split(',').filter(s => s.trim()).length;
@@ -101,7 +94,7 @@ const READ_API = (() => {
     return [row];
   }
 
-  const SCOPES = { openloops, messages, log, requests, loops, record, guardrails };
+  const SCOPES = { openloops, messages, log, loops, record, guardrails };
 
   function handle(params) {
     const configured = PropertiesService.getScriptProperties().getProperty('READ_API_TOKEN');

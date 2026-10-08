@@ -21,10 +21,9 @@
       "Bash(gh issue list:*)",
       "Bash(gh issue view:*)",
       "Bash(git push:*)",
-      "Bash(clasp -u aedile deploy:*)",
+      "Bash(aedile/deploy.sh:*)",
       "Bash(clasp -u aedile deployments:*)",
       "Bash(clasp -u aedile pull:*)",
-      "Bash(clasp -u aedile push:*)",
       "Bash(node --check:*)",
       "Bash(node aedile/TestsLocal.js)"
     ],

@@ -1,12 +1,25 @@
-// aedile/brain/model.mjs -- Node model client: drives Claude through the
-// locally logged-in `claude` CLI's subscription credentials via the Agent SDK
-// and returns a parsed JSON decision. No ANTHROPIC_API_KEY.
+// aedile/brain/model.mjs -- Node model client: drives Claude through the Agent
+// SDK on the krewe's own subscription token and returns a parsed JSON decision.
+// No ANTHROPIC_API_KEY, and never the CLI login of whoever runs it.
 // Mirrors AnthropicClient.getJsonDecision's name and arg order.
 // Node-only: excluded from Apps Script by aedile/.claspignore (`brain/**`).
 // Smoke: node brain/model.mjs --smoke
 
 import { query } from '@anthropic-ai/claude-agent-sdk';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+// The secrets file call.sh reads. Only the file: a token already in the
+// caller's environment is somebody's login, and which one is not knowable here.
+function oauthToken() {
+  const file = process.env.AEDILE_SECRETS
+    || [join(process.env.HOME || '', '.config/aedile/api-secrets'), '/srv/vaporwave-reports/aedile/.aedile-api-secrets']
+      .find(f => existsSync(f));
+  const m = file && readFileSync(file, 'utf8').match(/^CLAUDE_CODE_OAUTH_TOKEN=(.+)$/m);
+  if (!m) throw new Error(`no CLAUDE_CODE_OAUTH_TOKEN in ${file || 'any secrets file'}`);
+  return m[1].replace(/["'\r]/g, '');
+}
 
 const DEFAULT_ATTEMPTS = Number(process.env.AEDILE_MODEL_ATTEMPTS || 3);
 
@@ -75,6 +88,9 @@ async function runQuery(systemPrompt, userContent, { model, timeoutMs }) {
     allowDangerouslySkipPermissions: true,
   };
   if (model) options.model = model;
+
+  // The SDK's child process inherits this.
+  process.env.CLAUDE_CODE_OAUTH_TOKEN = oauthToken();
 
   let timer;
   if (timeoutMs) {

@@ -280,6 +280,19 @@ console.log('\nWriteApi.sendGate — the send primitive fails closed, master kil
   assertTrue(sendGate(false, false).indexOf('AEDILE_ENABLED') === 0, 'master kill switch is the reason reported when both fail');
 }
 
+console.log('\nWriteApi.capRefusal — sends stop at the daily cap');
+{
+  // The real function: WriteApi.js evaluated with its two trigger globals stubbed.
+  const src = (await import('node:fs')).readFileSync(new URL('./WriteApi.js', import.meta.url), 'utf8');
+  const { capRefusal } = new Function('scanInbox', 'checkBumps', src + '\nreturn WRITE_API;')();
+
+  const four = ['armed_draft_sent', 'reply_sent', 'bump_auto_reply', 'auto_reply'];
+  assertEqual(capRefusal([]), null, 'no sends → may send');
+  assertEqual(capRefusal(four), null, 'four sends → may send');
+  assertTrue(capRefusal(four.concat('reply_sent')), 'the fifth send in the window refuses the next');
+  assertEqual(capRefusal(four.concat(['headsup_draft', 'recap_draft_posted', 'no_action', 'error'])), null, 'drafts and reviews do not count');
+}
+
 console.log('\nLoops.js nextRowId — ids are never reused');
 {
   // Inline copy of Loops.js's nextRowId (plain node cannot load Apps Script

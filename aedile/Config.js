@@ -50,5 +50,12 @@ const Config = (() => {
     return rows.some(row => row[LOG_MESSAGE_ID_COL] === messageId);
   }
 
-  return { get, getAll, logEvent, isMessageProcessed };
+  /** Actions logged at or after `since`; WriteApi's send cap counts from these. */
+  function actionsSince(since) {
+    return _sheet('Log').getDataRange().getValues().slice(1)
+      .filter(row => row[0] instanceof Date && row[0] >= since)
+      .map(row => String(row[5]));
+  }
+
+  return { get, getAll, logEvent, isMessageProcessed, actionsSince };
 })();

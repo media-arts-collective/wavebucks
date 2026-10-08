@@ -16,6 +16,9 @@
 //   sendReplyAll threadId=<id> htmlBody=   sends; refused unless AEDILE_ENABLED and
 //                every participant is in AUTOSEND_ALLOWLIST with AUTOSEND_ENABLED on
 //   sendDraft    messageId=<id> sha256=<of its html>   sends one armed draft; same gate
+//                Both sends share MAX_SENDS_PER_DAY, counted from the Log.
+//   logEvent     messageId=<id> logLabel=<action> [threadId, from, subject, logNote]
+//                one Log row; refuses a send label
 //   addLabel     threadId=<id> label=<name>
 //   trashMessage messageId=<id>
 //   openLoop, closeLoop, amendLoop, appendRecord
@@ -83,6 +86,21 @@ const WRITE_API = (() => {
   }
 
   // The master kill switch is checked before the allowlist.
+  // Sends through this endpoint in any 24 hours. Counted from the Log, so the
+  // cap holds across calls and callers; nothing downstream reviews a send.
+  const MAX_SENDS_PER_DAY = 5;
+
+  function isSendAction(action) {
+    return /(_sent|auto_reply)$/.test(String(action));
+  }
+
+  function capRefusal(recentActions) {
+    const sent = recentActions.filter(isSendAction).length;
+    return sent >= MAX_SENDS_PER_DAY
+      ? `${sent} sends in the last 24 hours, cap is ${MAX_SENDS_PER_DAY}.`
+      : null;
+  }
+
   function sendGate(aedileEnabled, allowlistEligible) {
     if (!aedileEnabled) return 'AEDILE_ENABLED is not "true" — master kill switch is off.';
     if (!allowlistEligible) {
@@ -110,6 +128,19 @@ const WRITE_API = (() => {
       Config.logEvent(ctx.threadId || '', 'createDraft', ctx.from || '', ctx.subject || '', params.logLabel, params.logNote || '');
     } catch (err) {
       Logger.log(`[createDraft] Config.logEvent(${params.logLabel}) FAILED — ${err.stack || err}`);
+    }
+  }
+
+  // Count and send under the script lock: two overlapping sends must not both
+  // read a count one under the cap. `send` runs only when a send may proceed.
+  function withSendCap(action, send) {
+    const lock = LockService.getScriptLock();
+    if (!lock.tryLock(10000)) return respondRefused(action, 'another run holds the script lock.');
+    try {
+      const capped = capRefusal(Config.actionsSince(new Date(Date.now() - 24 * 60 * 60 * 1000)));
+      return capped ? respondRefused(action, capped) : send();
+    } finally {
+      lock.releaseLock();
     }
   }
 
@@ -159,11 +190,14 @@ const WRITE_API = (() => {
     if (refusal) return respondRefused('sendReplyAll', refusal);
 
     const cc = InboxProcessor.getRecipientCompletion(thread);
-    if (dryRun) {
-      return respondOk('sendReplyAll', dryRun, { threadId: params.threadId, wouldCc: cc, note: 'DRY RUN — guardrail passed; would replyAll; nothing sent.' });
-    }
-    thread.replyAll('', { htmlBody: params.htmlBody, cc });
-    return respondOk('sendReplyAll', dryRun, { threadId: params.threadId, cc, sent: true });
+    return withSendCap('sendReplyAll', () => {
+      if (dryRun) {
+        return respondOk('sendReplyAll', dryRun, { threadId: params.threadId, wouldCc: cc, note: 'DRY RUN — guardrail passed; would replyAll; nothing sent.' });
+      }
+      thread.replyAll('', { htmlBody: params.htmlBody, cc });
+      Config.logEvent(params.threadId, 'sendReplyAll', cc, thread.getFirstMessageSubject(), 'reply_sent', '');
+      return respondOk('sendReplyAll', dryRun, { threadId: params.threadId, cc, sent: true });
+    });
   }
 
   function primAddLabel(params, dryRun) {
@@ -211,12 +245,24 @@ const WRITE_API = (() => {
     if (sha256 !== params.sha256) return respondRefused('sendDraft', 'body changed since arming (sha256 ' + sha256 + '); re-arm it.');
 
     const ctx = { threadId: message.getThread().getId(), from: message.getTo(), subject: message.getSubject() };
-    if (dryRun) {
-      return respondOk('sendDraft', dryRun, { messageId: params.messageId, to: message.getTo(), subject: ctx.subject, note: 'DRY RUN — guardrail and hash passed; nothing sent.' });
-    }
-    draft.send();
-    Config.logEvent(ctx.threadId, 'sendDraft', ctx.from, ctx.subject, 'armed_draft_sent', 'sha256 ' + sha256);
-    return respondOk('sendDraft', dryRun, { messageId: params.messageId, to: ctx.from, subject: ctx.subject, sent: true });
+    return withSendCap('sendDraft', () => {
+      if (dryRun) {
+        return respondOk('sendDraft', dryRun, { messageId: params.messageId, to: message.getTo(), subject: ctx.subject, note: 'DRY RUN — guardrail and hash passed; nothing sent.' });
+      }
+      draft.send();
+      Config.logEvent(ctx.threadId, 'sendDraft', ctx.from, ctx.subject, 'armed_draft_sent', 'sha256 ' + sha256);
+      return respondOk('sendDraft', dryRun, { messageId: params.messageId, to: ctx.from, subject: ctx.subject, sent: true });
+    });
+  }
+
+  // logEvent: one Log row for a message a caller looked at and did not draft
+  // for. A send label is refused: the cap counts those, and sends log themselves.
+  function primLogEvent(params, dryRun) {
+    if (!params.messageId || !params.logLabel) return respondBad('logEvent requires messageId and logLabel.');
+    if (isSendAction(params.logLabel)) return respondBad('logEvent may not write a send label.');
+    if (dryRun) return respondOk('logEvent', dryRun, { messageId: params.messageId, logLabel: params.logLabel, note: 'DRY RUN — nothing written.' });
+    Config.logEvent(params.threadId || '', params.messageId, params.from || '', params.subject || '', params.logLabel, params.logNote || '');
+    return respondOk('logEvent', dryRun, { messageId: params.messageId, logged: true });
   }
 
   // No Gmail call, so the only gate is the token.
@@ -267,6 +313,7 @@ const WRITE_API = (() => {
     sendReplyAll: primSendReplyAll,
     sendDraft: primSendDraft,
     addLabel: primAddLabel,
+    logEvent: primLogEvent,
     trashMessage: primTrashMessage,
     openLoop: primOpenLoop,
     closeLoop: primCloseLoop,
@@ -353,9 +400,8 @@ const WRITE_API = (() => {
     return { status: 200, body: { ok: true, action, dryRun, ignoreDue, result } };
   }
 
-  // chooseDraftForm/chooseBody/sendGate/strictBool are exposed for TestsLocal.js
-  // and (strictBool) for the top-level payload actions; the rest is internal.
-  return { handle, chooseDraftForm, chooseBody, sendGate, strictBool };
+  // Everything but handle is exposed for TestsLocal.js.
+  return { handle, chooseDraftForm, chooseBody, sendGate, capRefusal, strictBool };
 })();
 
 function doPost(e) {

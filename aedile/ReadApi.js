@@ -8,6 +8,7 @@
 //   scope=messages  [q=<kw>] [threadId=<id>] [limit=<n>]   newest first
 //   scope=log       [limit=<n>]                            newest first
 //   scope=requests  [status=open]
+//   scope=guardrails                                       switches and installed triggers
 //
 // Every scope reads a sheet. Live Gmail reads are on WriteApi's doPost instead:
 // this endpoint's token rides in a query string.
@@ -87,7 +88,20 @@ const READ_API = (() => {
     return rows.slice(0, _clampLimit(p.limit));
   }
 
-  const SCOPES = { openloops, messages, log, requests, loops, record };
+  // What checkGuardrails() prints in the editor, as one row. Counts the
+  // allowlist, never lists it.
+  function guardrails() {
+    const props = PropertiesService.getScriptProperties();
+    const row = {};
+    ['AEDILE_ENABLED', 'AUTOSEND_ENABLED', 'BUMP_ENABLED', 'TESTING_MODE'].forEach(k => {
+      row[k] = props.getProperty(k) === 'true';
+    });
+    row.allowlistEntries = (props.getProperty('AUTOSEND_ALLOWLIST') || '').split(',').filter(s => s.trim()).length;
+    row.triggers = ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction());
+    return [row];
+  }
+
+  const SCOPES = { openloops, messages, log, requests, loops, record, guardrails };
 
   function handle(params) {
     const configured = PropertiesService.getScriptProperties().getProperty('READ_API_TOKEN');

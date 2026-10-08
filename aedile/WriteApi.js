@@ -300,12 +300,22 @@ const WRITE_API = (() => {
     return respondOk('appendRecord', dryRun, { id, appended: true });
   }
 
+  // One use: a property nothing reads (#104). Removed after it runs.
+  function primDeleteDeadProperty(params, dryRun) {
+    const props = PropertiesService.getScriptProperties();
+    const present = props.getProperty('LAST_CONSOLIDATION_RUN') !== null;
+    if (dryRun) return respondOk('deleteDeadProperty', dryRun, { present, note: 'DRY RUN — nothing changed.' });
+    props.deleteProperty('LAST_CONSOLIDATION_RUN');
+    return respondOk('deleteDeadProperty', dryRun, { deleted: present, remaining: props.getKeys().sort() });
+  }
+
   const PRIMITIVES = {
     createDraft: primCreateDraft,
     sendReplyAll: primSendReplyAll,
     sendDraft: primSendDraft,
     addLabel: primAddLabel,
     logEvent: primLogEvent,
+    deleteDeadProperty: primDeleteDeadProperty,
     trashMessage: primTrashMessage,
     openLoop: primOpenLoop,
     closeLoop: primCloseLoop,

@@ -17,6 +17,7 @@
 //                every participant is in AUTOSEND_ALLOWLIST with AUTOSEND_ENABLED on
 //   sendDraft    messageId=<id> sha256=<of its html>   sends one armed draft; same gate
 //                Both sends share MAX_SENDS_PER_DAY, counted from the Log.
+//   removeTriggers  deletes the scanInbox and checkBumps time triggers
 //   logEvent     messageId=<id> logLabel=<action> [threadId, from, subject, logNote]
 //                one Log row; refuses a send label
 //   addLabel     threadId=<id> label=<name>
@@ -308,12 +309,24 @@ const WRITE_API = (() => {
     return respondOk('appendRecord', dryRun, { id, appended: true });
   }
 
+  // The triggers that run in-Apps-Script judgment. installTrigger() and
+  // installBumpTrigger() put them back.
+  function primRemoveTriggers(params, dryRun) {
+    const doomed = ScriptApp.getProjectTriggers()
+      .filter(t => ['scanInbox', 'checkBumps'].indexOf(t.getHandlerFunction()) !== -1);
+    const handlers = doomed.map(t => t.getHandlerFunction());
+    if (dryRun) return respondOk('removeTriggers', dryRun, { wouldRemove: handlers, note: 'DRY RUN — nothing changed.' });
+    doomed.forEach(t => ScriptApp.deleteTrigger(t));
+    return respondOk('removeTriggers', dryRun, { removed: handlers, remaining: ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction()) });
+  }
+
   const PRIMITIVES = {
     createDraft: primCreateDraft,
     sendReplyAll: primSendReplyAll,
     sendDraft: primSendDraft,
     addLabel: primAddLabel,
     logEvent: primLogEvent,
+    removeTriggers: primRemoveTriggers,
     trashMessage: primTrashMessage,
     openLoop: primOpenLoop,
     closeLoop: primCloseLoop,

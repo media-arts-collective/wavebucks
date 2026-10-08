@@ -76,6 +76,26 @@ export function logCoversWindow(rows, now = new Date()) {
   return new Date(rows[rows.length - 1].Timestamp) < new Date(now - SCAN_DAYS * 86400000);
 }
 
+// Every write one decision causes, as call.sh argument lists, in order. The Log
+// row is last, so a message whose earlier writes failed is reviewed again.
+export function writesFor(d, msg, threadId) {
+  const from = extractEmail(msg.from);
+  const writes = [];
+  if (d.action === 'draft_reply') {
+    writes.push(['createDraft', `threadId=${threadId}`, `body=${d.draft_body}`, 'logLabel=triage_draft', `logNote=${d.reasoning}`]);
+  } else if (d.action === 'flag') {
+    writes.push(['addLabel', `threadId=${threadId}`, 'label=aedile-flagged']);
+  }
+  if (d.loop) {
+    writes.push(['openLoop', `owner=${d.loop.owner}`, `ask=${d.loop.ask}`, `due=${d.loop.due}`, `audience=${d.loop.audience}`,
+      `counterpart=${String(msg.from).replace(/\s*<[^<>]+>\s*$/, '')}`, `contact=${from}`,
+      'channel=email', 'tag=triage', `source=thread ${threadId}`]);
+  }
+  writes.push(['logEvent', `messageId=${msg.messageId}`, `threadId=${threadId}`, `from=${from}`,
+    `subject=${msg.subject}`, `logLabel=${d.action}`, `logNote=${d.reasoning}`]);
+  return writes;
+}
+
 function call(...args) {
   // /exec sometimes answers with Google's HTML page (#54). A read is safe to repeat.
   for (let left = READS.includes(args[0]) ? 3 : 1; ; ) {
@@ -125,19 +145,7 @@ async function main(argv) {
       if (d.action === 'draft_reply') console.log(d.draft_body.replace(/^/gm, '  | '));
       if (dryRun) continue;
 
-      if (d.action === 'draft_reply') {
-        call('createDraft', `threadId=${t.threadId}`, `body=${d.draft_body}`, 'logLabel=triage_draft', `logNote=${d.reasoning}`);
-      } else if (d.action === 'flag') {
-        call('addLabel', `threadId=${t.threadId}`, 'label=aedile-flagged');
-      }
-      if (d.loop) {
-        call('openLoop', `owner=${d.loop.owner}`, `ask=${d.loop.ask}`, `due=${d.loop.due}`, `audience=${d.loop.audience}`,
-          `counterpart=${String(msg.from).replace(/\s*<[^<>]+>\s*$/, '')}`, `contact=${from}`,
-          'channel=email', 'tag=triage', `source=thread ${t.threadId}`);
-      }
-      // Last, so a message whose writes failed is reviewed again.
-      call('logEvent', `messageId=${msg.messageId}`, `threadId=${t.threadId}`, `from=${from}`,
-        `subject=${msg.subject}`, `logLabel=${d.action}`, `logNote=${d.reasoning}`);
+      for (const write of writesFor(d, msg, t.threadId)) call(...write);
     }
     // Only a thread whose every unread message was seen: the cap returns above.
     if (!dryRun && todo.length) call('addLabel', `threadId=${t.threadId}`, 'label=aedile-reviewed');

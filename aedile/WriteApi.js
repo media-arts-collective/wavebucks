@@ -12,8 +12,9 @@
 // Primitives (all honor dryRun):
 //   createDraft  body=|htmlBody= (exactly one), with threadId=<id> (reply) or
 //                to=<addr> subject=<subj> (originate); optional logLabel, logNote.
-//                Never sends.
-//   sendReplyAll threadId=<id> htmlBody=   sends; refused unless AEDILE_ENABLED and
+//                Never sends. htmlBody exists for a review redline's marks;
+//                mail meant to be sent as it is goes plain, like the archive.
+//   sendReplyAll threadId=<id> body=   sends plain text; refused unless AEDILE_ENABLED and
 //                every participant is in AUTOSEND_ALLOWLIST with AUTOSEND_ENABLED on
 //   sendDraft    messageId=<id> sha256=<of its html>   sends one armed draft; same gate
 //                Both sends share MAX_SENDS_PER_DAY, counted from the Log.
@@ -173,7 +174,7 @@ const WRITE_API = (() => {
   // refusal returns without sending. cc's the full participant set so
   // eligibility and delivery cannot disagree.
   function primSendReplyAll(params, dryRun) {
-    if (!params.htmlBody) return respondBad('sendReplyAll requires htmlBody (POST it as a form field).');
+    if (!params.body) return respondBad('sendReplyAll requires body (plain text).');
     const thread = requireThread(params.threadId);
 
     const aedileEnabled = PropertiesService.getScriptProperties().getProperty('AEDILE_ENABLED') === 'true';
@@ -185,7 +186,7 @@ const WRITE_API = (() => {
       if (dryRun) {
         return respondOk('sendReplyAll', dryRun, { threadId: params.threadId, wouldCc: cc, note: 'DRY RUN — guardrail passed; would replyAll; nothing sent.' });
       }
-      thread.replyAll('', { htmlBody: params.htmlBody, cc });
+      thread.replyAll(params.body, { cc });
       Config.logEvent(params.threadId, 'sendReplyAll', cc, thread.getFirstMessageSubject(), 'reply_sent', '');
       return respondOk('sendReplyAll', dryRun, { threadId: params.threadId, cc, sent: true });
     });
@@ -299,12 +300,23 @@ const WRITE_API = (() => {
     return respondOk('appendRecord', dryRun, { id, appended: true });
   }
 
+  // One use: the properties the retired tiers read. Removed after it runs.
+  function primDeleteDeadProperties(params, dryRun) {
+    const dead = ['ANTHROPIC_API_KEY', 'BUMP_ENABLED', 'RECAP_ENABLED', 'TESTING_MODE', 'MIGRATION_DRIVE_FILE_ID'];
+    const props = PropertiesService.getScriptProperties();
+    const present = dead.filter(k => props.getProperty(k) !== null);
+    if (dryRun) return respondOk('deleteDeadProperties', dryRun, { wouldDelete: present, note: 'DRY RUN — nothing changed.' });
+    present.forEach(k => props.deleteProperty(k));
+    return respondOk('deleteDeadProperties', dryRun, { deleted: present, remaining: props.getKeys().sort() });
+  }
+
   const PRIMITIVES = {
     createDraft: primCreateDraft,
     sendReplyAll: primSendReplyAll,
     sendDraft: primSendDraft,
     addLabel: primAddLabel,
     logEvent: primLogEvent,
+    deleteDeadProperties: primDeleteDeadProperties,
     trashMessage: primTrashMessage,
     openLoop: primOpenLoop,
     closeLoop: primCloseLoop,

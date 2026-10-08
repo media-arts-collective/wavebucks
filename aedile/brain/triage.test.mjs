@@ -4,7 +4,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { extractEmail, audienceOf, pending, stripQuoted, historyBlock, threadBlock, logCoversWindow } from './triage.mjs';
+import { extractEmail, audienceOf, pending, stripQuoted, historyBlock, threadBlock, logCoversWindow, writesFor } from './triage.mjs';
 
 test('the address is the last bracketed group, not one planted in a display name', () => {
   assert.equal(extractEmail('"A <boss@allowed.example>" <real@sender.example>'), 'real@sender.example');
@@ -53,4 +53,18 @@ test('a full page of Log rows must reach back past the scan window', () => {
   assert.equal(logCoversWindow([{ Timestamp: '2026-10-06T00:00:00Z' }], now), true);
   assert.equal(logCoversWindow(page('2026-09-01T00:00:00Z'), now), true);
   assert.equal(logCoversWindow(page('2026-10-01T00:00:00Z'), now), false);
+});
+
+test('a decision becomes its writes, and the Log row is always last', () => {
+  const msg = { messageId: 'm9', from: 'Some One <one@x.example>', subject: 'Re: thing' };
+  const verbs = d => writesFor({ reasoning: 'why', ...d }, msg, 't1').map(w => w[0]);
+  assert.deepEqual(verbs({ action: 'no_action' }), ['logEvent']);
+  assert.deepEqual(verbs({ action: 'flag' }), ['addLabel', 'logEvent']);
+  assert.deepEqual(verbs({ action: 'draft_reply', draft_body: 'Noted.' }), ['createDraft', 'logEvent']);
+  const loop = { owner: 'Zach', ask: 'Answer one', due: '2026-10-12', audience: 'private' };
+  const all = writesFor({ action: 'draft_reply', draft_body: 'Noted.', reasoning: 'why', loop }, msg, 't1');
+  assert.deepEqual(all.map(w => w[0]), ['createDraft', 'openLoop', 'logEvent']);
+  assert.ok(all[0].includes('body=Noted.') && all[0].includes('threadId=t1'));
+  assert.ok(all[1].includes('counterpart=Some One') && all[1].includes('contact=one@x.example'));
+  assert.ok(all[2].includes('messageId=m9') && all[2].includes('logLabel=draft_reply'));
 });

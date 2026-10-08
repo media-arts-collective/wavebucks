@@ -4,7 +4,6 @@
 // together. Gated by the READ_API_TOKEN Script Property; fails closed if unset.
 //
 // Call: GET <exec-url>?token=<READ_API_TOKEN>&scope=<scope>
-//   scope=openloops [open=true]
 //   scope=messages  [q=<kw>] [threadId=<id>] [limit=<n>]   newest first
 //   scope=log       [limit=<n>]                            newest first
 //   scope=guardrails                                       switches and installed triggers
@@ -12,7 +11,7 @@
 // Every scope reads a sheet. Live Gmail reads are on WriteApi's doPost instead:
 // this endpoint's token rides in a query string.
 
-// Messages and OpenLoops are tabs nothing writes any more; they stay readable.
+// Messages is a tab nothing writes any more; it stays readable as history.
 const READ_API = (() => {
 
   const MAX_LIMIT = 500;
@@ -40,12 +39,6 @@ const READ_API = (() => {
     const n = parseInt(raw, 10);
     if (!Number.isFinite(n) || n <= 0) return DEFAULT_LIMIT;
     return Math.min(n, MAX_LIMIT);
-  }
-
-  function openloops(p) {
-    let rows = _rows('OpenLoops');
-    if (String(p.open) === 'true') rows = rows.filter(r => r.Open === true || r.Open === 'TRUE');
-    return rows;
   }
 
   function messages(p) {
@@ -94,7 +87,7 @@ const READ_API = (() => {
     return [row];
   }
 
-  const SCOPES = { openloops, messages, log, loops, record, guardrails };
+  const SCOPES = { messages, log, loops, record, guardrails };
 
   function handle(params) {
     const configured = PropertiesService.getScriptProperties().getProperty('READ_API_TOKEN');
